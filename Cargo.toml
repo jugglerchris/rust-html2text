@@ -4,3 +4,5 @@ version = "0.1.0"
 authors = ["Chris Emerson <github@mail.nosreme.org>"]
 
 [dependencies]
+html5ever = "*"
+string_cache = "0.2.0"
