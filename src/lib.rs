@@ -178,7 +178,9 @@ fn handle_tbody<T:Write>(handle: Handle, err_out: &mut T, width: usize) -> Strin
     let cell_bottom: String = (0..col_width).map(|_| '-').collect::<String>() + "+";
     let rowline: String = (0..num_columns-1).map(|_| &cell_bottom[..]).collect::<String>() + &cell_bottom[..col_width];
 
-    let mut result = rowline.clone();
+    let mut result = String::new();
+    result.push('\n');  // Make sure to start on a new line.
+    result.push_str(&rowline);
     result.push('\n');
 
     for row in table.rows() {
