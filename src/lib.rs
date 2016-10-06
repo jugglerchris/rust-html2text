@@ -176,7 +176,7 @@ fn handle_tbody<T:Write>(handle: Handle, err_out: &mut T, width: usize) -> Strin
 
 
     let cell_bottom: String = (0..col_width).map(|_| '-').collect::<String>() + "+";
-    let rowline: String = (0..num_columns).map(|_| &cell_bottom[..]).collect::<String>() + &cell_bottom[..col_width];
+    let rowline: String = (0..num_columns-1).map(|_| &cell_bottom[..]).collect::<String>() + &cell_bottom[..col_width];
 
     let mut result = rowline.clone();
     result.push('\n');
@@ -194,9 +194,13 @@ fn handle_tbody<T:Write>(handle: Handle, err_out: &mut T, width: usize) -> Strin
                                    .map(|v| v.len())
                                    .max().unwrap();
         for i in 0..cell_height {
-            for ls in &line_sets {
+            for (cellno, ls) in line_sets.iter().enumerate() {
                 result.push_str(&format!("{: <width$}", ls.get(i).cloned().unwrap_or(""), width = col_width));
-                result.push('|')
+                if cellno == line_sets.len()-1 {
+                    result.push('\n')
+                } else {
+                    result.push('|')
+                }
             }
         }
         result.push_str(&rowline);
