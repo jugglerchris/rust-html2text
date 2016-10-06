@@ -61,7 +61,7 @@ fn dom_to_string(handle: Handle) -> String {
     result
 }
 
-pub fn from_read<R>(input: &mut R) -> String where R: io::Read {
+pub fn from_read<R>(mut input: R) -> String where R: io::Read {
     let opts = ParseOpts {
         tree_builder: TreeBuilderOpts {
             drop_doctype: true,
@@ -71,7 +71,7 @@ pub fn from_read<R>(input: &mut R) -> String where R: io::Read {
     };
     let dom = parse_document(RcDom::default(), opts)
                    .from_utf8()
-                   .read_from(input)
+                   .read_from(&mut input)
                    .unwrap();
 
     dom_to_string(dom.document)
