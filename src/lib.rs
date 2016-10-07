@@ -1,6 +1,7 @@
 #[macro_use]
 extern crate string_cache;
 extern crate html5ever;
+extern crate unicode_width;
 
 use std::io;
 use std::io::Write;
@@ -9,6 +10,57 @@ use html5ever::driver::ParseOpts;
 use html5ever::tree_builder::TreeBuilderOpts;
 use html5ever::rcdom::{RcDom,Handle,Text,Element,Document,Comment};
 use html5ever::tendril::TendrilSink;
+use unicode_width::{UnicodeWidthStr,UnicodeWidthChar};
+
+fn wrap_text(text: String, width: usize) -> String {
+    let mut result = String::new();
+    let mut xpos = 0usize;
+    for word in text.split_whitespace() {
+        if width <= (xpos + 1) {
+            result.push('\n');
+            xpos = 0;
+        }
+        let space_left = width - xpos - 1;
+        let word_width = UnicodeWidthStr::width(word);
+        if word_width <= space_left {
+            /* It fits; no problem. */
+            result.push(' ');
+            xpos += 1;
+            result.push_str(word);
+            xpos += word_width;
+            continue;
+        }
+
+        /* It doesn't fit.  If we're not at the start of the line,
+         * then go to a new line. */
+        if xpos > 0 {
+            result.push('\n');
+            xpos = 0;
+        }
+
+        /* We're now at the start of a line. */
+        if word_width > width {
+            /* It doesn't fit at all on the line, so break it. */
+            for c in word.chars() {
+                let c_width = UnicodeWidthChar::width(c).unwrap();
+                if c_width + xpos > width {
+                    /* Break here */
+                    result.push('\n');
+                    xpos = 0;
+                }
+                /* This might happen with really narrow spaces... */
+                assert!(c_width <= width);
+
+                result.push(c);
+                xpos += c_width;
+            }
+        } else {
+            result.push_str(word);
+            xpos += word_width;
+        }
+    }
+    result
+}
 
 fn get_text(handle: Handle) -> String {
     let node = handle.borrow();
@@ -21,6 +73,11 @@ fn get_text(handle: Handle) -> String {
         }
     }
     result
+}
+
+fn get_wrapped_text(handle: Handle, width: usize) -> String {
+    let text = get_text(handle);
+    wrap_text(text, width)
 }
 
 fn dom_to_string<T:Write>(handle: Handle, err_out: &mut T, width: usize) -> String {
@@ -43,9 +100,12 @@ fn dom_to_string<T:Write>(handle: Handle, err_out: &mut T, width: usize) -> Stri
                     /* Ignore the head and its children */
                     return result;
                 },
+                qualname!(html, "h1") |
+                qualname!(html, "h2") |
+                qualname!(html, "h3") |
                 qualname!(html, "h4") |
                 qualname!(html, "p") => {
-                    return get_text(handle.clone()) + "\n\n";
+                    return get_wrapped_text(handle.clone(), width) + "\n\n";
                 },
                 qualname!(html, "br") => {
                     result.push('\n');
@@ -57,7 +117,7 @@ fn dom_to_string<T:Write>(handle: Handle, err_out: &mut T, width: usize) -> Stri
             }
           },
         Text(ref tstr) => {
-            return tstr.to_string();
+            return wrap_text(tstr.to_string(), width);
         }
         Comment(_) => {},
         _ => { write!(err_out, "Unhandled: {:?}\n", node); },
