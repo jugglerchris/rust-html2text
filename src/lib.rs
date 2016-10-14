@@ -265,8 +265,10 @@ fn handle_tbody<T:Write>(handle: Handle, err_out: &mut T, width: usize) -> Strin
                 }
             }
         }
-        result.push_str(&rowline);
-        result.push('\n');
+        if cell_height > 0 {
+            result.push_str(&rowline);
+            result.push('\n');
+        }
     }
 
     result
