@@ -5,12 +5,20 @@ extern crate unicode_width;
 
 use std::io;
 use std::io::Write;
+use std::cmp::max;
 use html5ever::{Parser,parse_document};
 use html5ever::driver::ParseOpts;
 use html5ever::tree_builder::TreeBuilderOpts;
 use html5ever::rcdom::{RcDom,Handle,Text,Element,Document,Comment};
 use html5ever::tendril::TendrilSink;
 use unicode_width::{UnicodeWidthStr,UnicodeWidthChar};
+
+/// A dummy writer which does nothing
+struct Discard {}
+impl Write for Discard {
+    fn write(&mut self, _: &[u8]) -> std::result::Result<usize, io::Error> { Ok(0) }
+    fn flush(&mut self) -> std::result::Result<(), io::Error> { Ok(()) }
+}
 
 fn wrap_text(text: String, width: usize) -> String {
     let mut result = String::new();
@@ -235,18 +243,58 @@ fn handle_tbody<T:Write>(handle: Handle, err_out: &mut T, width: usize) -> Strin
     let col_width = (width - (num_columns-1))/num_columns;
 
 
-    let cell_bottom: String = (0..col_width).map(|_| '-').collect::<String>() + "+";
-    let rowline: String = (0..num_columns-1).map(|_| &cell_bottom[..]).collect::<String>() + &cell_bottom[..col_width];
-
     let mut result = String::new();
-    result.push('\n');  // Make sure to start on a new line.
+
+    /* Heuristic: scale the column widths according to how much content there is. */
+    let test_col_width = 1000;  // Render width for measurement; shouldn't make much difference.
+    let min_width = 5;
+    let mut col_sizes = vec![0usize; num_columns];
+
+    for row in table.rows() {
+        for (colno, cell) in row.cells().enumerate() {
+            let celldata = cell.render(test_col_width, &mut Discard{});
+            col_sizes[colno] += celldata.len();
+        }
+    }
+    let tot_size: usize = col_sizes.iter().sum();
+    let mut col_widths:Vec<usize> = col_sizes.iter()
+                                         .map(|sz| {
+                                             if *sz == 0 {
+                                                 0
+                                             } else {
+                                                 max(sz * width / tot_size, min_width)
+                                             }
+                                          }).collect();
+    /* The minimums may have put the total width too high */
+    while col_widths.iter().cloned().sum::<usize>() > width {
+        let (i, v) = col_widths.iter().cloned().enumerate().max_by_key(|k| k.1).unwrap();
+        col_widths[i] -= 1;
+    }
+
+    let cell_bottom: String = (0..col_width).map(|_| '-').collect::<String>() + "+";
+    let mut rowline = String::new();
+    for width in col_widths.iter().cloned().filter(|w:&usize| *w > 0) {
+        rowline.push_str(&(0..(width-1)).map(|_| '-').collect::<String>());
+        rowline.push('+');
+    }
+    if rowline.len() > 0 {
+        rowline.pop().unwrap();  // Remove the last '+'.
+    }
     result.push_str(&rowline);
     result.push('\n');
 
     for row in table.rows() {
-        let formatted_cells: Vec<String> = row.cells()
-                                              .map(|cell| cell.render(col_width, err_out))
-                                              .collect();
+        let (used_widths, formatted_cells): (Vec<usize>, Vec<String>) = row.cells()
+                                              .enumerate()
+                                              .flat_map(|(colno, cell)| {
+                                                   let col_width = col_widths[colno];
+                                                   if col_width > 0 {
+                                                       Some((col_width, cell.render(col_width-1, err_out)))
+                                                   } else {
+                                                       None
+                                                   }
+                                               })
+                                              .unzip();
         let line_sets: Vec<Vec<&str>> = formatted_cells.iter()
                                                        .map(|s| s.lines()
                                                                  .map(|line| line.trim_right())
@@ -257,7 +305,7 @@ fn handle_tbody<T:Write>(handle: Handle, err_out: &mut T, width: usize) -> Strin
                                    .max().unwrap_or(0);
         for i in 0..cell_height {
             for (cellno, ls) in line_sets.iter().enumerate() {
-                result.push_str(&format!("{: <width$}", ls.get(i).cloned().unwrap_or(""), width = col_width));
+                result.push_str(&format!("{: <width$}", ls.get(i).cloned().unwrap_or(""), width = used_widths[cellno]));
                 if cellno == line_sets.len()-1 {
                     result.push('\n')
                 } else {
