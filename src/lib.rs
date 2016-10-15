@@ -254,7 +254,7 @@ fn handle_tbody<T:Write>(handle: Handle, err_out: &mut T, width: usize) -> Strin
                                                        .collect();
         let cell_height = line_sets.iter()
                                    .map(|v| v.len())
-                                   .max().unwrap();
+                                   .max().unwrap_or(0);
         for i in 0..cell_height {
             for (cellno, ls) in line_sets.iter().enumerate() {
                 result.push_str(&format!("{: <width$}", ls.get(i).cloned().unwrap_or(""), width = col_width));
