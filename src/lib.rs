@@ -20,7 +20,7 @@ impl Write for Discard {
     fn flush(&mut self) -> std::result::Result<(), io::Error> { Ok(()) }
 }
 
-fn wrap_text(text: String, width: usize) -> String {
+fn wrap_text(text: &str, width: usize) -> String {
     let mut result = String::new();
     let mut xpos = 0usize;
     for word in text.split_whitespace() {
@@ -85,7 +85,7 @@ fn get_text(handle: Handle) -> String {
 
 fn get_wrapped_text(handle: Handle, width: usize) -> String {
     let text = get_text(handle);
-    wrap_text(text, width)
+    wrap_text(&text, width)
 }
 
 fn dom_to_string<T:Write>(handle: Handle, err_out: &mut T, width: usize) -> String {
@@ -125,10 +125,10 @@ fn dom_to_string<T:Write>(handle: Handle, err_out: &mut T, width: usize) -> Stri
             }
           },
         Text(ref tstr) => {
-            return wrap_text(tstr.to_string(), width);
+            return wrap_text(tstr, width);
         }
         Comment(_) => {},
-        _ => { write!(err_out, "Unhandled: {:?}\n", node); },
+        _ => { write!(err_out, "Unhandled: {:?}\n", node).unwrap(); },
     }
     for child in node.children.iter() {
         result.push_str(&dom_to_string(child.clone(), err_out, width));
@@ -138,6 +138,7 @@ fn dom_to_string<T:Write>(handle: Handle, err_out: &mut T, width: usize) -> Stri
 
 #[derive(Debug)]
 struct TableCell {
+    colspan: usize,
     content: Handle,
 }
 
@@ -180,7 +181,20 @@ impl TableRow {
 
 impl TableCell {
     pub fn new(s: Handle) -> TableCell {
-        TableCell{ content: s }
+        if let Element(_, _, ref attrs) = s.borrow().node {
+            let mut colspan = 1;
+            for attr in attrs {
+                if &attr.name.local == "colspan" {
+                    let v:&str = &*attr.value;
+                    colspan = v.parse().unwrap_or(1);
+                } else {
+                    //println!("Attr: {:?}", attr);
+                }
+            }
+            TableCell{ content: s.clone(), colspan: colspan }
+        } else {
+            panic!("TableCell::new received a non-Element");
+        }
     }
     pub fn render<T:Write>(&self, width: usize, err_out: &mut T) -> String
     {
@@ -192,14 +206,14 @@ fn handle_td(handle: Handle) -> TableCell {
     TableCell::new(handle)
 }
 
-fn handle_tr<T:Write>(handle: Handle, err_out: &mut T) -> TableRow {
+fn handle_tr<T:Write>(handle: Handle, _: &mut T) -> TableRow {
     let node = handle.borrow();
 
     let mut row = TableRow::new();
 
     for child in node.children.iter() {
         match child.borrow().node {
-            Element(ref name, _, ref attrs) => {
+            Element(ref name, _, _) => {
                 match *name {
                     qualname!(html, "td") => {
                         row.push(handle_td(child.clone()));
@@ -222,7 +236,7 @@ fn handle_tbody<T:Write>(handle: Handle, err_out: &mut T, width: usize) -> Strin
 
     for child in node.children.iter() {
         match child.borrow().node {
-            Element(ref name, _, ref attrs) => {
+            Element(ref name, _, _) => {
                 match *name {
                     qualname!(html, "tr") => {
                         table.push(handle_tr(child.clone(), err_out));
@@ -324,11 +338,11 @@ fn handle_tbody<T:Write>(handle: Handle, err_out: &mut T, width: usize) -> Strin
 
 fn table_to_string<T:Write>(handle: Handle, err_out: &mut T, width: usize) -> String {
     let node = handle.borrow();
-    let mut result = String::new();
+    let result = String::new();
 
     for child in node.children.iter() {
         match child.borrow().node {
-            Element(ref name, _, ref attrs) => {
+            Element(ref name, _, _) => {
                 match *name {
                     qualname!(html, "tbody") => return handle_tbody(child.clone(), err_out, width),
                     _ => { writeln!(err_out, "  [[table child: {:?}]]", name);},
@@ -342,7 +356,7 @@ fn table_to_string<T:Write>(handle: Handle, err_out: &mut T, width: usize) -> St
     result
 }
 
-pub fn from_read<R>(mut input: R) -> String where R: io::Read {
+pub fn from_read<R>(mut input: R, width: usize) -> String where R: io::Read {
     let opts = ParseOpts {
         tree_builder: TreeBuilderOpts {
             drop_doctype: true,
@@ -355,9 +369,35 @@ pub fn from_read<R>(mut input: R) -> String where R: io::Read {
                    .read_from(&mut input)
                    .unwrap();
 
-    dom_to_string(dom.document, &mut io::stderr(), 80)
+    dom_to_string(dom.document, &mut io::stderr(), width)
 }
 
 #[cfg(test)]
 mod tests {
+    use super::{from_read,wrap_text};
+    #[test]
+    fn test_table() {
+        assert_eq!(from_read(&br##"
+       <table>
+         <tr>
+           <td>1</td>
+           <td>2</td>
+           <td>3</td>
+         </tr>
+       </table>
+"##[..], 12), r#"---+---+---
+|1  |2 |3 |
+"#);
+     }
+
+     #[test]
+     fn test_para() {
+        assert_eq!(from_read(&b"<p>Hello</p>"[..], 10),
+                   "Hello\n");
+     }
+
+     #[test]
+     fn test_wrap() {
+        assert_eq!(wrap_text("Hello", 10), "Hello\n");
+     }
 }
