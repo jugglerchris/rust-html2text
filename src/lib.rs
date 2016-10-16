@@ -460,4 +460,18 @@ mod tests {
      fn test_wrap() {
         assert_eq!(wrap_text("Hello", 10), "Hello\n");
      }
+
+     #[test]
+     fn test_blockquote() {
+        assert_eq!(from_read(&br#"<p>Hello</p>
+        <blockquote>One, two, three</blockquote>
+        <p>foo</p>
+"#[..], 12), r#"Hello
+
+> One, two,
+> three
+
+foo
+"#);
+     }
 }
