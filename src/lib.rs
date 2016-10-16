@@ -111,6 +111,7 @@ fn dom_to_string<T:Write>(handle: Handle, err_out: &mut T, width: usize) -> Stri
                 qualname!(html, "link") |
                 qualname!(html, "meta") |
                 qualname!(html, "hr") |
+                qualname!(html, "script") |
                 qualname!(html, "head") => {
                     /* Ignore the head and its children */
                     return result;
