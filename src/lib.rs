@@ -24,7 +24,6 @@ fn wrap_text(text: &str, width: usize) -> String {
     let mut result = String::new();
     let mut xpos = 0usize;
     for word in text.split_whitespace() {
-        println!("First word: <<{:?}>>", word);
         if width <= (xpos + 1) {
             result.push('\n');
             xpos = 0;
@@ -182,8 +181,21 @@ impl TableRow {
     pub fn cells(&self) -> std::slice::Iter<TableCell> {
         self.cells.iter()
     }
+    /// Return an iterator over (column, &cell)s, which
+    /// takes into account colspan.
+    pub fn cell_columns(&self) -> Vec<(usize, &TableCell)> {
+        let mut result = Vec::new();
+        let mut colno = 0;
+        for cell in &self.cells {
+            result.push((colno, cell));
+            colno += cell.colspan;
+        }
+        result
+    }
+    /// Count the number of cells in the row.
+    /// Takes into account colspan.
     pub fn num_cells(&self) -> usize {
-        self.cells.len()
+        self.cells.iter().map(|cell| cell.colspan).sum()
     }
 }
 
@@ -261,10 +273,6 @@ fn handle_tbody<T:Write>(handle: Handle, err_out: &mut T, width: usize) -> Strin
      * same width.  TODO: be cleverer, and handle multi-width cells, etc. */
     let num_columns = table.rows().map(|r| r.num_cells()).max().unwrap();
 
-    // Allow for | between columns.
-    let col_width = (width - (num_columns-1))/num_columns;
-
-
     let mut result = String::new();
 
     /* Heuristic: scale the column widths according to how much content there is. */
@@ -273,9 +281,16 @@ fn handle_tbody<T:Write>(handle: Handle, err_out: &mut T, width: usize) -> Strin
     let mut col_sizes = vec![0usize; num_columns];
 
     for row in table.rows() {
-        for (colno, cell) in row.cells().enumerate() {
+        let mut colno = 0;
+        for cell in row.cells() {
             let celldata = cell.render(test_col_width, &mut Discard{});
-            col_sizes[colno] += celldata.len();
+            // If the cell has a colspan>1, then spread its size between the
+            // columns.
+            let col_size = celldata.len() / cell.colspan;
+            for i in 0..cell.colspan {
+                col_sizes[colno + i] += col_size;
+            }
+            colno += cell.colspan;
         }
     }
     let tot_size: usize = col_sizes.iter().sum();
@@ -305,10 +320,11 @@ fn handle_tbody<T:Write>(handle: Handle, err_out: &mut T, width: usize) -> Strin
     result.push('\n');
 
     for row in table.rows() {
-        let (used_widths, formatted_cells): (Vec<usize>, Vec<String>) = row.cells()
-                                              .enumerate()
+        let (used_widths, formatted_cells): (Vec<usize>, Vec<String>) = row.cell_columns()
+                                              .into_iter()
                                               .flat_map(|(colno, cell)| {
-                                                   let col_width = col_widths[colno];
+                                                   let col_width:usize = col_widths[colno..colno+cell.colspan]
+                                                                      .iter().sum();
                                                    if col_width > 0 {
                                                        Some((col_width, cell.render(col_width-1, err_out)))
                                                    } else {
@@ -394,6 +410,34 @@ mod tests {
        </table>
 "##[..], 12), r#"---+---+---
 1  |2  |3  
+---+---+---
+"#);
+     }
+
+     #[test]
+     fn test_colspan() {
+        assert_eq!(from_read(&br##"
+       <table>
+         <tr>
+           <td>1</td>
+           <td>2</td>
+           <td>3</td>
+         </tr>
+         <tr>
+           <td colspan="2">12</td>
+           <td>3</td>
+         </tr>
+         <tr>
+           <td>1</td>
+           <td colspan="2">23</td>
+         </tr>
+       </table>
+"##[..], 12), r#"---+---+---
+1  |2  |3  
+---+---+---
+12     |3  
+---+---+---
+1  |23     
 ---+---+---
 "#);
      }
