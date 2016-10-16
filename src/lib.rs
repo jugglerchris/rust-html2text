@@ -307,6 +307,13 @@ fn handle_tbody<T:Write>(handle: Handle, err_out: &mut T, width: usize) -> Strin
         let (i, _) = col_widths.iter().cloned().enumerate().max_by_key(|k| k.1).unwrap();
         col_widths[i] -= 1;
     }
+    if col_widths.len() > 0 {
+        // Slight fudge; we're not drawing extreme edges, so one of the columns
+        // can gets a free character cell from not having a border.
+        // make it the last.
+        let last = col_widths.len() - 1;
+        col_widths[last] += 1;
+    }
 
     let mut rowline = String::new();
     for width in col_widths.iter().cloned().filter(|w:&usize| *w > 0) {
@@ -392,7 +399,7 @@ pub fn from_read<R>(mut input: R, width: usize) -> String where R: io::Read {
                    .read_from(&mut input)
                    .unwrap();
 
-    dom_to_string(dom.document, &mut io::stderr(), width)
+    dom_to_string(dom.document, &mut Discard{} /* &mut io::stderr()*/, width)
 }
 
 #[cfg(test)]
@@ -408,9 +415,9 @@ mod tests {
            <td>3</td>
          </tr>
        </table>
-"##[..], 12), r#"---+---+---
-1  |2  |3  
----+---+---
+"##[..], 12), r#"---+---+----
+1  |2  |3   
+---+---+----
 "#);
      }
 
@@ -432,13 +439,13 @@ mod tests {
            <td colspan="2">23</td>
          </tr>
        </table>
-"##[..], 12), r#"---+---+---
-1  |2  |3  
----+---+---
-12     |3  
----+---+---
-1  |23     
----+---+---
+"##[..], 12), r#"---+---+----
+1  |2  |3   
+---+---+----
+12     |3   
+---+---+----
+1  |23      
+---+---+----
 "#);
      }
 
