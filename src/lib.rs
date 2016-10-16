@@ -24,6 +24,7 @@ fn wrap_text(text: &str, width: usize) -> String {
     let mut result = String::new();
     let mut xpos = 0usize;
     for word in text.split_whitespace() {
+        println!("First word: <<{:?}>>", word);
         if width <= (xpos + 1) {
             result.push('\n');
             xpos = 0;
@@ -31,9 +32,12 @@ fn wrap_text(text: &str, width: usize) -> String {
         let space_left = width - xpos - 1;
         let word_width = UnicodeWidthStr::width(word);
         if word_width <= space_left {
-            /* It fits; no problem. */
-            result.push(' ');
-            xpos += 1;
+            /* It fits; no problem.  Add a space if not at the
+             * start of line.*/
+            if xpos > 0 {
+                result.push(' ');
+                xpos += 1;
+            }
             result.push_str(word);
             xpos += word_width;
             continue;
@@ -66,6 +70,10 @@ fn wrap_text(text: &str, width: usize) -> String {
             result.push_str(word);
             xpos += word_width;
         }
+    }
+    /* Terminate with a newline if needed. */
+    if xpos > 0 {
+        result.push('\n');
     }
     result
 }
@@ -319,7 +327,7 @@ fn handle_tbody<T:Write>(handle: Handle, err_out: &mut T, width: usize) -> Strin
                                    .max().unwrap_or(0);
         for i in 0..cell_height {
             for (cellno, ls) in line_sets.iter().enumerate() {
-                result.push_str(&format!("{: <width$}", ls.get(i).cloned().unwrap_or(""), width = used_widths[cellno]));
+                result.push_str(&format!("{: <width$}", ls.get(i).cloned().unwrap_or(""), width = used_widths[cellno]-1));
                 if cellno == line_sets.len()-1 {
                     result.push('\n')
                 } else {
@@ -386,7 +394,8 @@ mod tests {
          </tr>
        </table>
 "##[..], 12), r#"---+---+---
-|1  |2 |3 |
+1  |2  |3  
+---+---+---
 "#);
      }
 
