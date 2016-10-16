@@ -90,7 +90,7 @@ fn get_text(handle: Handle) -> String {
     result
 }
 
-fn get_wrapped_text(handle: Handle, width: usize) -> String {
+fn render_block(handle: Handle, width: usize) -> String {
     let text = get_text(handle);
     wrap_text(&text, width)
 }
@@ -121,12 +121,13 @@ fn dom_to_string<T:Write>(handle: Handle, err_out: &mut T, width: usize) -> Stri
                 qualname!(html, "h3") |
                 qualname!(html, "h4") |
                 qualname!(html, "p") => {
-                    return get_wrapped_text(handle.clone(), width) + "\n";
+                    return render_block(handle.clone(), width) + "\n";
                 },
                 qualname!(html, "br") => {
                     result.push('\n');
                 }
                 qualname!(html, "table") => return table_to_string(handle.clone(), err_out, width),
+                qualname!(html, "blockquote") => return bq_to_string(handle.clone(), err_out, width) + "\n",
                 _ => {
                     write!(err_out, "Unhandled element: {:?}\n", name.local).unwrap();
                 },
@@ -387,6 +388,23 @@ fn table_to_string<T:Write>(handle: Handle, err_out: &mut T, width: usize) -> St
     result
 }
 
+fn prepend_block(block: &str, prefix: &str) -> String {
+    let mut result = String::new();
+    for line in block.lines() {
+        result.push_str(prefix);
+        result.push_str(line);
+        result.push('\n');
+    }
+    result
+}
+
+fn bq_to_string<T:Write>(handle: Handle, err_out: &mut T, width: usize) -> String {
+
+    let subblock = render_block(handle, width-2);
+
+    prepend_block(&subblock, "> ")
+}
+
 pub fn from_read<R>(mut input: R, width: usize) -> String where R: io::Read {
     let opts = ParseOpts {
         tree_builder: TreeBuilderOpts {
@@ -472,6 +490,7 @@ mod tests {
 > three
 
 foo
+
 "#);
      }
 }
