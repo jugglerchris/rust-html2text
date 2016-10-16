@@ -4,5 +4,5 @@ use std::io;
 fn main() {
     let stdin = io::stdin();
 
-    println!("{}", html2text::from_read(&mut stdin.lock(), 12));
+    println!("{}", html2text::from_read(&mut stdin.lock(), 80));
 }
