@@ -6,7 +6,7 @@ extern crate unicode_width;
 use std::io;
 use std::io::Write;
 use std::cmp::max;
-use html5ever::{Parser,parse_document};
+use html5ever::{parse_document};
 use html5ever::driver::ParseOpts;
 use html5ever::tree_builder::TreeBuilderOpts;
 use html5ever::rcdom::{RcDom,Handle,Text,Element,Document,Comment};
@@ -16,7 +16,7 @@ use unicode_width::{UnicodeWidthStr,UnicodeWidthChar};
 /// A dummy writer which does nothing
 struct Discard {}
 impl Write for Discard {
-    fn write(&mut self, _: &[u8]) -> std::result::Result<usize, io::Error> { Ok(0) }
+    fn write(&mut self, bytes: &[u8]) -> std::result::Result<usize, io::Error> { Ok(bytes.len()) }
     fn flush(&mut self) -> std::result::Result<(), io::Error> { Ok(()) }
 }
 
@@ -101,7 +101,7 @@ fn dom_to_string<T:Write>(handle: Handle, err_out: &mut T, width: usize) -> Stri
     let mut result = String::new();
     match node.node {
         Document => {},
-        Element(ref name, _, ref attrs) => {
+        Element(ref name, _, _) => {
             match *name {
                 qualname!(html, "html") |
                 qualname!(html, "div") |
@@ -121,14 +121,14 @@ fn dom_to_string<T:Write>(handle: Handle, err_out: &mut T, width: usize) -> Stri
                 qualname!(html, "h3") |
                 qualname!(html, "h4") |
                 qualname!(html, "p") => {
-                    return get_wrapped_text(handle.clone(), width) + "\n\n";
+                    return get_wrapped_text(handle.clone(), width) + "\n";
                 },
                 qualname!(html, "br") => {
                     result.push('\n');
                 }
                 qualname!(html, "table") => return table_to_string(handle.clone(), err_out, width),
                 _ => {
-                    write!(err_out, "Unhandled element: {:?}\n", name.local);
+                    write!(err_out, "Unhandled element: {:?}\n", name.local).unwrap();
                 },
             }
           },
@@ -289,11 +289,10 @@ fn handle_tbody<T:Write>(handle: Handle, err_out: &mut T, width: usize) -> Strin
                                           }).collect();
     /* The minimums may have put the total width too high */
     while col_widths.iter().cloned().sum::<usize>() > width {
-        let (i, v) = col_widths.iter().cloned().enumerate().max_by_key(|k| k.1).unwrap();
+        let (i, _) = col_widths.iter().cloned().enumerate().max_by_key(|k| k.1).unwrap();
         col_widths[i] -= 1;
     }
 
-    let cell_bottom: String = (0..col_width).map(|_| '-').collect::<String>() + "+";
     let mut rowline = String::new();
     for width in col_widths.iter().cloned().filter(|w:&usize| *w > 0) {
         rowline.push_str(&(0..(width-1)).map(|_| '-').collect::<String>());
@@ -353,7 +352,7 @@ fn table_to_string<T:Write>(handle: Handle, err_out: &mut T, width: usize) -> St
             Element(ref name, _, _) => {
                 match *name {
                     qualname!(html, "tbody") => return handle_tbody(child.clone(), err_out, width),
-                    _ => { writeln!(err_out, "  [[table child: {:?}]]", name);},
+                    _ => { writeln!(err_out, "  [[table child: {:?}]]", name).unwrap();},
                 }
             },
             Comment(_) => {},
@@ -402,7 +401,7 @@ mod tests {
      #[test]
      fn test_para() {
         assert_eq!(from_read(&b"<p>Hello</p>"[..], 10),
-                   "Hello\n");
+                   "Hello\n\n");
      }
 
      #[test]
