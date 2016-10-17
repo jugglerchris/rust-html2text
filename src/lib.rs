@@ -128,6 +128,7 @@ fn dom_to_string<T:Write>(handle: Handle, err_out: &mut T, width: usize) -> Stri
                 }
                 qualname!(html, "table") => return table_to_string(handle.clone(), err_out, width),
                 qualname!(html, "blockquote") => return bq_to_string(handle.clone(), err_out, width) + "\n",
+                qualname!(html, "ul") => return ul_to_string(handle.clone(), err_out, width) + "\n",
                 _ => {
                     write!(err_out, "Unhandled element: {:?}\n", name.local).unwrap();
                 },
@@ -398,11 +399,53 @@ fn prepend_block(block: &str, prefix: &str) -> String {
     result
 }
 
-fn bq_to_string<T:Write>(handle: Handle, err_out: &mut T, width: usize) -> String {
+fn prepend_first_line(block: &str, prefix: &str) -> String {
+    let mut result = String::new();
+    let mut lines = block.lines();
+    if let Some(line) = lines.next() {
+        result.push_str(prefix);
+        result.push_str(line);
+        result.push('\n');
+    }
+    let ws_prefix: String = (0..prefix.len()).map(|_| ' ').collect();
+    for line in lines {
+        result.push_str(&ws_prefix);
+        result.push_str(line);
+        result.push('\n');
+    }
+    result
+}
+
+
+fn bq_to_string<T:Write>(handle: Handle, _: &mut T, width: usize) -> String {
 
     let subblock = render_block(handle, width-2);
 
     prepend_block(&subblock, "> ")
+}
+
+fn ul_to_string<T:Write>(handle: Handle, _: &mut T, width: usize) -> String {
+    let node = handle.borrow();
+
+    let mut result = String::new();
+
+    for child in node.children.iter() {
+        match child.borrow().node {
+            Element(ref name, _, _) => {
+                match *name {
+                    qualname!(html, "li") => {
+                        let li_text = render_block(child.clone(), width-2);
+                        result.push_str(&prepend_first_line(&li_text, "* "));
+                    },
+                    _ => println!("  [[ul child: {:?}]]", name),
+                }
+            },
+            Comment(_) => {},
+            _ => { /*result.push_str(&format!("Unhandled in table: {:?}\n", node));*/ },
+        }
+    }
+
+    result
 }
 
 pub fn from_read<R>(mut input: R, width: usize) -> String where R: io::Read {
@@ -424,6 +467,11 @@ pub fn from_read<R>(mut input: R, width: usize) -> String where R: io::Read {
 #[cfg(test)]
 mod tests {
     use super::{from_read,wrap_text};
+
+    fn test_html(input: &[u8], expected: &str, width: usize) {
+        assert_eq!(from_read(input, width), expected);
+    }
+
     #[test]
     fn test_table() {
         assert_eq!(from_read(&br##"
@@ -492,5 +540,21 @@ mod tests {
 foo
 
 "#);
+     }
+
+     #[test]
+     fn test_ul() {
+         test_html(br#"
+            <ul>
+              <li>Item one</li>
+              <li>Item two</li>
+              <li>Item three</li>
+            </ul>
+         "#, r#"* Item one
+* Item two
+* Item
+  three
+
+"#, 10);
      }
 }
