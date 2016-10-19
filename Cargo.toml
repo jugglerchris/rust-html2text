@@ -7,3 +7,7 @@ authors = ["Chris Emerson <github@mail.nosreme.org>"]
 html5ever = "*"
 string_cache = "0.2.0"
 unicode-width = "*"
+backtrace = "*"
+
+[features]
+html_trace = []
