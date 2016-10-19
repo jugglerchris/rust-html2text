@@ -229,6 +229,10 @@ fn render_block<T:Write>(builder: &mut HtmlBuilder, handle: Handle,
     render_children(builder, handle, err_out);
 }
 
+fn render_pre<T:Write>(builder: &mut HtmlBuilder, handle: Handle, _: &mut T) {
+    builder.add_block(&get_text(handle));
+}
+
 fn render_children<T:Write>(builder: &mut HtmlBuilder, handle: Handle,
                             err_out: &mut T) {
     for child in handle.borrow().children.iter() {
@@ -264,6 +268,9 @@ fn dom_to_string<T:Write>(builder: &mut HtmlBuilder, handle: Handle,
                 qualname!(html, "h4") |
                 qualname!(html, "p") => {
                     return render_block(builder, handle.clone(), err_out);
+                },
+                qualname!(html, "pre") => {
+                    return render_pre(builder, handle.clone(), err_out);
                 },
                 qualname!(html, "br") => {
                     builder.add_empty_line();
@@ -763,4 +770,19 @@ One Two Three
 --------------------
 ", 20);
      }
+     #[test]
+     fn test_pre() {
+         test_html(br#"
+           <pre>foo
+    bar
+  wib   asdf;
+</pre>
+<p>Hello</p>
+         "#, r"foo
+    bar
+  wib   asdf;
+
+Hello
+", 20);
+    }
 }
