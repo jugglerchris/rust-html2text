@@ -386,6 +386,7 @@ fn handle_tr<T:Write>(handle: Handle, _: &mut T) -> TableRow {
         match child.borrow().node {
             Element(ref name, _, _) => {
                 match *name {
+                    qualname!(html, "th") |
                     qualname!(html, "td") => {
                         row.push(handle_td(child.clone()));
                     },
