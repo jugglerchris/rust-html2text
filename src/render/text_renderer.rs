@@ -204,7 +204,7 @@ impl Renderer for TextRenderer {
                                 let width = sub_r.width;
                                 (width, sub_r.into_lines()
                                              .into_iter()
-                                             .map(|line| format!("{: <width$}", width=width))
+                                             .map(|line| format!("{: <width$}", line, width=width))
                                              .collect())
                                  })
                             .collect::<Vec<(usize, Vec<String>)>>();
