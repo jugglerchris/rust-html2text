@@ -370,7 +370,9 @@ fn render_blockquote<T:Write, R:Renderer>(builder: &mut R, handle: Handle, err_o
     let mut sub_builder = builder.new_sub_renderer(builder.width()-2);
     render_children(&mut sub_builder, handle, err_out);
 
+    builder.start_block();
     builder.append_subrender(sub_builder, repeat("> "));
+    builder.end_block();
 }
 
 fn render_ul<T:Write, R:Renderer>(builder: &mut R, handle: Handle, err_out: &mut T) {

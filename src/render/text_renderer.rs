@@ -118,6 +118,10 @@ impl Renderer for TextRenderer {
         self.at_block_end = true;
     }
 
+    fn end_block(&mut self) {
+        self.at_block_end = true;
+    }
+
     fn add_inline_text(&mut self, text: &str) {
         html_trace!("add_inline_text({}, {})", self.width, text);
         let mut partial = self.take_partial_line();
@@ -184,6 +188,7 @@ impl Renderer for TextRenderer {
                                prefixes: I)
                            where I:Iterator<Item=&'a str>
     {
+        self.flush_line();
         self.lines.extend(other.into_lines()
                                .into_iter()
                                .zip(prefixes)
