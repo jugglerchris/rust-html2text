@@ -4,210 +4,29 @@ extern crate html5ever;
 extern crate unicode_width;
 extern crate backtrace;
 
-#[cfg(html_trace)]
-macro_rules! html_trace {
-    ($fmt:expr) => {
-         let bt = ::backtrace::Backtrace::new();
-         println!( concat!($fmt, " at {:?}"), bt );
-    };
-    ($fmt:expr, $( $args:expr ),*) => {
-         let bt = ::backtrace::Backtrace::new();
-         println!( concat!($fmt, " at {:?}"), $( $args ),* , bt );
-    };
-}
-#[cfg(not(html_trace))]
-macro_rules! html_trace {
-    ($fmt:expr) => {};
-    ($fmt:expr, $( $args:expr ),*) => {};
-}
+#[macro_use]
+mod macros;
 
-#[cfg(html_trace)]
-macro_rules! html_trace_quiet {
-    ($fmt:expr) => {
-         println!( $fmt );
-    };
-    ($fmt:expr, $( $args:expr ),*) => {
-         println!( $fmt, $( $args ),* );
-    };
-}
+pub mod render;
 
-#[cfg(not(html_trace))]
-macro_rules! html_trace_quiet {
-    ($fmt:expr) => {};
-    ($fmt:expr, $( $args:expr ),*) => {};
-}
+use render::Renderer;
+use render::text_renderer::TextRenderer;
+
 use std::io;
 use std::io::Write;
 use std::cmp::max;
+use std::iter::{once,repeat};
 use html5ever::{parse_document};
 use html5ever::driver::ParseOpts;
 use html5ever::tree_builder::TreeBuilderOpts;
 use html5ever::rcdom::{RcDom,Handle,Text,Element,Document,Comment};
 use html5ever::tendril::TendrilSink;
-use unicode_width::{UnicodeWidthStr,UnicodeWidthChar};
 
 /// A dummy writer which does nothing
 struct Discard {}
 impl Write for Discard {
     fn write(&mut self, bytes: &[u8]) -> std::result::Result<usize, io::Error> { Ok(bytes.len()) }
     fn flush(&mut self) -> std::result::Result<(), io::Error> { Ok(()) }
-}
-
-/// State corresponding to a partially constructed line.
-struct PartialLine {
-    text: String,
-    /// The width in character cells of the text, or
-    /// current position.
-    pos: usize,
-}
-
-impl PartialLine {
-    pub fn new() -> PartialLine {
-        PartialLine {
-            text: String::new(),
-            pos: 0,
-        }
-    }
-}
-
-/// A struct which is passed either inline text or blocks and appends
-/// them to its output, wrapping as needed.
-struct HtmlBuilder {
-    width: usize,
-    lines: Vec<String>,
-    /// True at the end of a block, meaning we should add
-    /// a blank line if any other text is added.
-    at_block_end: bool,
-    partial_line: Option<PartialLine>,
-}
-
-impl HtmlBuilder {
-    /// Construct a new empty HtmlBuilder.
-    pub fn new(width: usize) -> HtmlBuilder {
-        html_trace!("new({})", width);
-        HtmlBuilder {
-            width: width,
-            lines: Vec::new(),
-            at_block_end: false,
-            partial_line: None,
-        }
-    }
-
-    /// Take the partial line out of self, or create one
-    /// if there wasn't one.
-    fn take_partial_line(&mut self) -> PartialLine {
-        if let Some(p) = self.partial_line.take() {
-            p
-        } else {
-            PartialLine::new()
-        }
-    }
-
-    pub fn start_block(&mut self) {
-        html_trace!("start_block({})", self.width);
-        self.flush_line();
-        if self.lines.len() > 0 {
-            self.add_empty_line();
-        }
-        html_trace_quiet!("start_block; at_block_end <- false");
-        self.at_block_end = false;
-    }
-
-    pub fn add_inline_text(&mut self, text: &str) {
-        html_trace!("add_inline_text({}, {})", self.width, text);
-        let mut partial = self.take_partial_line();
-        for word in text.split_whitespace() {
-            if self.width <= (partial.pos + 1) {
-                self.push_line(partial.text);
-                partial = self.take_partial_line();
-            }
-            let space_left = self.width - partial.pos - 1;
-            let word_width = UnicodeWidthStr::width(word);
-            if word_width <= space_left {
-                /* It fits; no problem.  Add a space if not at the
-                 * start of line.*/
-                if partial.pos > 0 {
-                    partial.text.push(' ');
-                    partial.pos += 1;
-                }
-                partial.text.push_str(word);
-                partial.pos += word_width;
-                continue;
-            }
-
-            /* It doesn't fit.  If we're not at the start of the line,
-             * then go to a new line. */
-            if partial.pos > 0 {
-                self.push_line(partial.text);
-                partial = self.take_partial_line();
-            }
-
-            /* We're now at the start of a line. */
-            if word_width > self.width {
-                /* It doesn't fit at all on the line, so break it. */
-                for c in word.chars() {
-                    let c_width = UnicodeWidthChar::width(c).unwrap();
-                    if c_width + partial.pos > self.width {
-                        /* Break here */
-                        self.push_line(partial.text);
-                        partial = self.take_partial_line();
-                    }
-                    /* This might happen with really narrow spaces... */
-                    assert!(c_width <= self.width);
-
-                    partial.text.push(c);
-                    partial.pos += c_width;
-                }
-            } else {
-                partial.text.push_str(word);
-                partial.pos += word_width;
-            }
-        }
-        self.partial_line = Some(partial);
-    }
-
-    pub fn add_block(&mut self, s: &str) {
-        html_trace!("add_block({}, {})", self.width, s);
-        self.start_block();
-        self.add_subblock(s);
-        html_trace_quiet!("add_block: at_block_end <- true");
-        self.at_block_end = true;
-    }
-    pub fn add_subblock(&mut self, s: &str) {
-        html_trace!("add_subblock({}, {})", self.width, s);
-        self.lines.extend(s.lines().map(|l| l.into()));
-    }
-
-    fn push_line(&mut self, s: String) {
-        self.lines.push(s);
-    }
-    fn flush_line(&mut self) {
-        if let Some(s) = self.partial_line.take() {
-            if s.text.len() > 0 {
-                self.push_line(s.text);
-            }
-        }
-    }
-
-    pub fn add_empty_line(&mut self) {
-        html_trace!("add_empty_line()");
-        self.flush_line();
-        self.lines.push("".into());
-        html_trace_quiet!("add_empty_line: at_block_end <- false");
-        self.at_block_end = false;
-        html_trace_quiet!("add_empty_line: new lines: {:?}", self.lines);
-    }
-
-    pub fn into_string(mut self) -> String {
-        self.flush_line();
-        let mut result = String::new();
-        for s in self.lines.into_iter() {
-            result.push_str(&s);
-            result.push('\n');
-        }
-        html_trace!("into_string({}, {:?})", self.width, result);
-        result
-    }
 }
 
 fn get_text(handle: Handle) -> String {
@@ -223,24 +42,24 @@ fn get_text(handle: Handle) -> String {
     result
 }
 
-fn render_block<T:Write>(builder: &mut HtmlBuilder, handle: Handle,
+fn render_block<T:Write, R:Renderer>(builder: &mut R, handle: Handle,
                          err_out: &mut T) {
     builder.start_block();
     render_children(builder, handle, err_out);
 }
 
-fn render_pre<T:Write>(builder: &mut HtmlBuilder, handle: Handle, _: &mut T) {
-    builder.add_block(&get_text(handle));
+fn render_pre<T:Write, R:Renderer>(builder: &mut R, handle: Handle, _: &mut T) {
+    builder.add_preformatted_block(&get_text(handle));
 }
 
-fn render_children<T:Write>(builder: &mut HtmlBuilder, handle: Handle,
+fn render_children<T:Write, R:Renderer>(builder: &mut R, handle: Handle,
                             err_out: &mut T) {
     for child in handle.borrow().children.iter() {
         dom_to_string(builder, child.clone(), err_out);
     }
 }
 
-fn dom_to_string<T:Write>(builder: &mut HtmlBuilder, handle: Handle,
+fn dom_to_string<T:Write, R:Renderer>(builder: &mut R, handle: Handle,
                           err_out: &mut T) {
     let node = handle.borrow();
     match node.node {
@@ -367,7 +186,7 @@ impl TableCell {
             panic!("TableCell::new received a non-Element");
         }
     }
-    pub fn render<T:Write>(&self, builder: &mut HtmlBuilder, err_out: &mut T)
+    pub fn render<T:Write, R:Renderer>(&self, builder: &mut R, err_out: &mut T)
     {
         dom_to_string(builder, self.content.clone(), err_out)
     }
@@ -401,7 +220,7 @@ fn handle_tr<T:Write>(handle: Handle, _: &mut T) -> TableRow {
     row
 }
 
-fn handle_tbody<T:Write>(builder: &mut HtmlBuilder, handle: Handle, err_out: &mut T) {
+fn handle_tbody<T:Write, R:Renderer>(builder: &mut R, handle: Handle, err_out: &mut T) {
     let node = handle.borrow();
 
     let mut table = Table::new();
@@ -433,12 +252,12 @@ fn handle_tbody<T:Write>(builder: &mut HtmlBuilder, handle: Handle, err_out: &mu
     for row in table.rows() {
         let mut colno = 0;
         for cell in row.cells() {
-            let mut cellbuilder = HtmlBuilder::new(test_col_width);
+            let mut cellbuilder = builder.new_sub_renderer(test_col_width);
             cell.render(&mut cellbuilder, &mut Discard{});
-            let celldata = cellbuilder.into_string();
+            let cellsize = cellbuilder.text_len();
             // If the cell has a colspan>1, then spread its size between the
             // columns.
-            let col_size = celldata.len() / cell.colspan;
+            let col_size = cellsize / cell.colspan;
             for i in 0..cell.colspan {
                 col_sizes[colno + i] += col_size;
             }
@@ -446,7 +265,7 @@ fn handle_tbody<T:Write>(builder: &mut HtmlBuilder, handle: Handle, err_out: &mu
         }
     }
     let tot_size: usize = col_sizes.iter().sum();
-    let width = builder.width;
+    let width = builder.width();
     let mut col_widths:Vec<usize> = col_sizes.iter()
                                          .map(|sz| {
                                              if *sz == 0 {
@@ -478,48 +297,30 @@ fn handle_tbody<T:Write>(builder: &mut HtmlBuilder, handle: Handle, err_out: &mu
     if rowline.len() > 0 {
         rowline.pop().unwrap();  // Remove the last '+'.
     }
-    builder.add_subblock(&rowline);
+    builder.add_block_line(&rowline);
 
     for row in table.rows() {
-        let (used_widths, formatted_cells): (Vec<usize>, Vec<String>) = row.cell_columns()
-                                              .into_iter()
-                                              .flat_map(|(colno, cell)| {
-                                                   let col_width:usize = col_widths[colno..colno+cell.colspan]
-                                                                      .iter().sum();
-                                                   if col_width > 0 {
-                                                       let mut cellbuilder = HtmlBuilder::new(col_width-1);
-                                                       cell.render(&mut cellbuilder, err_out);
-                                                       Some((col_width, cellbuilder.into_string()))
-                                                   } else {
-                                                       None
-                                                   }
-                                               })
-                                              .unzip();
-        let line_sets: Vec<Vec<&str>> = formatted_cells.iter()
-                                                       .map(|s| s.lines()
-                                                                 .map(|line| line.trim_right())
-                                                                 .collect())
-                                                       .collect();
-        let cell_height = line_sets.iter()
-                                   .map(|v| v.len())
-                                   .max().unwrap_or(0);
-        for i in 0..cell_height {
-            let mut line = String::new();
-            for (cellno, ls) in line_sets.iter().enumerate() {
-                line.push_str(&format!("{: <width$}", ls.get(i).cloned().unwrap_or(""), width = used_widths[cellno]-1));
-                if cellno != line_sets.len()-1 {
-                    line.push('|')
-                }
-            }
-            builder.add_subblock(&line);
-        }
-        if cell_height > 0 {
-            builder.add_subblock(&rowline);
+        let rendered_cells: Vec<R::Sub> = row.cell_columns()
+                                             .into_iter()
+                                             .flat_map(|(colno, cell)| {
+                                                  let col_width:usize = col_widths[colno..colno+cell.colspan]
+                                                                     .iter().sum();
+                                                  if col_width > 0 {
+                                                      let mut cellbuilder = builder.new_sub_renderer(col_width-1);
+                                                      cell.render(&mut cellbuilder, err_out);
+                                                      Some(cellbuilder)
+                                                  } else {
+                                                      None
+                                                  }
+                                              }).collect();
+        if rendered_cells.iter().any(|r| !r.empty()) {
+            builder.append_columns(rendered_cells, "|");
+            builder.add_block_line(&rowline);
         }
     }
 }
 
-fn render_table<T:Write>(builder: &mut HtmlBuilder, handle: Handle, err_out: &mut T) {
+fn render_table<T:Write, R:Renderer>(builder: &mut R, handle: Handle, err_out: &mut T) {
     let node = handle.borrow();
 
     for child in node.children.iter() {
@@ -564,16 +365,15 @@ fn prepend_first_line(block: &str, prefix: &str) -> String {
 }
 
 
-fn render_blockquote<T:Write>(builder: &mut HtmlBuilder, handle: Handle, err_out: &mut T) {
+fn render_blockquote<T:Write, R:Renderer>(builder: &mut R, handle: Handle, err_out: &mut T) {
 
-    let mut sub_builder = HtmlBuilder::new(builder.width-2);
+    let mut sub_builder = builder.new_sub_renderer(builder.width()-2);
     render_children(&mut sub_builder, handle, err_out);
 
-    let rendered = prepend_block(&sub_builder.into_string(), "> ");
-    builder.add_block(&rendered);
+    builder.append_subrender(sub_builder, repeat("> "));
 }
 
-fn render_ul<T:Write>(builder: &mut HtmlBuilder, handle: Handle, err_out: &mut T) {
+fn render_ul<T:Write, R:Renderer>(builder: &mut R, handle: Handle, err_out: &mut T) {
     let node = handle.borrow();
 
     builder.start_block();
@@ -583,10 +383,9 @@ fn render_ul<T:Write>(builder: &mut HtmlBuilder, handle: Handle, err_out: &mut T
             Element(ref name, _, _) => {
                 match *name {
                     qualname!(html, "li") => {
-                        let mut sub_builder = HtmlBuilder::new(builder.width-2);
+                        let mut sub_builder = builder.new_sub_renderer(builder.width()-2);
                         render_block(&mut sub_builder, child.clone(), err_out);
-                        let li_text = sub_builder.into_string();
-                        builder.add_subblock(&prepend_first_line(&li_text, "* "));
+                        builder.append_subrender(sub_builder, once("* ").chain(repeat("  ")));
                     },
                     _ => println!("  [[ul child: {:?}]]", name),
                 }
@@ -610,7 +409,7 @@ pub fn from_read<R>(mut input: R, width: usize) -> String where R: io::Read {
                    .read_from(&mut input)
                    .unwrap();
 
-    let mut builder = HtmlBuilder::new(width);
+    let mut builder = TextRenderer::new(width);
     dom_to_string(&mut builder, dom.document, &mut Discard{} /* &mut io::stderr()*/);
     builder.into_string()
 }
