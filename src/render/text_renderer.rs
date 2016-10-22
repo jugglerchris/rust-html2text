@@ -197,22 +197,33 @@ impl Renderer for TextRenderer {
 
     fn append_columns<I>(&mut self, cols: I, separator: &str)
                            where I:IntoIterator<Item=Self::Sub> {
-        unimplemented!()
-        /*
+        self.flush_line();
+
+        let line_sets = cols.into_iter()
+                            .map(|sub_r| {
+                                let width = sub_r.width;
+                                (width, sub_r.into_lines()
+                                             .into_iter()
+                                             .map(|line| format!("{: <width$}", width=width))
+                                             .collect())
+                                 })
+                            .collect::<Vec<(usize, Vec<String>)>>();
+
         let cell_height = line_sets.iter()
-                                   .map(|v| v.len())
+                                   .map(|&(_, ref v)| v.len())
                                    .max().unwrap_or(0);
+        let spaces:String = (0..self.width).map(|_| ' ').collect();
         for i in 0..cell_height {
             let mut line = String::new();
-            for (cellno, ls) in line_sets.iter().enumerate() {
-                line.push_str(&format!("{: <width$}", ls.get(i).cloned().unwrap_or(""), width = used_widths[cellno]-1));
+            for (cellno, &(width, ref ls)) in line_sets.iter().enumerate() {
+                let piece = ls.get(i).map(|s| s.as_str()).unwrap_or(&spaces[0..width]);
+                line.push_str(piece);
                 if cellno != line_sets.len()-1 {
                     line.push('|')
                 }
             }
-            builder.add_block_line(&line);
+            self.add_block_line(&line);
         }
-        */
     }
 
     fn empty(&self) -> bool {
