@@ -496,8 +496,14 @@ mod tests {
 
      #[test]
      fn test_para() {
-        assert_eq!(from_read(&b"<p>Hello</p>"[..], 10),
+        assert_eq_str!(from_read(&b"<p>Hello</p>"[..], 10),
                    "Hello\n");
+     }
+
+     #[test]
+     fn test_para2() {
+        assert_eq_str!(from_read(&b"<p>Hello, world!</p>"[..], 20),
+                   "Hello, world!\n");
      }
 
      #[test]
