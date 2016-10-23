@@ -96,6 +96,7 @@ fn dom_to_string<T:Write, R:Renderer>(builder: &mut R, handle: Handle,
                     } else {
                         render_children(builder, handle.clone(), err_out);
                     }
+                    return;
                 },
                 qualname!(html, "h1") |
                 qualname!(html, "h2") |

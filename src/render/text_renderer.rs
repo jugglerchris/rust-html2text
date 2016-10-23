@@ -27,6 +27,9 @@ pub struct TextRenderer {
     /// a blank line if any other text is added.
     at_block_end: bool,
     partial_line: Option<PartialLine>,
+    /// Set to true when adding text (eg markup) that doesn't require
+    /// a space before the next word.
+    no_space_needed: bool,
     links: Vec<String>,
 }
 
@@ -40,6 +43,7 @@ impl TextRenderer {
             at_block_end: false,
             partial_line: None,
             links: Vec::new(),
+            no_space_needed: false,
         }
     }
 
@@ -135,16 +139,21 @@ impl Renderer for TextRenderer {
         html_trace!("add_inline_text({}, {})", self.width, text);
         let mut partial = self.take_partial_line();
         for word in text.split_whitespace() {
-            if self.width <= (partial.pos + 1) {
+            let mut need_space = (partial.pos > 0) && !(self.no_space_needed);
+            let space_space = if need_space { 1 } else { 0 };
+            // We've used up the "no space needed" condition now.
+            self.no_space_needed = false;
+            if self.width <= (partial.pos + space_space) {
                 self.push_line(partial.text);
                 partial = self.take_partial_line();
+                need_space = false;
             }
-            let space_left = self.width - partial.pos - 1;
+            let space_left = self.width - partial.pos - space_space;
             let word_width = UnicodeWidthStr::width(word);
             if word_width <= space_left {
                 /* It fits; no problem.  Add a space if not at the
                  * start of line.*/
-                if partial.pos > 0 {
+                if need_space {
                     partial.text.push(' ');
                     partial.pos += 1;
                 }
@@ -254,10 +263,12 @@ impl Renderer for TextRenderer {
     {
         self.links.push(target.to_string());
         self.add_inline_text("[");
+        self.no_space_needed = true;
     }
     fn end_link(&mut self)
     {
         let idx = self.links.len();
+        self.no_space_needed = true;
         self.add_inline_text(&format!("][{}]", idx));
     }
 }
