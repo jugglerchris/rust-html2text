@@ -64,7 +64,7 @@ fn dom_to_string<T:Write, R:Renderer>(builder: &mut R, handle: Handle,
     let node = handle.borrow();
     match node.node {
         Document => {},
-        Element(ref name, _, _) => {
+        Element(ref name, _, ref attrs) => {
             match *name {
                 qualname!(html, "html") |
                 qualname!(html, "div") |
@@ -80,6 +80,22 @@ fn dom_to_string<T:Write, R:Renderer>(builder: &mut R, handle: Handle,
                 qualname!(html, "head") => {
                     /* Ignore the head and its children */
                     return;
+                },
+                qualname!(html, "a") => {
+                    let mut target = None;
+                    for attr in attrs {
+                        if &attr.name.local == "href" {
+                            target = Some(&*attr.value);
+                            break;
+                        }
+                    }
+                    if let Some(href) = target {
+                        builder.start_link(href);
+                        render_children(builder, handle.clone(), err_out);
+                        builder.end_link();
+                    } else {
+                        render_children(builder, handle.clone(), err_out);
+                    }
                 },
                 qualname!(html, "h1") |
                 qualname!(html, "h2") |

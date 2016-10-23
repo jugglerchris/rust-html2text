@@ -43,4 +43,12 @@ pub trait Renderer {
 
     /// Return the length of the contained text.
     fn text_len(&self) -> usize;
+
+    /// Start a hyperlink
+    /// TODO: return sub-builder or similar to make misuse
+    /// of start/link harder?
+    fn start_link(&mut self, target: &str);
+
+    /// Finish a hyperlink started earlier.
+    fn end_link(&mut self);
 }

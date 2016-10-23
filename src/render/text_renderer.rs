@@ -27,6 +27,7 @@ pub struct TextRenderer {
     /// a blank line if any other text is added.
     at_block_end: bool,
     partial_line: Option<PartialLine>,
+    links: Vec<String>,
 }
 
 impl TextRenderer {
@@ -38,6 +39,7 @@ impl TextRenderer {
             lines: Vec::new(),
             at_block_end: false,
             partial_line: None,
+            links: Vec::new(),
         }
     }
 
@@ -80,6 +82,13 @@ impl TextRenderer {
 
     fn into_lines(mut self) -> Vec<String> {
         self.flush_line();
+        // And add the links
+        if self.links.len() > 0 {
+            self.start_block();
+            for (idx, target) in self.links.drain((0..)).enumerate() {
+                self.lines.push(format!("[{}] {}", idx+1, target));
+            }
+        }
         self.lines
     }
 }
@@ -239,5 +248,16 @@ impl Renderer for TextRenderer {
             result += line.pos;
         }
         result
+    }
+
+    fn start_link(&mut self, target: &str)
+    {
+        self.links.push(target.to_string());
+        self.add_inline_text("[");
+    }
+    fn end_link(&mut self)
+    {
+        let idx = self.links.len();
+        self.add_inline_text(&format!("][{}]", idx));
     }
 }
