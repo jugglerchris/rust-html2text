@@ -603,4 +603,12 @@ One Two Three
 Hello
 ", 20);
     }
+     #[test]
+     fn test_link() {
+         test_html(br#"
+           <p>Hello, <a href="http://www.example.com/">world</a>!</p>"#, r"Hello, [world][1]!
+
+[1] http://www.example.com
+", 80);
+    }
 }
