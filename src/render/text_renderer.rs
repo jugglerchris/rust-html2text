@@ -74,9 +74,8 @@ impl TextRenderer {
     }
 
     pub fn into_string(mut self) -> String {
-        self.flush_line();
         let mut result = String::new();
-        for s in self.lines.into_iter() {
+        for s in self.into_lines() {
             result.push_str(&s);
             result.push('\n');
         }

@@ -441,7 +441,7 @@ mod tests {
     macro_rules! assert_eq_str {
         ($a:expr, $b:expr) => {
             if $a != $b {
-                println!("[[{}]] vs [[{}]]", $a, $b);
+                println!("<<<\n{}===\n{}>>>", $a, $b);
                 assert_eq!($a, $b);
             }
         }
@@ -607,9 +607,17 @@ Hello
      #[test]
      fn test_link() {
          test_html(br#"
+           <p>Hello, <a href="http://www.example.com/">world</a></p>"#, r"Hello, [world][1]
+
+[1] http://www.example.com/
+", 80);
+    }
+     #[test]
+     fn test_link2() {
+         test_html(br#"
            <p>Hello, <a href="http://www.example.com/">world</a>!</p>"#, r"Hello, [world][1]!
 
-[1] http://www.example.com
+[1] http://www.example.com/
 ", 80);
     }
 }
