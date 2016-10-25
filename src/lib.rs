@@ -625,5 +625,14 @@ Hello
 
 [1] http://www.example.com/
 ", 80);
-    }
+     }
+
+     #[test]
+     fn test_link3() {
+         test_html(br#"
+           <p>Hello, <a href="http://www.example.com/">w</a>orld</p>"#, r"Hello, [w][1]orld
+
+[1] http://www.example.com/
+", 80);
+     }
 }
