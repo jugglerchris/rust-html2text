@@ -1,24 +1,114 @@
 use unicode_width::{UnicodeWidthStr,UnicodeWidthChar};
 use super::Renderer;
 use std::mem;
+use std::fmt::Debug;
 
-/// State corresponding to a partially constructed line.
-struct PartialLine {
-    text: String,
-    /// The width in character cells of the text, or
-    /// current position.
-    pos: usize,
+/// A wrapper around a String with extra metadata.
+#[derive(Debug)]
+struct TaggedString<T:Debug> {
+    s: String,
+    tag: T,
 }
 
-impl PartialLine {
-    pub fn new() -> PartialLine {
-        PartialLine {
-            text: String::new(),
-            pos: 0,
+
+/// A type to build up wrapped text, allowing extra metadata for
+/// spans.
+#[derive(Debug)]
+struct WrappedBlock<T:Clone+Eq+Debug> {
+    width: usize,
+    text: Vec<Vec<TaggedString<T>>>,
+    textlen: usize,
+    line: Vec<TaggedString<T>>,
+    linelen: usize,
+    spacetag: Option<T>,         // Tag for the whitespace before the current word
+    word: Vec<TaggedString<T>>,  // The current word (with no whitespace).
+    wordlen: usize,
+}
+
+impl<T:Clone+Eq+Debug> WrappedBlock<T> {
+    pub fn new(width: usize) -> WrappedBlock<T> {
+        WrappedBlock {
+            width: width,
+            text: Vec::new(),
+            textlen: 0,
+            line: Vec::new(),
+            linelen: 0,
+            spacetag: None,
+            word: Vec::new(),
+            wordlen: 0,
         }
     }
-}
 
+    fn flush_word(&mut self) {
+        /* Finish the word. */
+        if self.word.len() > 0 {
+            let space_in_line = self.width - self.linelen
+                        - if self.linelen > 0 { 1 } else { 0 }; // space
+            if self.wordlen <= space_in_line {
+                if self.linelen > 0 {
+                    self.line.push(TaggedString{s: " ".into(), tag: self.spacetag.take().unwrap()});
+                    self.linelen += 1;
+                }
+                self.line.extend(self.word.drain(..));
+                self.linelen += self.wordlen;
+                self.wordlen = 0;
+            } else {
+                unimplemented!()
+            }
+        }
+    }
+
+    fn flush(&mut self) {
+        self.flush_word();
+        if self.line.len() > 0 {
+            let mut tmp_line = Vec::new();
+            mem::swap(&mut tmp_line, &mut self.line);
+            self.text.push(tmp_line);
+        }
+    }
+
+    /// Consume self and return a vector of lines.
+    pub fn into_untagged_lines(mut self) -> Vec<String> {
+        self.flush();
+
+        let mut result = Vec::new();
+        for line in self.text.into_iter() {
+            let mut line_s = String::new();
+            for TaggedString{ s, .. } in line.into_iter() {
+                line_s.push_str(&s);
+            }
+            result.push(line_s);
+        }
+        result
+    }
+
+    pub fn add_text(&mut self, text: &str, tag: T) {
+        for c in text.chars() {
+            if c.is_whitespace() {
+                /* Whitespace is mostly ignored, except to terminate words. */
+                self.flush_word();
+                self.spacetag = Some(tag.clone());
+            } else {
+                /* Not whitespace; add to the current word. */
+                if self.word.len() > 0 && self.word[self.word.len()-1].tag == tag {
+                    /* Just add a character to the last piece */
+                    let last_idx = self.word.len() - 1;
+                    self.word[last_idx].s.push(c);
+                } else {
+                    /* Starting a new word; easy. */
+                    let mut s = String::new();
+                    s.push(c);
+                    self.word.push(TaggedString{ s: s, tag: tag.clone()});
+                }
+                self.wordlen += UnicodeWidthChar::width(c).unwrap();
+            }
+        }
+    }
+
+    pub fn text_len(&self) -> usize {
+        self.textlen + self.linelen + self.wordlen
+    }
+}
 
 /// A renderer which just outputs plain text.
 pub struct TextRenderer {
@@ -27,11 +117,8 @@ pub struct TextRenderer {
     /// True at the end of a block, meaning we should add
     /// a blank line if any other text is added.
     at_block_end: bool,
-    partial_line: Option<PartialLine>,
-    /// Set to true when adding text (eg markup) that doesn't require
-    /// a space before the next word.
-    no_space_needed: bool,
     links: Vec<String>,
+    wrapping: Option<WrappedBlock<()>>,
 }
 
 impl TextRenderer {
@@ -42,20 +129,18 @@ impl TextRenderer {
             width: width,
             lines: Vec::new(),
             at_block_end: false,
-            partial_line: None,
             links: Vec::new(),
-            no_space_needed: false,
+            wrapping: None,
         }
     }
 
-    /// Take the partial line out of self, or create one
-    /// if there wasn't one.
-    fn take_partial_line(&mut self) -> PartialLine {
-        if let Some(p) = self.partial_line.take() {
-            p
-        } else {
-            PartialLine::new()
+    /// Get the current line wrapping context (and create if
+    /// needed).
+    fn current_text(&mut self) -> &mut WrappedBlock<()> {
+        if self.wrapping.is_none() {
+            self.wrapping = Some(WrappedBlock::new(self.width));
         }
+        self.wrapping.as_mut().unwrap()
     }
 
     pub fn add_subblock(&mut self, s: &str) {
@@ -63,14 +148,9 @@ impl TextRenderer {
         self.lines.extend(s.lines().map(|l| l.into()));
     }
 
-    fn push_line(&mut self, s: String) {
-        self.lines.push(s);
-    }
-    fn flush_line(&mut self) {
-        if let Some(s) = self.partial_line.take() {
-            if s.text.len() > 0 {
-                self.push_line(s.text);
-            }
+    fn flush_wrapping(&mut self) {
+        if let Some(w) = self.wrapping.take() {
+            self.lines.extend(w.into_untagged_lines())
         }
     }
 
@@ -85,7 +165,7 @@ impl TextRenderer {
     }
 
     fn into_lines(mut self) -> Vec<String> {
-        self.flush_line();
+        self.flush_wrapping();
         // And add the links
         if self.links.len() > 0 {
             self.start_block();
@@ -118,7 +198,7 @@ impl Renderer for TextRenderer {
 
     fn add_empty_line(&mut self) {
         html_trace!("add_empty_line()");
-        self.flush_line();
+        self.flush_wrapping();
         self.lines.push("".into());
         html_trace_quiet!("add_empty_line: at_block_end <- false");
         self.at_block_end = false;
@@ -131,7 +211,7 @@ impl Renderer for TextRenderer {
 
     fn start_block(&mut self) {
         html_trace!("start_block({})", self.width);
-        self.flush_line();
+        self.flush_wrapping();
         if self.lines.len() > 0 {
             self.add_empty_line();
         }
@@ -153,60 +233,8 @@ impl Renderer for TextRenderer {
 
     fn add_inline_text(&mut self, text: &str) {
         html_trace!("add_inline_text({}, {})", self.width, text);
-        let mut partial = self.take_partial_line();
-        for word in text.split_whitespace() {
-            let mut need_space = (partial.pos > 0) && !(self.no_space_needed);
-            let space_space = if need_space { 1 } else { 0 };
-            // We've used up the "no space needed" condition now.
-            self.no_space_needed = false;
-            if self.width <= (partial.pos + space_space) {
-                self.push_line(partial.text);
-                partial = self.take_partial_line();
-                need_space = false;
-            }
-            let space_left = self.width - partial.pos - space_space;
-            let word_width = UnicodeWidthStr::width(word);
-            if word_width <= space_left {
-                /* It fits; no problem.  Add a space if not at the
-                 * start of line.*/
-                if need_space {
-                    partial.text.push(' ');
-                    partial.pos += 1;
-                }
-                partial.text.push_str(word);
-                partial.pos += word_width;
-                continue;
-            }
-
-            /* It doesn't fit.  If we're not at the start of the line,
-             * then go to a new line. */
-            if partial.pos > 0 {
-                self.push_line(partial.text);
-                partial = self.take_partial_line();
-            }
-
-            /* We're now at the start of a line. */
-            if word_width > self.width {
-                /* It doesn't fit at all on the line, so break it. */
-                for c in word.chars() {
-                    let c_width = UnicodeWidthChar::width(c).unwrap();
-                    if c_width + partial.pos > self.width {
-                        /* Break here */
-                        self.push_line(partial.text);
-                        partial = self.take_partial_line();
-                    }
-                    /* This might happen with really narrow spaces... */
-                    assert!(c_width <= self.width);
-
-                    partial.text.push(c);
-                    partial.pos += c_width;
-                }
-            } else {
-                partial.text.push_str(word);
-                partial.pos += word_width;
-            }
-        }
-        self.partial_line = Some(partial);
+        let mut partial = self.current_text();
+        partial.add_text(text, ());
     }
 
     fn width(&self) -> usize {
@@ -222,7 +250,7 @@ impl Renderer for TextRenderer {
                                prefixes: I)
                            where I:Iterator<Item=&'a str>
     {
-        self.flush_line();
+        self.flush_wrapping();
         self.lines.extend(other.into_lines()
                                .into_iter()
                                .zip(prefixes)
@@ -231,7 +259,7 @@ impl Renderer for TextRenderer {
 
     fn append_columns<I>(&mut self, cols: I, separator: char)
                            where I:IntoIterator<Item=Self::Sub> {
-        self.flush_line();
+        self.flush_wrapping();
 
         let line_sets = cols.into_iter()
                             .map(|sub_r| {
@@ -261,7 +289,7 @@ impl Renderer for TextRenderer {
     }
 
     fn empty(&self) -> bool {
-        self.lines.len() == 0 && self.partial_line.is_none()
+        self.lines.len() == 0 && self.wrapping.is_none()
     }
 
     fn text_len(&self) -> usize {
@@ -269,8 +297,8 @@ impl Renderer for TextRenderer {
         for line in &self.lines {
             result += UnicodeWidthStr::width(line.as_str());
         }
-        if let Some(ref line) = self.partial_line {
-            result += line.pos;
+        if let Some(ref w) = self.wrapping {
+            result += w.text_len();
         }
         result
     }
@@ -279,12 +307,10 @@ impl Renderer for TextRenderer {
     {
         self.links.push(target.to_string());
         self.add_inline_text("[");
-        self.no_space_needed = true;
     }
     fn end_link(&mut self)
     {
         let idx = self.links.len();
-        self.no_space_needed = true;
         self.add_inline_text(&format!("][{}]", idx));
     }
 }
