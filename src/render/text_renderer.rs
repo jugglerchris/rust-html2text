@@ -53,18 +53,31 @@ impl<T:Clone+Eq+Debug> WrappedBlock<T> {
                 self.linelen += self.wordlen;
                 self.wordlen = 0;
             } else {
-                unimplemented!()
+                /* Start a new line */
+                self.flush_line();
+                if self.wordlen <= self.width {
+                    let mut new_word = Vec::new();
+                    mem::swap(&mut new_word, &mut self.word);
+                    mem::swap(&mut self.line, &mut new_word);
+                } else {
+                    unimplemented!()
+                }
             }
+        }
+    }
+
+    fn flush_line(&mut self) {
+        if self.line.len() > 0 {
+            let mut tmp_line = Vec::new();
+            mem::swap(&mut tmp_line, &mut self.line);
+            self.text.push(tmp_line);
+            self.linelen = 0;
         }
     }
 
     fn flush(&mut self) {
         self.flush_word();
-        if self.line.len() > 0 {
-            let mut tmp_line = Vec::new();
-            mem::swap(&mut tmp_line, &mut self.line);
-            self.text.push(tmp_line);
-        }
+        self.flush_line();
     }
 
     /// Consume self and return a vector of lines.
