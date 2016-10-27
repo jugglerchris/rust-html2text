@@ -1,5 +1,6 @@
 use unicode_width::{UnicodeWidthStr,UnicodeWidthChar};
 use super::Renderer;
+use std::mem;
 
 /// State corresponding to a partially constructed line.
 struct PartialLine {
@@ -89,7 +90,23 @@ impl TextRenderer {
         if self.links.len() > 0 {
             self.start_block();
             for (idx, target) in self.links.drain((0..)).enumerate() {
-                self.lines.push(format!("[{}] {}", idx+1, target));
+                /* Hard wrap */
+                let mut output = String::new();
+                let mut pos = 0;
+                for c in format!("[{}] {}", idx+1, target).chars() {
+                    let c_width = UnicodeWidthChar::width(c).unwrap();
+                    if pos + c_width > self.width {
+                        let mut tmp_s = String::new();
+                        mem::swap(&mut output, &mut tmp_s);
+                        self.lines.push(tmp_s);
+                        output.push(c);
+                        pos = c_width;
+                    } else {
+                        output.push(c);
+                        pos += c_width;
+                    }
+                }
+                self.lines.push(output);
             }
         }
         self.lines
