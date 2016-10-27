@@ -60,7 +60,45 @@ impl<T:Clone+Eq+Debug> WrappedBlock<T> {
                     mem::swap(&mut new_word, &mut self.word);
                     mem::swap(&mut self.line, &mut new_word);
                 } else {
-                    unimplemented!()
+                    /* We need to split the word. */
+                    let mut wordbits = self.word.drain(..);
+                    /* Note: there's always at least one piece */
+                    let mut opt_piece = wordbits.next();
+                    let mut lineleft = self.width;
+                    while let Some(piece) = opt_piece.take() {
+                        let w = UnicodeWidthStr::width(piece.s.as_str());
+                        if w <= lineleft {
+                            self.line.push(piece);
+                            lineleft -= w;
+                            opt_piece = wordbits.next();
+                        } else {
+                            /* Split into two */
+                            let mut split_idx = 0;
+                            for (idx,c) in piece.s.char_indices() {
+                                let c_w = UnicodeWidthChar::width(c).unwrap();
+                                if c_w <= lineleft {
+                                    lineleft -= c_w;
+                                } else {
+                                    split_idx = idx;
+                                    break;
+                                }
+                            }
+                            self.line.push(TaggedString{
+                                s: piece.s[..split_idx].into(),
+                                tag: piece.tag.clone(),
+                            });
+                            {
+                                let mut tmp_line = Vec::new();
+                                mem::swap(&mut tmp_line, &mut self.line);
+                                self.text.push(tmp_line);
+                            }
+                            lineleft = self.width;
+                            opt_piece = Some(TaggedString{
+                                s: piece.s[split_idx..].into(),
+                                tag: piece.tag,
+                            });
+                        }
+                    }
                 }
             }
         }

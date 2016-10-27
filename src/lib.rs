@@ -618,4 +618,15 @@ Hello
 le.com/
 ", 10);
      }
+
+     #[test]
+     fn test_wrap() {
+         test_html(br"<p>Hello, world.  Superlongwordreally</p>",
+                   r#"Hello,
+world.
+Superlon
+gwordrea
+lly
+"#, 8);
+     }
 }
