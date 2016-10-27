@@ -74,7 +74,7 @@ impl TextRenderer {
         }
     }
 
-    pub fn into_string(mut self) -> String {
+    pub fn into_string(self) -> String {
         let mut result = String::new();
         for s in self.into_lines() {
             result.push_str(&s);
@@ -229,7 +229,7 @@ impl Renderer for TextRenderer {
                                .map(|(line, prefix)| prefix.to_string() + &line));
     }
 
-    fn append_columns<I>(&mut self, cols: I, separator: &str)
+    fn append_columns<I>(&mut self, cols: I, separator: char)
                            where I:IntoIterator<Item=Self::Sub> {
         self.flush_line();
 
@@ -253,7 +253,7 @@ impl Renderer for TextRenderer {
                 let piece = ls.get(i).map(|s| s.as_str()).unwrap_or(&spaces[0..width]);
                 line.push_str(piece);
                 if cellno != line_sets.len()-1 {
-                    line.push('|')
+                    line.push(separator)
                 }
             }
             self.add_block_line(&line);

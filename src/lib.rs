@@ -331,7 +331,7 @@ fn handle_tbody<T:Write, R:Renderer>(builder: &mut R, handle: Handle, err_out: &
                                                   }
                                               }).collect();
         if rendered_cells.iter().any(|r| !r.empty()) {
-            builder.append_columns(rendered_cells, "|");
+            builder.append_columns(rendered_cells, '|');
             builder.add_block_line(&rowline);
         }
     }
@@ -353,34 +353,6 @@ fn render_table<T:Write, R:Renderer>(builder: &mut R, handle: Handle, err_out: &
         }
     }
 }
-
-fn prepend_block(block: &str, prefix: &str) -> String {
-    let mut result = String::new();
-    for line in block.lines() {
-        result.push_str(prefix);
-        result.push_str(line);
-        result.push('\n');
-    }
-    result
-}
-
-fn prepend_first_line(block: &str, prefix: &str) -> String {
-    let mut result = String::new();
-    let mut lines = block.lines();
-    if let Some(line) = lines.next() {
-        result.push_str(prefix);
-        result.push_str(line);
-        result.push('\n');
-    }
-    let ws_prefix: String = (0..prefix.len()).map(|_| ' ').collect();
-    for line in lines {
-        result.push_str(&ws_prefix);
-        result.push_str(line);
-        result.push('\n');
-    }
-    result
-}
-
 
 fn render_blockquote<T:Write, R:Renderer>(builder: &mut R, handle: Handle, err_out: &mut T) {
 
