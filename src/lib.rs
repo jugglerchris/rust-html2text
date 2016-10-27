@@ -635,4 +635,15 @@ Hello
 [1] http://www.example.com/
 ", 80);
      }
+
+     #[test]
+     fn test_link_wrap() {
+         test_html(br#"
+           <a href="http://www.example.com/">Hello</a>"#, r"[Hello][1]
+
+[1] http:/
+/www.examp
+le.com/
+", 10);
+     }
 }
