@@ -42,9 +42,10 @@ impl<T:Clone+Eq+Debug> WrappedBlock<T> {
     fn flush_word(&mut self) {
         /* Finish the word. */
         if self.word.len() > 0 {
-            let space_in_line = self.width - self.linelen
-                        - if self.linelen > 0 { 1 } else { 0 }; // space
-            if self.wordlen <= space_in_line {
+            let space_in_line = self.width - self.linelen;
+            let space_needed = self.wordlen +
+                        if self.linelen > 0 { 1 } else { 0 }; // space
+            if space_needed <= space_in_line {
                 if self.linelen > 0 {
                     self.line.push(TaggedString{s: " ".into(), tag: self.spacetag.take().unwrap()});
                     self.linelen += 1;
@@ -59,6 +60,8 @@ impl<T:Clone+Eq+Debug> WrappedBlock<T> {
                     let mut new_word = Vec::new();
                     mem::swap(&mut new_word, &mut self.word);
                     mem::swap(&mut self.line, &mut new_word);
+                    self.linelen = self.wordlen;
+                    self.wordlen = 0;
                 } else {
                     /* We need to split the word. */
                     let mut wordbits = self.word.drain(..);
@@ -70,6 +73,7 @@ impl<T:Clone+Eq+Debug> WrappedBlock<T> {
                         if w <= lineleft {
                             self.line.push(piece);
                             lineleft -= w;
+                            self.linelen += w;
                             opt_piece = wordbits.next();
                         } else {
                             /* Split into two */
@@ -93,6 +97,7 @@ impl<T:Clone+Eq+Debug> WrappedBlock<T> {
                                 self.text.push(tmp_line);
                             }
                             lineleft = self.width;
+                            self.linelen = 0;
                             opt_piece = Some(TaggedString{
                                 s: piece.s[split_idx..].into(),
                                 tag: piece.tag,

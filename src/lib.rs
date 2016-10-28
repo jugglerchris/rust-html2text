@@ -629,4 +629,16 @@ gwordrea
 lly
 "#, 8);
      }
+
+     #[test]
+     fn test_wrap2() {
+         test_html(br"<p>Hello, world.  This is a long sentence with a
+few words, which we want to be wrapped correctly.</p>",
+r#"Hello, world. This
+is a long sentence
+with a few words,
+which we want to be
+wrapped correctly.
+"#, 20);
+     }
 }
