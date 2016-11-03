@@ -230,6 +230,12 @@ impl TextRenderer {
                 let mut output = String::new();
                 let mut pos = 0;
                 for c in format!("[{}] {}", idx+1, target).chars() {
+                    // FIXME: should we percent-escape?  This is probably
+                    // an invalid URL to start with.
+                    let c = match c {
+                        '\n' => ' ',
+                        x => x,
+                    };
                     let c_width = UnicodeWidthChar::width(c).unwrap();
                     if pos + c_width > self.width {
                         let mut tmp_s = String::new();
