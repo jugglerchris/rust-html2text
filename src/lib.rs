@@ -1,5 +1,7 @@
+//#[macro_use]
+//extern crate string_cache;
 #[macro_use]
-extern crate string_cache;
+extern crate html5ever_atoms;
 extern crate html5ever;
 extern crate unicode_width;
 extern crate backtrace;

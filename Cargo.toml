@@ -5,6 +5,7 @@ authors = ["Chris Emerson <github@mail.nosreme.org>"]
 
 [dependencies]
 html5ever = "*"
+html5ever-atoms = "*"
 string_cache = "0.2.0"
 unicode-width = "*"
 backtrace = "*"
