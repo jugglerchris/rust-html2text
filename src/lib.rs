@@ -12,7 +12,7 @@ mod macros;
 pub mod render;
 
 use render::Renderer;
-use render::text_renderer::TextRenderer;
+use render::text_renderer::{TextRenderer,PlainDecorator};
 
 use std::io;
 use std::io::Write;
@@ -48,6 +48,7 @@ fn render_block<T:Write, R:Renderer>(builder: &mut R, handle: Handle,
                          err_out: &mut T) {
     builder.start_block();
     render_children(builder, handle, err_out);
+    builder.end_block();
 }
 
 fn render_pre<T:Write, R:Renderer>(builder: &mut R, handle: Handle, _: &mut T) {
@@ -402,7 +403,8 @@ pub fn from_read<R>(mut input: R, width: usize) -> String where R: io::Read {
                    .read_from(&mut input)
                    .unwrap();
 
-    let mut builder = TextRenderer::new(width);
+    let decorator = PlainDecorator::new();
+    let mut builder = TextRenderer::new(width, decorator);
     dom_to_string(&mut builder, dom.document, &mut Discard{} /* &mut io::stderr()*/);
     builder.into_string()
 }
@@ -641,6 +643,15 @@ is a long sentence
 with a few words,
 which we want to be
 wrapped correctly.
+"#, 20);
+     }
+
+     #[test]
+     fn test_div() {
+         test_html(br"<p>Hello</p><div>Div</div>",
+r#"Hello
+
+Div
 "#, 20);
      }
 }

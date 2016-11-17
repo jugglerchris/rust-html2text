@@ -166,27 +166,44 @@ impl<T:Clone+Eq+Debug> WrappedBlock<T> {
     }
 }
 
+/// Allow decorating/styling text.
+pub trait TextDecorator {
+    /// An annotation which can be added to text, and which will
+    /// be attached to spans of text.
+    type Annotation;
+
+    /// Return an annotation and rendering prefix for a link.
+    fn decorate_link_start(&mut self, url: &str) -> (String, Option<Self::Annotation>);
+
+    /// Return a suffix for after a link.
+    fn decorate_link_end(&mut self) -> String;
+
+    /// Finish with a document, and return extra lines (eg footnotes)
+    /// to add to the rendered text.
+    fn finalise(self) -> Vec<String>;
+}
+
 /// A renderer which just outputs plain text.
-pub struct TextRenderer {
+pub struct TextRenderer<D:TextDecorator+Clone> {
     width: usize,
     lines: Vec<String>,
     /// True at the end of a block, meaning we should add
     /// a blank line if any other text is added.
     at_block_end: bool,
-    links: Vec<String>,
     wrapping: Option<WrappedBlock<()>>,
+    decorator: Option<D>,
 }
 
-impl TextRenderer {
+impl<D:TextDecorator+Clone> TextRenderer<D> {
     /// Construct a new empty TextRenderer.
-    pub fn new(width: usize) -> TextRenderer {
+    pub fn new(width: usize, decorator: D) -> TextRenderer<D> {
         html_trace!("new({})", width);
         TextRenderer {
             width: width,
             lines: Vec::new(),
             at_block_end: false,
-            links: Vec::new(),
             wrapping: None,
+            decorator: Some(decorator),
         }
     }
 
@@ -223,13 +240,14 @@ impl TextRenderer {
     fn into_lines(mut self) -> Vec<String> {
         self.flush_wrapping();
         // And add the links
-        if self.links.len() > 0 {
+        let mut trailer = self.decorator.take().unwrap().finalise();
+        if trailer.len() > 0 {
             self.start_block();
-            for (idx, target) in self.links.drain((0..)).enumerate() {
+            for line in trailer.drain((0..)) {
                 /* Hard wrap */
                 let mut output = String::new();
                 let mut pos = 0;
-                for c in format!("[{}] {}", idx+1, target).chars() {
+                for c in line.chars() {
                     // FIXME: should we percent-escape?  This is probably
                     // an invalid URL to start with.
                     let c = match c {
@@ -255,9 +273,8 @@ impl TextRenderer {
     }
 }
 
-impl Renderer for TextRenderer {
-    type Sub = TextRenderer;
-
+impl<D:TextDecorator+Clone> Renderer for TextRenderer<D> {
+    type Sub = Self;
     fn add_empty_line(&mut self) {
         html_trace!("add_empty_line()");
         self.flush_wrapping();
@@ -267,8 +284,8 @@ impl Renderer for TextRenderer {
         html_trace_quiet!("add_empty_line: new lines: {:?}", self.lines);
     }
 
-    fn new_sub_renderer(&self, width: usize) -> Self::Sub {
-        TextRenderer::new(width)
+    fn new_sub_renderer(&self, width: usize) -> Self {
+        TextRenderer::new(width, self.decorator.as_ref().unwrap().clone())
     }
 
     fn start_block(&mut self) {
@@ -295,6 +312,13 @@ impl Renderer for TextRenderer {
 
     fn add_inline_text(&mut self, text: &str) {
         html_trace!("add_inline_text({}, {})", self.width, text);
+        if self.at_block_end && text.chars().all(char::is_whitespace) {
+            // Ignore whitespace between blocks.
+            return;
+        }
+        if self.at_block_end {
+            self.start_block();
+        }
         let mut partial = self.current_text();
         partial.add_text(text, ());
     }
@@ -308,7 +332,7 @@ impl Renderer for TextRenderer {
         self.add_subblock(line);
     }
 
-    fn append_subrender<'a, I>(&mut self, other: Self::Sub,
+    fn append_subrender<'a, I>(&mut self, other: Self,
                                prefixes: I)
                            where I:Iterator<Item=&'a str>
     {
@@ -320,7 +344,7 @@ impl Renderer for TextRenderer {
     }
 
     fn append_columns<I>(&mut self, cols: I, separator: char)
-                           where I:IntoIterator<Item=Self::Sub> {
+                           where I:IntoIterator<Item=Self> {
         self.flush_wrapping();
 
         let line_sets = cols.into_iter()
@@ -367,12 +391,46 @@ impl Renderer for TextRenderer {
 
     fn start_link(&mut self, target: &str)
     {
-        self.links.push(target.to_string());
-        self.add_inline_text("[");
+        if let Some((s, _annotation)) = self.decorator.as_mut().map(|d| d.decorate_link_start(target)) {
+            self.add_inline_text(&s);
+        }
     }
     fn end_link(&mut self)
     {
-        let idx = self.links.len();
-        self.add_inline_text(&format!("][{}]", idx));
+        if let Some(s) = self.decorator.as_mut().map(|d| d.decorate_link_end()) {
+            self.add_inline_text(&s);
+        }
+    }
+}
+
+#[derive(Clone)]
+pub struct PlainDecorator {
+    links: Vec<String>,
+}
+
+impl PlainDecorator {
+    pub fn new() -> PlainDecorator {
+        PlainDecorator {
+            links: Vec::new(),
+        }
+    }
+}
+
+impl TextDecorator for PlainDecorator {
+    type Annotation = ();
+
+    fn decorate_link_start(&mut self, url: &str) -> (String, Option<Self::Annotation>)
+    {
+        self.links.push(url.to_string());
+        ("[".to_string(), None)
+    }
+
+    fn decorate_link_end(&mut self) -> String
+    {
+        format!("][{}]", self.links.len())
+    }
+
+    fn finalise(self) -> Vec<String> {
+        self.links.into_iter().enumerate().map(|(idx,s)| format!("[{}] {}", idx+1, s)).collect()
     }
 }
