@@ -173,7 +173,7 @@ pub trait TextDecorator {
     type Annotation: Eq+PartialEq+Debug+Clone;
 
     /// Return an annotation and rendering prefix for a link.
-    fn decorate_link_start(&mut self, url: &str) -> (String, Option<Self::Annotation>);
+    fn decorate_link_start(&mut self, url: &str) -> (String, Self::Annotation);
 
     /// Return a suffix for after a link.
     fn decorate_link_end(&mut self) -> String;
@@ -394,7 +394,8 @@ impl<D:TextDecorator+Clone> Renderer for TextRenderer<D> {
 
     fn start_link(&mut self, target: &str)
     {
-        if let Some((s, _annotation)) = self.decorator.as_mut().map(|d| d.decorate_link_start(target)) {
+        if let Some((s, annotation)) = self.decorator.as_mut().map(|d| d.decorate_link_start(target)) {
+            self.ann_stack.push(annotation);
             self.add_inline_text(&s);
         }
     }
@@ -402,6 +403,7 @@ impl<D:TextDecorator+Clone> Renderer for TextRenderer<D> {
     {
         if let Some(s) = self.decorator.as_mut().map(|d| d.decorate_link_end()) {
             self.add_inline_text(&s);
+            self.ann_stack.pop();
         }
     }
 }
@@ -422,10 +424,10 @@ impl PlainDecorator {
 impl TextDecorator for PlainDecorator {
     type Annotation = ();
 
-    fn decorate_link_start(&mut self, url: &str) -> (String, Option<Self::Annotation>)
+    fn decorate_link_start(&mut self, url: &str) -> (String, Self::Annotation)
     {
         self.links.push(url.to_string());
-        ("[".to_string(), None)
+        ("[".to_string(), ())
     }
 
     fn decorate_link_end(&mut self) -> String
