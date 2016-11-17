@@ -138,7 +138,7 @@ impl<T:Clone+Eq+Debug> WrappedBlock<T> {
         result
     }
 
-    pub fn add_text(&mut self, text: &str, tag: T) {
+    pub fn add_text(&mut self, text: &str, tag: &T) {
         for c in text.chars() {
             if c.is_whitespace() {
                 /* Whitespace is mostly ignored, except to terminate words. */
@@ -146,7 +146,7 @@ impl<T:Clone+Eq+Debug> WrappedBlock<T> {
                 self.spacetag = Some(tag.clone());
             } else {
                 /* Not whitespace; add to the current word. */
-                if self.word.len() > 0 && self.word[self.word.len()-1].tag == tag {
+                if self.word.len() > 0 && self.word[self.word.len()-1].tag == *tag {
                     /* Just add a character to the last piece */
                     let last_idx = self.word.len() - 1;
                     self.word[last_idx].s.push(c);
@@ -170,7 +170,7 @@ impl<T:Clone+Eq+Debug> WrappedBlock<T> {
 pub trait TextDecorator {
     /// An annotation which can be added to text, and which will
     /// be attached to spans of text.
-    type Annotation;
+    type Annotation: Eq+PartialEq+Debug+Clone;
 
     /// Return an annotation and rendering prefix for a link.
     fn decorate_link_start(&mut self, url: &str) -> (String, Option<Self::Annotation>);
@@ -190,8 +190,9 @@ pub struct TextRenderer<D:TextDecorator+Clone> {
     /// True at the end of a block, meaning we should add
     /// a blank line if any other text is added.
     at_block_end: bool,
-    wrapping: Option<WrappedBlock<()>>,
+    wrapping: Option<WrappedBlock<Vec<D::Annotation>>>,
     decorator: Option<D>,
+    ann_stack: Vec<D::Annotation>,
 }
 
 impl<D:TextDecorator+Clone> TextRenderer<D> {
@@ -204,12 +205,13 @@ impl<D:TextDecorator+Clone> TextRenderer<D> {
             at_block_end: false,
             wrapping: None,
             decorator: Some(decorator),
+            ann_stack: Vec::new(),
         }
     }
 
     /// Get the current line wrapping context (and create if
     /// needed).
-    fn current_text(&mut self) -> &mut WrappedBlock<()> {
+    fn current_text(&mut self) -> &mut WrappedBlock<Vec<D::Annotation>> {
         if self.wrapping.is_none() {
             self.wrapping = Some(WrappedBlock::new(self.width));
         }
@@ -319,8 +321,9 @@ impl<D:TextDecorator+Clone> Renderer for TextRenderer<D> {
         if self.at_block_end {
             self.start_block();
         }
-        let mut partial = self.current_text();
-        partial.add_text(text, ());
+        // ensure wrapping is set
+        let _ = self.current_text();
+        self.wrapping.as_mut().unwrap().add_text(text, &self.ann_stack);
     }
 
     fn width(&self) -> usize {
