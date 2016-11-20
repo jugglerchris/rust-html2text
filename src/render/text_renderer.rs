@@ -563,7 +563,7 @@ impl TextDecorator for PlainDecorator {
 
     fn decorate_image(&mut self, title: &str) -> (String, Self::Annotation)
     {
-        (title.to_string(), ())
+        (format!("[{}]", title), ())
     }
 
     fn finalise(self) -> Vec<TaggedLine<()>> {

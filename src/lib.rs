@@ -693,6 +693,6 @@ Div
      #[test]
      fn test_img_alt() {
          test_html(br"<p>Hello <img src='foo.jpg' alt='world'></p>",
-                   "Hello world\n", 80);
+                   "Hello [world]\n", 80);
      }
 }
