@@ -80,6 +80,11 @@ impl<T:Debug+Eq+PartialEq+Clone+Default> TaggedLine<T> {
         Box::new(self.v.iter().flat_map(|ts| ts.s.chars()))
     }
 
+    /// Iterator over (string, tag) pairs
+    pub fn iter<'a>(&'a self) -> Box<Iterator<Item=(&str, &T)>+'a> {
+        Box::new(self.v.iter().map(|ts| (ts.s.as_str(), &ts.tag)))
+    }
+
     /// Return the width of the line in cells
     pub fn width(&self) -> usize {
         let mut result = 0;
