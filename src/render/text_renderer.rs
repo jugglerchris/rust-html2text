@@ -3,8 +3,6 @@ use super::Renderer;
 use std::mem;
 use std::vec;
 use std::fmt::Debug;
-use std::iter;
-use std::slice;
 
 /// A wrapper around a String with extra metadata.
 #[derive(Debug)]
@@ -313,9 +311,10 @@ impl<D:TextDecorator+Clone> TextRenderer<D> {
 
     pub fn add_subblock(&mut self, s: &str) {
         html_trace!("add_subblock({}, {})", self.width, s);
+        let tag = self.ann_stack.clone();
         self.lines.extend(s.lines().map(|l| {
             let mut line = TaggedLine::new();
-            line.push(TaggedString{s: l.into(), tag: self.ann_stack.clone()});
+            line.push(TaggedString{s: l.into(), tag: tag.clone()});
             line
         }));
     }
@@ -437,13 +436,14 @@ impl<D:TextDecorator+Clone> Renderer for TextRenderer<D> {
                            where I:Iterator<Item=&'a str>
     {
         self.flush_wrapping();
+        let tag = self.ann_stack.clone();
         self.lines.extend(other.into_lines()
                                .into_iter()
                                .zip(prefixes)
                                .map(|(mut line, prefix)| {
                                    line.insert_front(TaggedString{
                                        s: prefix.to_string(),
-                                       tag: self.ann_stack.clone()
+                                       tag: tag.clone()
                                    });
                                    line
                                 }));
@@ -453,12 +453,12 @@ impl<D:TextDecorator+Clone> Renderer for TextRenderer<D> {
                            where I:IntoIterator<Item=Self> {
         self.flush_wrapping();
 
-        let line_sets = cols.into_iter()
+        let mut line_sets = cols.into_iter()
                             .map(|sub_r| {
                                 let width = sub_r.width;
                                 (width, sub_r.into_lines()
                                              .into_iter()
-                                             .map(|line| {line.pad_to(width); line})
+                                             .map(|mut line| {line.pad_to(width); line})
                                              .collect())
                                  })
                             .collect::<Vec<(usize, Vec<TaggedLine<_>>)>>();
@@ -467,18 +467,19 @@ impl<D:TextDecorator+Clone> Renderer for TextRenderer<D> {
                                    .map(|&(_, ref v)| v.len())
                                    .max().unwrap_or(0);
         let spaces:String = (0..self.width).map(|_| ' ').collect();
+        let last_cellno = line_sets.len()-1;
         for i in 0..cell_height {
             let mut line = TaggedLine::new();
-            for (cellno, (width, ls)) in line_sets.into_iter().enumerate() {
-                if let Some(piece) = ls.get(i) {
-                    line.consume(&mut piece);
+            for (cellno, &mut (width, ref mut ls)) in line_sets.iter_mut().enumerate() {
+                if let Some(piece) = ls.get_mut(i) {
+                    line.consume(piece);
                 } else {
                     line.push(TaggedString {
                         s: spaces[0..width].to_string(),
                         tag: self.ann_stack.clone(),
                     });
                 }
-                if cellno != line_sets.len()-1 {
+                if cellno != last_cellno {
                     line.push_char(separator, &self.ann_stack);
                 }
             }
