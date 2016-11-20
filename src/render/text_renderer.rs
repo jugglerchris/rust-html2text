@@ -1,7 +1,10 @@
 use unicode_width::{UnicodeWidthStr,UnicodeWidthChar};
 use super::Renderer;
 use std::mem;
+use std::vec;
 use std::fmt::Debug;
+use std::iter;
+use std::slice;
 
 /// A wrapper around a String with extra metadata.
 #[derive(Debug)]
@@ -10,18 +13,96 @@ struct TaggedString<T:Debug> {
     tag: T,
 }
 
+#[derive(Debug)]
+struct TaggedLine<T:Debug+Eq+PartialEq+Clone> {
+    v: Vec<TaggedString<T>>,
+}
+
+impl<T:Debug+Eq+PartialEq+Clone> TaggedLine<T> {
+    pub fn new() -> TaggedLine<T> {
+        TaggedLine {
+            v: Vec::new(),
+        }
+    }
+
+    /// Create a new TaggedLine from a string and tag.
+    pub fn from_string(s: String, tag: &T) -> TaggedLine<T> {
+        TaggedLine {
+            v: vec![TaggedString{ s: s, tag: tag.clone() }],
+        }
+    }
+
+    /// Join the line into a String ignoring the tags.
+    pub fn into_string(self) -> String {
+        let mut s = String::new();
+        for ts in self.v {
+            s.push_str(&ts.s);
+        }
+        s
+    }
+
+    /// Return true if the line is non-empty
+    pub fn is_empty(&self) -> bool {
+        self.v.len() == 0
+    }
+
+    /// Add a new fragment to the line
+    pub fn push(&mut self, ts: TaggedString<T>) {
+        self.v.push(ts);
+    }
+
+    /// Add a new fragment to the start of the line
+    pub fn insert_front(&mut self, ts: TaggedString<T>) {
+        self.v.insert(0, ts);
+    }
+
+    /// Add text with a particular tag to self
+    pub fn push_char(&mut self, c: char, tag: &T) {
+        if self.v.len() > 0 && self.v.last().unwrap().tag == *tag {
+            self.v.last_mut().unwrap().s.push(c);
+        } else {
+            let mut s = String::new();
+            s.push(c);
+            self.v.push(TaggedString { s: s, tag: tag.clone() });
+        }
+    }
+
+    /// Drain tl and use to extend self.
+    pub fn consume(&mut self, tl: &mut TaggedLine<T>) {
+        self.v.extend(tl.v.drain(..));
+    }
+
+    /// Drain the contained items
+    pub fn drain_all(&mut self) -> vec::Drain<TaggedString<T>> {
+        self.v.drain(..)
+    }
+
+    /// Iterator over the chars in this line.
+    pub fn chars<'a>(&'a self) -> Box<Iterator<Item=char>+'a> {
+        Box::new(self.v.iter().flat_map(|ts| ts.s.chars()))
+    }
+
+    /// Return the width of the line in cells
+    pub fn width(&self) -> usize {
+        let mut result = 0;
+        for ts in &self.v {
+            result += UnicodeWidthStr::width(ts.s.as_str());
+        }
+        result
+    }
+}
 
 /// A type to build up wrapped text, allowing extra metadata for
 /// spans.
 #[derive(Debug)]
 struct WrappedBlock<T:Clone+Eq+Debug> {
     width: usize,
-    text: Vec<Vec<TaggedString<T>>>,
+    text: Vec<TaggedLine<T>>,
     textlen: usize,
-    line: Vec<TaggedString<T>>,
+    line: TaggedLine<T>,
     linelen: usize,
     spacetag: Option<T>,         // Tag for the whitespace before the current word
-    word: Vec<TaggedString<T>>,  // The current word (with no whitespace).
+    word: TaggedLine<T>,         // The current word (with no whitespace).
     wordlen: usize,
 }
 
@@ -31,17 +112,17 @@ impl<T:Clone+Eq+Debug> WrappedBlock<T> {
             width: width,
             text: Vec::new(),
             textlen: 0,
-            line: Vec::new(),
+            line: TaggedLine::new(),
             linelen: 0,
             spacetag: None,
-            word: Vec::new(),
+            word: TaggedLine::new(),
             wordlen: 0,
         }
     }
 
     fn flush_word(&mut self) {
         /* Finish the word. */
-        if self.word.len() > 0 {
+        if !self.word.is_empty() {
             let space_in_line = self.width - self.linelen;
             let space_needed = self.wordlen +
                         if self.linelen > 0 { 1 } else { 0 }; // space
@@ -50,21 +131,21 @@ impl<T:Clone+Eq+Debug> WrappedBlock<T> {
                     self.line.push(TaggedString{s: " ".into(), tag: self.spacetag.take().unwrap()});
                     self.linelen += 1;
                 }
-                self.line.extend(self.word.drain(..));
+                self.line.consume(&mut self.word);
                 self.linelen += self.wordlen;
                 self.wordlen = 0;
             } else {
                 /* Start a new line */
                 self.flush_line();
                 if self.wordlen <= self.width {
-                    let mut new_word = Vec::new();
+                    let mut new_word = TaggedLine::new();
                     mem::swap(&mut new_word, &mut self.word);
                     mem::swap(&mut self.line, &mut new_word);
                     self.linelen = self.wordlen;
                     self.wordlen = 0;
                 } else {
                     /* We need to split the word. */
-                    let mut wordbits = self.word.drain(..);
+                    let mut wordbits = self.word.drain_all();
                     /* Note: there's always at least one piece */
                     let mut opt_piece = wordbits.next();
                     let mut lineleft = self.width;
@@ -92,7 +173,7 @@ impl<T:Clone+Eq+Debug> WrappedBlock<T> {
                                 tag: piece.tag.clone(),
                             });
                             {
-                                let mut tmp_line = Vec::new();
+                                let mut tmp_line = TaggedLine::new();
                                 mem::swap(&mut tmp_line, &mut self.line);
                                 self.text.push(tmp_line);
                             }
@@ -110,8 +191,8 @@ impl<T:Clone+Eq+Debug> WrappedBlock<T> {
     }
 
     fn flush_line(&mut self) {
-        if self.line.len() > 0 {
-            let mut tmp_line = Vec::new();
+        if !self.line.is_empty() {
+            let mut tmp_line = TaggedLine::new();
             mem::swap(&mut tmp_line, &mut self.line);
             self.text.push(tmp_line);
             self.linelen = 0;
@@ -124,6 +205,7 @@ impl<T:Clone+Eq+Debug> WrappedBlock<T> {
     }
 
     /// Consume self and return a vector of lines.
+    /*
     pub fn into_untagged_lines(mut self) -> Vec<String> {
         self.flush();
 
@@ -137,6 +219,14 @@ impl<T:Clone+Eq+Debug> WrappedBlock<T> {
         }
         result
     }
+    */
+
+    /// Consume self and return vector of lines including annotations.
+    pub fn into_lines(mut self) -> Vec<TaggedLine<T>> {
+        self.flush();
+
+        self.text
+    }
 
     pub fn add_text(&mut self, text: &str, tag: &T) {
         for c in text.chars() {
@@ -146,16 +236,7 @@ impl<T:Clone+Eq+Debug> WrappedBlock<T> {
                 self.spacetag = Some(tag.clone());
             } else {
                 /* Not whitespace; add to the current word. */
-                if self.word.len() > 0 && self.word[self.word.len()-1].tag == *tag {
-                    /* Just add a character to the last piece */
-                    let last_idx = self.word.len() - 1;
-                    self.word[last_idx].s.push(c);
-                } else {
-                    /* Starting a new word; easy. */
-                    let mut s = String::new();
-                    s.push(c);
-                    self.word.push(TaggedString{ s: s, tag: tag.clone()});
-                }
+                self.word.push_char(c, tag);
                 self.wordlen += UnicodeWidthChar::width(c).unwrap();
             }
         }
@@ -180,13 +261,13 @@ pub trait TextDecorator {
 
     /// Finish with a document, and return extra lines (eg footnotes)
     /// to add to the rendered text.
-    fn finalise(self) -> Vec<String>;
+    fn finalise(self) -> Vec<TaggedLine<Self::Annotation>>;
 }
 
 /// A renderer which just outputs plain text.
 pub struct TextRenderer<D:TextDecorator+Clone> {
     width: usize,
-    lines: Vec<String>,
+    lines: Vec<TaggedLine<Vec<D::Annotation>>>,
     /// True at the end of a block, meaning we should add
     /// a blank line if any other text is added.
     at_block_end: bool,
@@ -220,26 +301,30 @@ impl<D:TextDecorator+Clone> TextRenderer<D> {
 
     pub fn add_subblock(&mut self, s: &str) {
         html_trace!("add_subblock({}, {})", self.width, s);
-        self.lines.extend(s.lines().map(|l| l.into()));
+        self.lines.extend(s.lines().map(|l| {
+            let mut line = TaggedLine::new();
+            line.push(TaggedString{s: l.into(), tag: self.ann_stack.clone()});
+            line
+        }));
     }
 
     fn flush_wrapping(&mut self) {
         if let Some(w) = self.wrapping.take() {
-            self.lines.extend(w.into_untagged_lines())
+            self.lines.extend(w.into_lines())
         }
     }
 
     pub fn into_string(self) -> String {
         let mut result = String::new();
-        for s in self.into_lines() {
-            result.push_str(&s);
+        for line in self.into_lines() {
+            result.push_str(&line.into_string());
             result.push('\n');
         }
         html_trace!("into_string({}, {:?})", self.width, result);
         result
     }
 
-    fn into_lines(mut self) -> Vec<String> {
+    fn into_lines(mut self) -> Vec<TaggedLine<Vec<D::Annotation>>> {
         self.flush_wrapping();
         // And add the links
         let mut trailer = self.decorator.take().unwrap().finalise();
@@ -260,7 +345,7 @@ impl<D:TextDecorator+Clone> TextRenderer<D> {
                     if pos + c_width > self.width {
                         let mut tmp_s = String::new();
                         mem::swap(&mut output, &mut tmp_s);
-                        self.lines.push(tmp_s);
+                        self.lines.push(TaggedLine::from_string(tmp_s, &vec![]));
                         output.push(c);
                         pos = c_width;
                     } else {
@@ -268,7 +353,7 @@ impl<D:TextDecorator+Clone> TextRenderer<D> {
                         pos += c_width;
                     }
                 }
-                self.lines.push(output);
+                self.lines.push(TaggedLine::from_string(output, &vec![]));
             }
         }
         self.lines
@@ -280,7 +365,7 @@ impl<D:TextDecorator+Clone> Renderer for TextRenderer<D> {
     fn add_empty_line(&mut self) {
         html_trace!("add_empty_line()");
         self.flush_wrapping();
-        self.lines.push("".into());
+        self.lines.push(TaggedLine::new());
         html_trace_quiet!("add_empty_line: at_block_end <- false");
         self.at_block_end = false;
         html_trace_quiet!("add_empty_line: new lines: {:?}", self.lines);
@@ -343,7 +428,13 @@ impl<D:TextDecorator+Clone> Renderer for TextRenderer<D> {
         self.lines.extend(other.into_lines()
                                .into_iter()
                                .zip(prefixes)
-                               .map(|(line, prefix)| prefix.to_string() + &line));
+                               .map(|(mut line, prefix)| {
+                                   line.insert_front(TaggedString{
+                                       s: prefix.to_string(),
+                                       tag: self.ann_stack.clone()
+                                   });
+                                   line
+                                }));
     }
 
     fn append_columns<I>(&mut self, cols: I, separator: char)
@@ -384,7 +475,7 @@ impl<D:TextDecorator+Clone> Renderer for TextRenderer<D> {
     fn text_len(&self) -> usize {
         let mut result = 0;
         for line in &self.lines {
-            result += UnicodeWidthStr::width(line.as_str());
+            result += line.width();
         }
         if let Some(ref w) = self.wrapping {
             result += w.text_len();
@@ -435,7 +526,44 @@ impl TextDecorator for PlainDecorator {
         format!("][{}]", self.links.len())
     }
 
-    fn finalise(self) -> Vec<String> {
-        self.links.into_iter().enumerate().map(|(idx,s)| format!("[{}] {}", idx+1, s)).collect()
+    fn finalise(self) -> Vec<TaggedLine<()>> {
+        self.links.into_iter().enumerate().map(|(idx,s)|
+            TaggedLine::from_string(format!("[{}] {}", idx+1, s), &())).collect()
+    }
+}
+
+/// A decorator to generate rich text (styled) rather than
+/// pure text output.
+#[derive(Clone)]
+pub struct RichDecorator {
+}
+
+#[derive(PartialEq,Eq,Clone,Debug)]
+pub enum RichAnnotation {
+    Link(String),
+}
+
+impl RichDecorator {
+    pub fn new() -> RichDecorator {
+        RichDecorator {
+        }
+    }
+}
+
+impl TextDecorator for RichDecorator {
+    type Annotation = RichAnnotation;
+
+    fn decorate_link_start(&mut self, url: &str) -> (String, Self::Annotation)
+    {
+        ("".to_string(), RichAnnotation::Link(url.to_string()))
+    }
+
+    fn decorate_link_end(&mut self) -> String
+    {
+        "".to_string()
+    }
+
+    fn finalise(self) -> Vec<TaggedLine<RichAnnotation>> {
+        Vec::new()
     }
 }
