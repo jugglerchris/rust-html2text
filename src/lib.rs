@@ -12,7 +12,8 @@ mod macros;
 pub mod render;
 
 use render::Renderer;
-use render::text_renderer::{TextRenderer,PlainDecorator,RichDecorator};
+use render::text_renderer::{TextRenderer,PlainDecorator,RichDecorator,
+                            RichAnnotation,TaggedLine,TaggedString};
 
 use std::io;
 use std::io::Write;
@@ -409,7 +410,9 @@ pub fn from_read<R>(mut input: R, width: usize) -> String where R: io::Read {
     builder.into_string()
 }
 
-pub fn from_read_rich<R>(mut input: R, width: usize) -> String where R: io::Read {
+pub fn from_read_rich<R>(mut input: R, width: usize) -> Vec<TaggedLine<Vec<RichAnnotation>>>
+        where R: io::Read
+{
     let opts = ParseOpts {
         tree_builder: TreeBuilderOpts {
             drop_doctype: true,
@@ -425,7 +428,7 @@ pub fn from_read_rich<R>(mut input: R, width: usize) -> String where R: io::Read
     let decorator = RichDecorator::new();
     let mut builder = TextRenderer::new(width, decorator);
     dom_to_string(&mut builder, dom.document, &mut Discard{} /* &mut io::stderr()*/);
-    builder.into_string()
+    builder.into_lines()
 }
 
 #[cfg(test)]

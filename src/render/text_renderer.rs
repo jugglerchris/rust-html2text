@@ -335,7 +335,7 @@ impl<D:TextDecorator+Clone> TextRenderer<D> {
         result
     }
 
-    fn into_lines(mut self) -> Vec<TaggedLine<Vec<D::Annotation>>> {
+    pub fn into_lines(mut self) -> Vec<TaggedLine<Vec<D::Annotation>>> {
         self.flush_wrapping();
         // And add the links
         let mut trailer = self.decorator.take().unwrap().finalise();
