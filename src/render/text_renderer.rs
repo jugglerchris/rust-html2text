@@ -8,17 +8,17 @@ use std::slice;
 
 /// A wrapper around a String with extra metadata.
 #[derive(Debug)]
-struct TaggedString<T:Debug> {
+pub struct TaggedString<T:Debug> {
     s: String,
     tag: T,
 }
 
 #[derive(Debug)]
-struct TaggedLine<T:Debug+Eq+PartialEq+Clone> {
+pub struct TaggedLine<T:Debug+Eq+PartialEq+Clone> {
     v: Vec<TaggedString<T>>,
 }
 
-impl<T:Debug+Eq+PartialEq+Clone> TaggedLine<T> {
+impl<T:Debug+Eq+PartialEq+Clone+Default> TaggedLine<T> {
     pub fn new() -> TaggedLine<T> {
         TaggedLine {
             v: Vec::new(),
@@ -90,12 +90,24 @@ impl<T:Debug+Eq+PartialEq+Clone> TaggedLine<T> {
         }
         result
     }
+
+    /// Pad this line to width with spaces (or if already at least this wide, do
+    /// nothing).
+    pub fn pad_to(&mut self, width: usize) {
+        let my_width = self.width();
+        if width > my_width {
+            self.v.push(TaggedString{
+                s: format!("{: <width$}", "", width=width-my_width),
+                tag: T::default(),
+            });
+        }
+    }
 }
 
 /// A type to build up wrapped text, allowing extra metadata for
 /// spans.
 #[derive(Debug)]
-struct WrappedBlock<T:Clone+Eq+Debug> {
+struct WrappedBlock<T:Clone+Eq+Debug+Default> {
     width: usize,
     text: Vec<TaggedLine<T>>,
     textlen: usize,
@@ -106,7 +118,7 @@ struct WrappedBlock<T:Clone+Eq+Debug> {
     wordlen: usize,
 }
 
-impl<T:Clone+Eq+Debug> WrappedBlock<T> {
+impl<T:Clone+Eq+Debug+Default> WrappedBlock<T> {
     pub fn new(width: usize) -> WrappedBlock<T> {
         WrappedBlock {
             width: width,
@@ -251,7 +263,7 @@ impl<T:Clone+Eq+Debug> WrappedBlock<T> {
 pub trait TextDecorator {
     /// An annotation which can be added to text, and which will
     /// be attached to spans of text.
-    type Annotation: Eq+PartialEq+Debug+Clone;
+    type Annotation: Eq+PartialEq+Debug+Clone+Default;
 
     /// Return an annotation and rendering prefix for a link.
     fn decorate_link_start(&mut self, url: &str) -> (String, Self::Annotation);
@@ -446,25 +458,31 @@ impl<D:TextDecorator+Clone> Renderer for TextRenderer<D> {
                                 let width = sub_r.width;
                                 (width, sub_r.into_lines()
                                              .into_iter()
-                                             .map(|line| format!("{: <width$}", line, width=width))
+                                             .map(|line| {line.pad_to(width); line})
                                              .collect())
                                  })
-                            .collect::<Vec<(usize, Vec<String>)>>();
+                            .collect::<Vec<(usize, Vec<TaggedLine<_>>)>>();
 
         let cell_height = line_sets.iter()
                                    .map(|&(_, ref v)| v.len())
                                    .max().unwrap_or(0);
         let spaces:String = (0..self.width).map(|_| ' ').collect();
         for i in 0..cell_height {
-            let mut line = String::new();
-            for (cellno, &(width, ref ls)) in line_sets.iter().enumerate() {
-                let piece = ls.get(i).map(|s| s.as_str()).unwrap_or(&spaces[0..width]);
-                line.push_str(piece);
+            let mut line = TaggedLine::new();
+            for (cellno, (width, ls)) in line_sets.into_iter().enumerate() {
+                if let Some(piece) = ls.get(i) {
+                    line.consume(&mut piece);
+                } else {
+                    line.push(TaggedString {
+                        s: spaces[0..width].to_string(),
+                        tag: self.ann_stack.clone(),
+                    });
+                }
                 if cellno != line_sets.len()-1 {
-                    line.push(separator)
+                    line.push_char(separator, &self.ann_stack);
                 }
             }
-            self.add_block_line(&line);
+            self.lines.push(line);
         }
     }
 
@@ -540,7 +558,14 @@ pub struct RichDecorator {
 
 #[derive(PartialEq,Eq,Clone,Debug)]
 pub enum RichAnnotation {
+    Default,
     Link(String),
+}
+
+impl Default for RichAnnotation {
+    fn default() -> Self {
+        RichAnnotation::Default
+    }
 }
 
 impl RichDecorator {
