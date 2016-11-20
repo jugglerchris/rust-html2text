@@ -51,4 +51,7 @@ pub trait Renderer {
 
     /// Finish a hyperlink started earlier.
     fn end_link(&mut self);
+
+    /// Add an image
+    fn add_image(&mut self, title: &str);
 }

@@ -102,6 +102,19 @@ fn dom_to_string<T:Write, R:Renderer>(builder: &mut R, handle: Handle,
                     }
                     return;
                 },
+                qualname!(html, "img") => {
+                    let mut title = None;
+                    for attr in attrs {
+                        if &attr.name.local == "alt" {
+                            title = Some(&*attr.value);
+                            break;
+                        }
+                    }
+                    if let Some(title) = title {
+                        builder.add_image(title);
+                    }
+                    return;
+                },
                 qualname!(html, "h1") |
                 qualname!(html, "h2") |
                 qualname!(html, "h3") |
@@ -675,5 +688,11 @@ r#"Hello
 
 Div
 "#, 20);
+     }
+
+     #[test]
+     fn test_img_alt() {
+         test_html(br"<p>Hello <img src='foo.jpg' alt='world'></p>",
+                   "Hello world\n", 80);
      }
 }

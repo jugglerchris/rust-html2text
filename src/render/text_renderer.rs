@@ -274,6 +274,9 @@ pub trait TextDecorator {
     /// Return a suffix for after a link.
     fn decorate_link_end(&mut self) -> String;
 
+    /// Return an annotation and rendering prefix for a link.
+    fn decorate_image(&mut self, title: &str) -> (String, Self::Annotation);
+
     /// Finish with a document, and return extra lines (eg footnotes)
     /// to add to the rendered text.
     fn finalise(self) -> Vec<TaggedLine<Self::Annotation>>;
@@ -521,6 +524,14 @@ impl<D:TextDecorator+Clone> Renderer for TextRenderer<D> {
             self.ann_stack.pop();
         }
     }
+    fn add_image(&mut self, title: &str)
+    {
+        if let Some((s, tag)) = self.decorator.as_mut().map(|d| d.decorate_image(title)) {
+            self.ann_stack.push(tag);
+            self.add_inline_text(&s);
+            self.ann_stack.pop();
+        }
+    }
 }
 
 #[derive(Clone)]
@@ -550,6 +561,11 @@ impl TextDecorator for PlainDecorator {
         format!("][{}]", self.links.len())
     }
 
+    fn decorate_image(&mut self, title: &str) -> (String, Self::Annotation)
+    {
+        (title.to_string(), ())
+    }
+
     fn finalise(self) -> Vec<TaggedLine<()>> {
         self.links.into_iter().enumerate().map(|(idx,s)|
             TaggedLine::from_string(format!("[{}] {}", idx+1, s), &())).collect()
@@ -566,6 +582,7 @@ pub struct RichDecorator {
 pub enum RichAnnotation {
     Default,
     Link(String),
+    Image,
 }
 
 impl Default for RichAnnotation {
@@ -592,6 +609,11 @@ impl TextDecorator for RichDecorator {
     fn decorate_link_end(&mut self) -> String
     {
         "".to_string()
+    }
+
+    fn decorate_image(&mut self, title: &str) -> (String, Self::Annotation)
+    {
+        (title.to_string(), RichAnnotation::Image)
     }
 
     fn finalise(self) -> Vec<TaggedLine<RichAnnotation>> {
