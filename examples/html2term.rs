@@ -1,7 +1,6 @@
 extern crate html2text;
 extern crate termion;
 use std::io::{self, Write};
-use std::fmt::Display;
 use html2text::render::text_renderer::{RichAnnotation};
 
 fn to_style(tag: &Vec<RichAnnotation>) -> String {
@@ -24,12 +23,14 @@ fn to_style(tag: &Vec<RichAnnotation>) -> String {
 fn main() {
     let stdin = io::stdin();
 
-    let annotated = html2text::from_read_rich(&mut stdin.lock(), 80);
+    let (width, _) = termion::terminal_size().unwrap();
+
+    let annotated = html2text::from_read_rich(&mut stdin.lock(), width as usize);
     for line in annotated {
         for (s, tag) in line.iter() {
             let style = to_style(tag);
-            write!(io::stdout(), "{}{}{}", style, s, termion::style::Reset);
+            write!(io::stdout(), "{}{}{}", style, s, termion::style::Reset).unwrap();
         }
-        write!(io::stdout(), "\n");
+        write!(io::stdout(), "\n").unwrap();
     }
 }
