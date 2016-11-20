@@ -12,3 +12,10 @@ backtrace = "*"
 
 [features]
 html_trace = []
+
+[[example]]
+name = "html2term"
+path = "examples/html2term.rs"
+
+[dev-dependencies]
+termion = "1.0"

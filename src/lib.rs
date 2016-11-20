@@ -12,7 +12,7 @@ mod macros;
 pub mod render;
 
 use render::Renderer;
-use render::text_renderer::{TextRenderer,PlainDecorator};
+use render::text_renderer::{TextRenderer,PlainDecorator,RichDecorator};
 
 use std::io;
 use std::io::Write;
@@ -404,6 +404,25 @@ pub fn from_read<R>(mut input: R, width: usize) -> String where R: io::Read {
                    .unwrap();
 
     let decorator = PlainDecorator::new();
+    let mut builder = TextRenderer::new(width, decorator);
+    dom_to_string(&mut builder, dom.document, &mut Discard{} /* &mut io::stderr()*/);
+    builder.into_string()
+}
+
+pub fn from_read_rich<R>(mut input: R, width: usize) -> String where R: io::Read {
+    let opts = ParseOpts {
+        tree_builder: TreeBuilderOpts {
+            drop_doctype: true,
+            ..Default::default()
+        },
+        ..Default::default()
+    };
+    let dom = parse_document(RcDom::default(), opts)
+                   .from_utf8()
+                   .read_from(&mut input)
+                   .unwrap();
+
+    let decorator = RichDecorator::new();
     let mut builder = TextRenderer::new(width, decorator);
     dom_to_string(&mut builder, dom.document, &mut Discard{} /* &mut io::stderr()*/);
     builder.into_string()
