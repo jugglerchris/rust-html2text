@@ -27,14 +27,6 @@ fn main() {
     let mut filename = String::new();
     {
         let mut ap = ArgumentParser::new();
-        /*
-        ap.refer(&mut ini)
-          .add_option(&["--init"], Store, "Set Lua init/config script path");
-        ap.refer(&mut script)
-          .add_option(&["--script"], Store, "Set Lua script path");
-        ap.refer(&mut immcmd)
-          .add_option(&["-c"], StoreOption, "Run Lua from the command line.  If specified, the main script (--script) is ignored.");
-          */
         ap.refer(&mut filename)
           .add_argument("filename", Store, "Set HTML filename");
         ap.parse_args_or_exit();
