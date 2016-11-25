@@ -61,22 +61,22 @@ fn main() {
         if let Some(Ok(k)) = keys.next() {
             match k {
                 Key::Char('q') => break,
-                Key::Char('j') => {
+                Key::Char('j') | Key::Down => {
                     if cursor_y < height as u16 {
                         cursor_y += 1;
                     }
                 },
-                Key::Char('k') => {
+                Key::Char('k') | Key::Up => {
                     if cursor_y > 1 {
                         cursor_y -= 1;
                     }
                 },
-                Key::Char('h') => {
+                Key::Char('h') | Key::Left => {
                     if cursor_x > 1 {
                         cursor_x -= 1;
                     }
                 },
-                Key::Char('l') => {
+                Key::Char('l') | Key::Right => {
                     if cursor_x < width as u16 {
                         cursor_x += 1;
                     }
