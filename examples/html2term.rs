@@ -1,13 +1,15 @@
 extern crate html2text;
 extern crate termion;
 extern crate argparse;
+extern crate unicode_width;
 use std::io::{self, Write};
-use html2text::render::text_renderer::{RichAnnotation};
+use html2text::render::text_renderer::{RichAnnotation,TaggedLine};
 use argparse::{ArgumentParser, Store};
 use termion::input::TermRead;
 use termion::event::Key;
 use termion::raw::IntoRawMode;
 use termion::cursor::Goto;
+use unicode_width::UnicodeWidthStr;
 
 fn to_style(tag: &Vec<RichAnnotation>) -> String {
     let mut style = String::new();
@@ -26,6 +28,50 @@ fn to_style(tag: &Vec<RichAnnotation>) -> String {
     style
 }
 
+struct LinkMap {
+    lines: Vec<Vec<Option<String>>>,  // lines[y][x] => Some(URL) or None
+}
+
+impl LinkMap {
+    pub fn link_at(&self, x: usize, y: usize) -> Option<&str> {
+        if let Some(ref linevec) = self.lines.get(y) {
+            if let Some(&Some(ref text)) = linevec.get(x) {
+                return Some(&text)
+            }
+        }
+        None
+    }
+}
+
+fn link_from_tag(tag: &Vec<RichAnnotation>) -> Option<String> {
+    let mut link = None;
+    for annotation in tag {
+        if let RichAnnotation::Link(ref text) = *annotation {
+            link = Some(text.clone());
+        }
+    }
+    link
+}
+
+fn find_links(lines: &Vec<TaggedLine<Vec<RichAnnotation>>>) -> LinkMap {
+    let mut map = Vec::new();
+    for line in lines {
+        let mut linevec = Vec::new();
+
+        for (s, tag) in line.iter() {
+            let link = link_from_tag(tag);
+            for _ in 0..UnicodeWidthStr::width(s) {
+                linevec.push(link.clone());
+            }
+        }
+
+        map.push(linevec);
+    }
+    LinkMap {
+        lines: map,
+    }
+}
+
 fn main() {
     let mut filename = String::new();
     {
@@ -41,18 +87,30 @@ fn main() {
     let mut file = std::fs::File::open(filename).expect("Tried to open file");
     let annotated = html2text::from_read_rich(&mut file, width as usize);
 
+    let link_map = find_links(&annotated);
+
     let mut keys = io::stdin().keys();
     let mut stdout = io::stdout().into_raw_mode().unwrap();
     let mut pos = 0;
+    // 1-based screen co-ordinates
     let mut cursor_x = 1;
     let mut cursor_y = 1;
     loop {
+        let opt_url = link_map.link_at(cursor_x as usize - 1, cursor_y as usize +pos-1);
         let maxpos = std::cmp::min(pos+height, annotated.len());
         write!(stdout, "{}", termion::clear::All).unwrap();
         for (i, line) in annotated[pos..maxpos].iter().enumerate() {
+            let mut x = 0;
             write!(stdout, "{}", Goto(1, i as u16 +1)).unwrap();
             for (s, tag) in line.iter() {
                 let style = to_style(tag);
+                let link = link_from_tag(tag);
+                match (opt_url, link) {
+                    (Some(ref t1), Some(ref t2)) if t1 == t2 => {
+                        write!(stdout, "{}", termion::style::Invert).unwrap();
+                    },
+                    _ => (),
+                }
                 write!(stdout, "{}{}{}", style, s, termion::style::Reset).unwrap();
             }
         }
@@ -90,6 +148,8 @@ fn main() {
                     if pos >= height-1 {
                         pos -= height-1;
                     }
+                },
+                Key::Char('\t') => {
                 },
                 _ => {},
             }
