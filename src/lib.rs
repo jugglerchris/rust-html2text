@@ -13,7 +13,7 @@ pub mod render;
 
 use render::Renderer;
 use render::text_renderer::{TextRenderer,PlainDecorator,RichDecorator,
-                            RichAnnotation,TaggedLine,TaggedString};
+                            RichAnnotation,TaggedLine};
 
 use std::io;
 use std::io::Write;
