@@ -274,6 +274,12 @@ pub trait TextDecorator {
     /// Return a suffix for after a link.
     fn decorate_link_end(&mut self) -> String;
 
+    /// Return an annotation and rendering prefix for em
+    fn decorate_em_start(&mut self) -> (String, Self::Annotation);
+
+    /// Return a suffix for after an em.
+    fn decorate_em_end(&mut self) -> String;
+
     /// Return an annotation and rendering prefix for a link.
     fn decorate_image(&mut self, title: &str) -> (String, Self::Annotation);
 
@@ -524,6 +530,20 @@ impl<D:TextDecorator+Clone> Renderer for TextRenderer<D> {
             self.ann_stack.pop();
         }
     }
+    fn start_emphasis(&mut self)
+    {
+        if let Some((s, annotation)) = self.decorator.as_mut().map(|d| d.decorate_em_start()) {
+            self.ann_stack.push(annotation);
+            self.add_inline_text(&s);
+        }
+    }
+    fn end_emphasis(&mut self)
+    {
+        if let Some(s) = self.decorator.as_mut().map(|d| d.decorate_em_end()) {
+            self.add_inline_text(&s);
+            self.ann_stack.pop();
+        }
+    }
     fn add_image(&mut self, title: &str)
     {
         if let Some((s, tag)) = self.decorator.as_mut().map(|d| d.decorate_image(title)) {
@@ -561,6 +581,16 @@ impl TextDecorator for PlainDecorator {
         format!("][{}]", self.links.len())
     }
 
+    fn decorate_em_start(&mut self) -> (String, Self::Annotation)
+    {
+        ("*".to_string(), ())
+    }
+
+    fn decorate_em_end(&mut self) -> String
+    {
+        "*".to_string()
+    }
+
     fn decorate_image(&mut self, title: &str) -> (String, Self::Annotation)
     {
         (format!("[{}]", title), ())
@@ -583,6 +613,7 @@ pub enum RichAnnotation {
     Default,
     Link(String),
     Image,
+    Emphasis,
 }
 
 impl Default for RichAnnotation {
@@ -607,6 +638,16 @@ impl TextDecorator for RichDecorator {
     }
 
     fn decorate_link_end(&mut self) -> String
+    {
+        "".to_string()
+    }
+
+    fn decorate_em_start(&mut self) -> (String, Self::Annotation)
+    {
+        ("".to_string(), RichAnnotation::Emphasis)
+    }
+
+    fn decorate_em_end(&mut self) -> String
     {
         "".to_string()
     }

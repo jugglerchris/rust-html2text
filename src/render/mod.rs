@@ -52,6 +52,12 @@ pub trait Renderer {
     /// Finish a hyperlink started earlier.
     fn end_link(&mut self);
 
+    /// Start an emphasised region
+    fn start_emphasis(&mut self);
+
+    /// Finish emphasised text started earlier.
+    fn end_emphasis(&mut self);
+
     /// Add an image
     fn add_image(&mut self, title: &str);
 }
