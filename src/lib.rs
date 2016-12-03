@@ -132,6 +132,7 @@ fn dom_to_string<T:Write, R:Renderer>(builder: &mut R, handle: Handle,
                 qualname!(html, "table") => return render_table(builder, handle.clone(), err_out),
                 qualname!(html, "blockquote") => return render_blockquote(builder, handle.clone(), err_out),
                 qualname!(html, "ul") => return render_ul(builder, handle.clone(), err_out),
+                qualname!(html, "ol") => return render_ol(builder, handle.clone(), err_out),
                 _ => {
                     write!(err_out, "Unhandled element: {:?}\n", name.local).unwrap();
                 },
@@ -396,6 +397,52 @@ fn render_ul<T:Write, R:Renderer>(builder: &mut R, handle: Handle, err_out: &mut
                         builder.append_subrender(sub_builder, once("* ").chain(repeat("  ")));
                     },
                     _ => println!("  [[ul child: {:?}]]", name),
+                }
+            },
+            Comment(_) => {},
+            _ => { /*result.push_str(&format!("Unhandled in table: {:?}\n", node));*/ },
+        }
+    }
+}
+
+/// Count children of a particular element type
+fn count_li_children(handle: Handle) -> usize {
+    handle.borrow()
+          .children
+          .iter()
+          .filter(|child| {
+                     if let Element(qualname!(html, "li"), _, _) = child.borrow().node {
+                         true
+                     } else {
+                         false
+                     }
+                   })
+          .count()
+}
+
+fn render_ol<T:Write, R:Renderer>(builder: &mut R, handle: Handle, err_out: &mut T) {
+    let num_items = count_li_children(handle.clone());
+    let node = handle.borrow();
+
+    builder.start_block();
+
+    let prefix_width = format!("{}", num_items).len() + 2;
+
+    let mut i = 1;
+    let prefixn = format!("{: <width$}", "", width=prefix_width);
+    for child in node.children.iter() {
+        match child.borrow().node {
+            Element(ref name, _, _) => {
+                match *name {
+                    qualname!(html, "li") => {
+                        let mut sub_builder = builder.new_sub_renderer(builder.width()-prefix_width);
+                        render_block(&mut sub_builder, child.clone(), err_out);
+                        let prefix1 = format!("{}.", i);
+                        let prefix1 = format!("{: <width$}", prefix1, width=prefix_width);
+                        builder.append_subrender(sub_builder, once(prefix1.as_str()).chain(repeat(prefixn.as_str())));
+                        i += 1;
+                    },
+                    _ => println!("  [[ol child: {:?}]]", name),
                 }
             },
             Comment(_) => {},
