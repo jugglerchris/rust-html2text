@@ -46,7 +46,11 @@ impl<T:Debug+Eq+PartialEq+Clone+Default> TaggedLine<T> {
 
     /// Add a new fragment to the line
     pub fn push(&mut self, ts: TaggedString<T>) {
-        self.v.push(ts);
+        if self.v.len() > 0 && self.v.last().unwrap().tag == ts.tag {
+            self.v.last_mut().unwrap().s.push_str(&ts.s);
+        } else {
+            self.v.push(ts);
+        }
     }
 
     /// Add a new fragment to the start of the line
