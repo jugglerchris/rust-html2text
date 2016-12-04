@@ -71,7 +71,9 @@ impl<T:Debug+Eq+PartialEq+Clone+Default> TaggedLine<T> {
 
     /// Drain tl and use to extend self.
     pub fn consume(&mut self, tl: &mut TaggedLine<T>) {
-        self.v.extend(tl.v.drain(..));
+        for ts in tl.v.drain(..) {
+            self.push(ts);
+        }
     }
 
     /// Drain the contained items
