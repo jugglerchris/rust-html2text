@@ -16,6 +16,9 @@ pub trait Renderer {
     /// Mark the end of a block.
     fn end_block(&mut self);
 
+    /// Start a new line, if necessary (but don't add a new line).
+    fn new_line(&mut self);
+
     /// Add a new block of preformatted text.
     fn add_preformatted_block(&mut self, text: &str);
 

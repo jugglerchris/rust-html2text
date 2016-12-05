@@ -71,7 +71,6 @@ fn dom_to_string<T:Write, R:Renderer>(builder: &mut R, handle: Handle,
         Element(ref name, _, ref attrs) => {
             match *name {
                 qualname!(html, "html") |
-                qualname!(html, "div") |
                 qualname!(html, "span") |
                 qualname!(html, "body") => {
                     /* process children, but don't add anything */
@@ -126,7 +125,14 @@ fn dom_to_string<T:Write, R:Renderer>(builder: &mut R, handle: Handle,
                 qualname!(html, "h3") |
                 qualname!(html, "h4") |
                 qualname!(html, "p") => {
-                    return render_block(builder, handle.clone(), err_out);
+                    render_block(builder, handle.clone(), err_out);
+                    return;
+                },
+                qualname!(html, "div") => {
+                    builder.new_line();
+                    render_children(builder, handle.clone(), err_out);
+                    builder.new_line();
+                    return;
                 },
                 qualname!(html, "pre") => {
                     return render_pre(builder, handle.clone(), err_out);
@@ -740,6 +746,12 @@ wrapped correctly.
 r#"Hello
 
 Div
+"#, 20);
+         test_html(br"<p>Hello</p><div>Div</div><div>Div2</div>",
+r#"Hello
+
+Div
+Div2
 "#, 20);
      }
 

@@ -416,6 +416,10 @@ impl<D:TextDecorator+Clone> Renderer for TextRenderer<D> {
         self.at_block_end = false;
     }
 
+    fn new_line(&mut self) {
+        self.flush_wrapping();
+    }
+
     fn add_preformatted_block(&mut self, text: &str) {
         html_trace!("add_block({}, {})", self.width, text);
         self.start_block();
