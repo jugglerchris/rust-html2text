@@ -2,8 +2,6 @@ extern crate html2text;
 extern crate termion;
 extern crate argparse;
 extern crate unicode_width;
-extern crate rlua;
-extern crate rlua_ui;
 use std::io::{self, Write};
 use html2text::render::text_renderer::{RichAnnotation,TaggedLine};
 use argparse::{ArgumentParser, Store};
@@ -78,9 +76,6 @@ fn find_links(lines: &Vec<TaggedLine<Vec<RichAnnotation>>>) -> LinkMap {
 }
 
 fn main() {
-    let mut rlua = rlua::RumLua::new();
-    rlua_ui::lrui::register(&mut rlua);
-
     let mut filename = String::new();
     {
         let mut ap = ArgumentParser::new();
