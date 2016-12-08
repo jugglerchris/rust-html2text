@@ -20,3 +20,5 @@ path = "examples/html2term.rs"
 [dev-dependencies]
 termion = "1.0"
 argparse = "*"
+rlua = { path = "../rlua/" }
+rlua-ui = { path = "../rlua-ui/" }
