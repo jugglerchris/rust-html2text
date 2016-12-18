@@ -1,5 +1,6 @@
 #![cfg_attr(feature="clippy", feature(plugin))]
 #![cfg_attr(feature="clippy", plugin(clippy))]
+#![warn(missing_docs)]
 
 #[macro_use]
 extern crate html5ever_atoms;
