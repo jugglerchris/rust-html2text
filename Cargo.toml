@@ -4,11 +4,11 @@ version = "0.1.0"
 authors = ["Chris Emerson <github@mail.nosreme.org>"]
 
 [dependencies]
-html5ever = "*"
-html5ever-atoms = "*"
+html5ever = "0.9"
+html5ever-atoms = "0.1"
 string_cache = "0.2.0"
-unicode-width = "*"
-backtrace = "*"
+unicode-width = "0.1"
+backtrace = "0.2"
 
 [features]
 html_trace = []
@@ -17,6 +17,10 @@ html_trace = []
 name = "html2term"
 path = "examples/html2term.rs"
 
+[[example]]
+name = "html2txt"
+path = "examples/html2txt.rs"
+
 [dev-dependencies]
 termion = "1.0"
-argparse = "*"
+argparse = "0.2"
