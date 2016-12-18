@@ -46,7 +46,7 @@ impl<T:Debug+Eq+PartialEq+Clone+Default> TaggedLine<T> {
 
     /// Add a new fragment to the line
     pub fn push(&mut self, ts: TaggedString<T>) {
-        if self.v.len() > 0 && self.v.last().unwrap().tag == ts.tag {
+        if !self.v.is_empty() && self.v.last().unwrap().tag == ts.tag {
             self.v.last_mut().unwrap().s.push_str(&ts.s);
         } else {
             self.v.push(ts);
@@ -60,7 +60,7 @@ impl<T:Debug+Eq+PartialEq+Clone+Default> TaggedLine<T> {
 
     /// Add text with a particular tag to self
     pub fn push_char(&mut self, c: char, tag: &T) {
-        if self.v.len() > 0 && self.v.last().unwrap().tag == *tag {
+        if !self.v.is_empty() && self.v.last().unwrap().tag == *tag {
             self.v.last_mut().unwrap().s.push(c);
         } else {
             let mut s = String::new();
@@ -82,6 +82,7 @@ impl<T:Debug+Eq+PartialEq+Clone+Default> TaggedLine<T> {
     }
 
     /// Iterator over the chars in this line.
+    #[cfg_attr(feature="clippy", allow(needless_lifetimes))]
     pub fn chars<'a>(&'a self) -> Box<Iterator<Item=char>+'a> {
         Box::new(self.v.iter().flat_map(|ts| ts.s.chars()))
     }
@@ -359,7 +360,7 @@ impl<D:TextDecorator+Clone> TextRenderer<D> {
         self.flush_wrapping();
         // And add the links
         let mut trailer = self.decorator.take().unwrap().finalise();
-        if trailer.len() > 0 {
+        if !trailer.is_empty() {
             self.start_block();
             for line in trailer.drain((0..)) {
                 /* Hard wrap */
@@ -409,7 +410,7 @@ impl<D:TextDecorator+Clone> Renderer for TextRenderer<D> {
     fn start_block(&mut self) {
         html_trace!("start_block({})", self.width);
         self.flush_wrapping();
-        if self.lines.len() > 0 {
+        if !self.lines.is_empty() {
             self.add_empty_line();
         }
         html_trace_quiet!("start_block; at_block_end <- false");
@@ -512,7 +513,7 @@ impl<D:TextDecorator+Clone> Renderer for TextRenderer<D> {
     }
 
     fn empty(&self) -> bool {
-        self.lines.len() == 0 && self.wrapping.is_none()
+        self.lines.is_empty() && self.wrapping.is_none()
     }
 
     fn text_len(&self) -> usize {
@@ -570,6 +571,7 @@ pub struct PlainDecorator {
 }
 
 impl PlainDecorator {
+    #[cfg_attr(feature="clippy", allow(new_without_default_derive))]
     pub fn new() -> PlainDecorator {
         PlainDecorator {
             links: Vec::new(),
@@ -633,6 +635,7 @@ impl Default for RichAnnotation {
 }
 
 impl RichDecorator {
+    #[cfg_attr(feature="clippy", allow(new_without_default_derive))]
     pub fn new() -> RichDecorator {
         RichDecorator {
         }

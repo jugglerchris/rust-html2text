@@ -4,6 +4,7 @@ version = "0.1.0"
 authors = ["Chris Emerson <github@mail.nosreme.org>"]
 
 [dependencies]
+clippy = { version = "*", optional=true }
 html5ever = "0.9"
 html5ever-atoms = "0.1"
 string_cache = "0.2.0"
@@ -12,6 +13,7 @@ backtrace = "0.2"
 
 [features]
 html_trace = []
+default = []
 
 [[example]]
 name = "html2term"

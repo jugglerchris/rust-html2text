@@ -1,5 +1,6 @@
-//#[macro_use]
-//extern crate string_cache;
+#![cfg_attr(feature="clippy", feature(plugin))]
+#![cfg_attr(feature="clippy", plugin(clippy))]
+
 #[macro_use]
 extern crate html5ever_atoms;
 extern crate html5ever;
@@ -36,9 +37,9 @@ fn get_text(handle: Handle) -> String {
     let node = handle.borrow();
     let mut result = String::new();
     if let Text(ref tstr) = node.node {
-        result.push_str(&tstr);
+        result.push_str(tstr);
     } else {
-        for child in node.children.iter() {
+        for child in &node.children {
             result.push_str(&get_text(child.clone()));
         }
     }
@@ -58,7 +59,7 @@ fn render_pre<T:Write, R:Renderer>(builder: &mut R, handle: Handle, _: &mut T) {
 
 fn render_children<T:Write, R:Renderer>(builder: &mut R, handle: Handle,
                             err_out: &mut T) {
-    for child in handle.borrow().children.iter() {
+    for child in &handle.borrow().children {
         dom_to_string(builder, child.clone(), err_out);
     }
 }
@@ -67,7 +68,7 @@ fn dom_to_string<T:Write, R:Renderer>(builder: &mut R, handle: Handle,
                           err_out: &mut T) {
     let node = handle.borrow();
     match node.node {
-        Document => {},
+        Document | Comment(_) => {},
         Element(ref name, _, ref attrs) => {
             match *name {
                 qualname!(html, "html") |
@@ -154,7 +155,6 @@ fn dom_to_string<T:Write, R:Renderer>(builder: &mut R, handle: Handle,
             builder.add_inline_text(tstr);
             return;
         }
-        Comment(_) => {},
         _ => { write!(err_out, "Unhandled: {:?}\n", node).unwrap(); },
     }
     render_children(builder, handle.clone(), err_out);
@@ -248,7 +248,7 @@ fn handle_tr<T:Write>(handle: Handle, _: &mut T) -> TableRow {
 
     let mut row = TableRow::new();
 
-    for child in node.children.iter() {
+    for child in &node.children {
         match child.borrow().node {
             Element(ref name, _, _) => {
                 match *name {
@@ -260,7 +260,7 @@ fn handle_tr<T:Write>(handle: Handle, _: &mut T) -> TableRow {
                 }
             },
             Comment(_) => {},
-            _ => { /*result.push_str(&format!("Unhandled in table: {:?}\n", node));*/ },
+            _ => { html_trace!("Unhandled in table: {:?}\n", node); },
         }
     }
 
@@ -272,7 +272,7 @@ fn handle_tbody<T:Write, R:Renderer>(builder: &mut R, handle: Handle, err_out: &
 
     let mut table = Table::new();
 
-    for child in node.children.iter() {
+    for child in &node.children {
         match child.borrow().node {
             Element(ref name, _, _) => {
                 match *name {
@@ -283,7 +283,7 @@ fn handle_tbody<T:Write, R:Renderer>(builder: &mut R, handle: Handle, err_out: &
                 }
             },
             Comment(_) => {},
-            _ => { /*result.push_str(&format!("Unhandled in table: {:?}\n", node));*/ },
+            _ => { html_trace!("Unhandled in table: {:?}\n", node); },
         }
     }
 
@@ -326,7 +326,7 @@ fn handle_tbody<T:Write, R:Renderer>(builder: &mut R, handle: Handle, err_out: &
         let (i, _) = col_widths.iter().cloned().enumerate().max_by_key(|k| k.1).unwrap();
         col_widths[i] -= 1;
     }
-    if col_widths.len() > 0 {
+    if !col_widths.is_empty() {
         // Slight fudge; we're not drawing extreme edges, so one of the columns
         // can gets a free character cell from not having a border.
         // make it the last.
@@ -341,7 +341,7 @@ fn handle_tbody<T:Write, R:Renderer>(builder: &mut R, handle: Handle, err_out: &
         rowline.push_str(&(0..(width-1)).map(|_| '-').collect::<String>());
         rowline.push('+');
     }
-    if rowline.len() > 0 {
+    if !rowline.is_empty() {
         rowline.pop().unwrap();  // Remove the last '+'.
     }
     builder.add_block_line(&rowline);
@@ -370,7 +370,7 @@ fn handle_tbody<T:Write, R:Renderer>(builder: &mut R, handle: Handle, err_out: &
 fn render_table<T:Write, R:Renderer>(builder: &mut R, handle: Handle, err_out: &mut T) {
     let node = handle.borrow();
 
-    for child in node.children.iter() {
+    for child in &node.children {
         match child.borrow().node {
             Element(ref name, _, _) => {
                 match *name {
@@ -379,7 +379,7 @@ fn render_table<T:Write, R:Renderer>(builder: &mut R, handle: Handle, err_out: &
                 }
             },
             Comment(_) => {},
-            _ => { /*result.push_str(&format!("Unhandled in table: {:?}\n", node));*/ },
+            _ => { html_trace!("Unhandled in table: {:?}\n", node); },
         }
     }
 }
@@ -399,7 +399,7 @@ fn render_ul<T:Write, R:Renderer>(builder: &mut R, handle: Handle, err_out: &mut
 
     builder.start_block();
 
-    for child in node.children.iter() {
+    for child in &node.children {
         match child.borrow().node {
             Element(ref name, _, _) => {
                 match *name {
@@ -412,7 +412,7 @@ fn render_ul<T:Write, R:Renderer>(builder: &mut R, handle: Handle, err_out: &mut
                 }
             },
             Comment(_) => {},
-            _ => { /*result.push_str(&format!("Unhandled in table: {:?}\n", node));*/ },
+            _ => { html_trace!("Unhandled in table: {:?}\n", node); },
         }
     }
 }
@@ -442,7 +442,7 @@ fn render_ol<T:Write, R:Renderer>(builder: &mut R, handle: Handle, err_out: &mut
 
     let mut i = 1;
     let prefixn = format!("{: <width$}", "", width=prefix_width);
-    for child in node.children.iter() {
+    for child in &node.children {
         match child.borrow().node {
             Element(ref name, _, _) => {
                 match *name {
@@ -458,7 +458,7 @@ fn render_ol<T:Write, R:Renderer>(builder: &mut R, handle: Handle, err_out: &mut
                 }
             },
             Comment(_) => {},
-            _ => { /*result.push_str(&format!("Unhandled in table: {:?}\n", node));*/ },
+            _ => { html_trace!("Unhandled in table: {:?}\n", node); },
         }
     }
 }

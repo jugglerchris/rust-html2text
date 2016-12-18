@@ -103,7 +103,6 @@ fn main() {
         let maxpos = std::cmp::min(pos+height, annotated.len());
         write!(stdout, "{}", termion::clear::All).unwrap();
         for (i, line) in annotated[pos..maxpos].iter().enumerate() {
-            let mut x = 0;
             write!(stdout, "{}", Goto(1, i as u16 +1)).unwrap();
             for (s, tag) in line.iter() {
                 let style = to_style(tag);
