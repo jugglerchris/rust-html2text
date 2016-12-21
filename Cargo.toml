@@ -2,6 +2,13 @@
 name = "html2text"
 version = "0.1.0"
 authors = ["Chris Emerson <github@mail.nosreme.org>"]
+description = "Render HTML as plain text."
+homepage = "https://github.com/jugglerchris/rust-text2html/"
+repository = "https://github.com/jugglerchris/rust-text2html/"
+readme = "README.md"
+
+keywords = ["html", "text"]
+license = "MIT"
 
 [dependencies]
 clippy = { version = "*", optional=true }
