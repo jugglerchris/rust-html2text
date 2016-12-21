@@ -27,8 +27,8 @@ name = "html2term"
 path = "examples/html2term.rs"
 
 [[example]]
-name = "html2txt"
-path = "examples/html2txt.rs"
+name = "html2text"
+path = "examples/html2text.rs"
 
 [dev-dependencies]
 termion = "1.0"
