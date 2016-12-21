@@ -8,6 +8,7 @@ pub fn nop() {}
 
 #[cfg(html_trace)]
 #[macro_export]
+#[doc(hidden)]
 macro_rules! html_trace {
     ($fmt:expr) => {
          let bt = ::backtrace::Backtrace::new();
@@ -20,6 +21,7 @@ macro_rules! html_trace {
 }
 #[cfg(not(html_trace))]
 #[macro_export]
+#[doc(hidden)]
 macro_rules! html_trace {
     ($fmt:expr) => { $crate::macros::nop(); };
     ($fmt:expr, $( $args:expr ),*) => { $crate::macros::nop(); };
@@ -27,6 +29,7 @@ macro_rules! html_trace {
 
 #[cfg(html_trace)]
 #[macro_export]
+#[doc(hidden)]
 macro_rules! html_trace_quiet {
     ($fmt:expr) => {
          println!( $fmt );
@@ -38,6 +41,7 @@ macro_rules! html_trace_quiet {
 
 #[cfg(not(html_trace))]
 #[macro_export]
+#[doc(hidden)]
 macro_rules! html_trace_quiet {
     ($fmt:expr) => { $crate::macros::nop(); };
     ($fmt:expr, $( $args:expr ),*) => { $crate::macros::nop(); };
