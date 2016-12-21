@@ -1,6 +1,29 @@
+//! Convert HTML to text formats.
+//!
+//! This crate renders HTML into a text format, wrapped to a specified width.
+//! This can either be plain text or with extra annotations to (for example)
+//! show in a terminal which supports colours.
+//!
+//! # Examples
+//!
+//! ```rust
+//! # use html2text::from_read;
+//! let html = b"
+//!        <ul>
+//!          <li>Item one</li>
+//!          <li>Item two</li>
+//!          <li>Item three</li>
+//!        </ul>";
+//! assert_eq!(from_read(&html[..], 20),
+//!            "\
+//! * Item one
+//! * Item two
+//! * Item three
+//! ");
+//! ```
 #![cfg_attr(feature="clippy", feature(plugin))]
 #![cfg_attr(feature="clippy", plugin(clippy))]
-#![warn(missing_docs)]
+//#![deny(missing_docs)]
 
 #[macro_use]
 extern crate html5ever_atoms;
