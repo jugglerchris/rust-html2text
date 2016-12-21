@@ -23,7 +23,7 @@
 //! ```
 #![cfg_attr(feature="clippy", feature(plugin))]
 #![cfg_attr(feature="clippy", plugin(clippy))]
-//#![deny(missing_docs)]
+#![deny(missing_docs)]
 
 #[macro_use]
 extern crate html5ever_atoms;
@@ -487,6 +487,8 @@ fn render_ol<T:Write, R:Renderer>(builder: &mut R, handle: Handle, err_out: &mut
     }
 }
 
+/// Reads HTML from `input`, and returns a `String` with text wrapped to
+/// `width` columns.
 pub fn from_read<R>(mut input: R, width: usize) -> String where R: io::Read {
     let opts = ParseOpts {
         tree_builder: TreeBuilderOpts {
@@ -506,6 +508,9 @@ pub fn from_read<R>(mut input: R, width: usize) -> String where R: io::Read {
     builder.into_string()
 }
 
+/// Reads HTML from `input`, and returns text wrapped to `width` columns.
+/// The text is returned as a `Vec<TaggedLine<_>>`; the annotations are vectors
+/// of `RichAnnotation`.  The "outer" annotation comes first in the `Vec`.
 pub fn from_read_rich<R>(mut input: R, width: usize) -> Vec<TaggedLine<Vec<RichAnnotation>>>
         where R: io::Read
 {

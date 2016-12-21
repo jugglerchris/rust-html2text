@@ -1,7 +1,12 @@
+//! Module containing the `Renderer` interface for constructing a
+//! particular text output.
+
 pub mod text_renderer;
 
 /// A type which is a backend for HTML to text rendering.
 pub trait Renderer {
+    /// A type of a sub-renderer which will be used for rendering
+    /// nested blocks such as table cells and list items.
     type Sub: Renderer;
 
     /// Add an empty line to the output (ie between blocks).

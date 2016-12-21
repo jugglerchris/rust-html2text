@@ -1,3 +1,8 @@
+//! Implementations of the `Renderer` trait.
+//!
+//! This module implements helpers and concrete types for rendering from HTML
+//! into different text formats.
+
 use unicode_width::{UnicodeWidthStr,UnicodeWidthChar};
 use super::Renderer;
 use std::mem;
@@ -11,12 +16,14 @@ pub struct TaggedString<T:Debug> {
     tag: T,
 }
 
+/// A line of tagged text (composed of a set of `TaggedString`s).
 #[derive(Debug)]
 pub struct TaggedLine<T:Debug+Eq+PartialEq+Clone> {
     v: Vec<TaggedString<T>>,
 }
 
 impl<T:Debug+Eq+PartialEq+Clone+Default> TaggedLine<T> {
+    /// Create an empty `TaggedLine`.
     pub fn new() -> TaggedLine<T> {
         TaggedLine {
             v: Vec::new(),
@@ -295,7 +302,8 @@ pub trait TextDecorator {
     fn finalise(self) -> Vec<TaggedLine<Self::Annotation>>;
 }
 
-/// A renderer which just outputs plain text.
+/// A renderer which just outputs plain text with
+/// annotations depending on a decorator.
 pub struct TextRenderer<D:TextDecorator+Clone> {
     width: usize,
     lines: Vec<TaggedLine<Vec<D::Annotation>>>,
@@ -330,6 +338,7 @@ impl<D:TextDecorator+Clone> TextRenderer<D> {
         self.wrapping.as_mut().unwrap()
     }
 
+    /// Add a prerendered (multiline) string with the current annotations.
     pub fn add_subblock(&mut self, s: &str) {
         html_trace!("add_subblock({}, {})", self.width, s);
         let tag = self.ann_stack.clone();
@@ -340,12 +349,14 @@ impl<D:TextDecorator+Clone> TextRenderer<D> {
         }));
     }
 
+    /// Flushes the current wrapped block into the lines.
     fn flush_wrapping(&mut self) {
         if let Some(w) = self.wrapping.take() {
             self.lines.extend(w.into_lines())
         }
     }
 
+    /// Consumes this renderer and return a multiline `String` with the result.
     pub fn into_string(self) -> String {
         let mut result = String::new();
         for line in self.into_lines() {
@@ -356,6 +367,7 @@ impl<D:TextDecorator+Clone> TextRenderer<D> {
         result
     }
 
+    /// Returns a `Vec` of `TaggedLine`s with therendered text.
     pub fn into_lines(mut self) -> Vec<TaggedLine<Vec<D::Annotation>>> {
         self.flush_wrapping();
         // And add the links
@@ -565,12 +577,15 @@ impl<D:TextDecorator+Clone> Renderer for TextRenderer<D> {
     }
 }
 
+/// A decorator for use with `TextRenderer` which outputs plain UTF-8 text
+/// with no annotations.  Markup is rendered as text characters or footnotes.
 #[derive(Clone)]
 pub struct PlainDecorator {
     links: Vec<String>,
 }
 
 impl PlainDecorator {
+    /// Create a new `PlainDecorator`.
     #[cfg_attr(feature="clippy", allow(new_without_default_derive))]
     pub fn new() -> PlainDecorator {
         PlainDecorator {
@@ -620,11 +635,17 @@ impl TextDecorator for PlainDecorator {
 pub struct RichDecorator {
 }
 
+/// Annotation type for "rich" text.  Text is associated with a set of
+/// these.
 #[derive(PartialEq,Eq,Clone,Debug)]
 pub enum RichAnnotation {
+    /// Normal text.
     Default,
+    /// A link with the target.
     Link(String),
+    /// An image (attached to the title text)
     Image,
+    /// Emphasised text, which might be rendered in bold or another colour.
     Emphasis,
 }
 
@@ -635,6 +656,7 @@ impl Default for RichAnnotation {
 }
 
 impl RichDecorator {
+    /// Create a new `RichDecorator`.
     #[cfg_attr(feature="clippy", allow(new_without_default_derive))]
     pub fn new() -> RichDecorator {
         RichDecorator {
