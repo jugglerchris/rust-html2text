@@ -1,10 +1,10 @@
 [package]
 name = "html2text"
-version = "0.1.0"
+version = "0.1.1"
 authors = ["Chris Emerson <github@mail.nosreme.org>"]
 description = "Render HTML as plain text."
-homepage = "https://github.com/jugglerchris/rust-text2html/"
-repository = "https://github.com/jugglerchris/rust-text2html/"
+homepage = "https://github.com/jugglerchris/rust-html2text/"
+repository = "https://github.com/jugglerchris/rust-html2text/"
 readme = "README.md"
 
 keywords = ["html", "text"]
