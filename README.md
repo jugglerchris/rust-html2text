@@ -29,3 +29,28 @@ assert_eq!(from_read(&html[..], 20),
 * Item three
 ");
 ```
+
+A couple of simple demonstration programs are included as examples:
+
+### html2text
+
+The simplest example uses `from_read` to convert HTML on stdin into plain
+text:
+
+```sh
+$ cargo run --example html2text < foo.html
+[...]
+```
+
+### html2term
+
+A very simple example of using the rich interface (`from_read_rich`) for a
+slightly interactive console HTML viewer is provided as `html2term`.
+
+```sh
+$ cargo run --example html2term foo.html
+[...]
+```
+
+Note that this example takes the HTML file as a parameter so that it can
+read keys from stdin.
