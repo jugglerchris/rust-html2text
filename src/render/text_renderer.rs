@@ -151,6 +151,7 @@ impl<T:Clone+Eq+Debug+Default> WrappedBlock<T> {
 
     fn flush_word(&mut self) {
         /* Finish the word. */
+        html_trace_quiet!("flush_word: word={:?}, linelen={}", self.word, self.linelen);
         if !self.word.is_empty() {
             let space_in_line = self.width - self.linelen;
             let space_needed = self.wordlen +
@@ -162,7 +163,6 @@ impl<T:Clone+Eq+Debug+Default> WrappedBlock<T> {
                 }
                 self.line.consume(&mut self.word);
                 self.linelen += self.wordlen;
-                self.wordlen = 0;
             } else {
                 /* Start a new line */
                 self.flush_line();
@@ -171,7 +171,6 @@ impl<T:Clone+Eq+Debug+Default> WrappedBlock<T> {
                     mem::swap(&mut new_word, &mut self.word);
                     mem::swap(&mut self.line, &mut new_word);
                     self.linelen = self.wordlen;
-                    self.wordlen = 0;
                 } else {
                     /* We need to split the word. */
                     let mut wordbits = self.word.drain_all();
@@ -217,6 +216,7 @@ impl<T:Clone+Eq+Debug+Default> WrappedBlock<T> {
                 }
             }
         }
+        self.wordlen = 0;
     }
 
     fn flush_line(&mut self) {
@@ -258,6 +258,7 @@ impl<T:Clone+Eq+Debug+Default> WrappedBlock<T> {
     }
 
     pub fn add_text(&mut self, text: &str, tag: &T) {
+        html_trace!("WrappedBlock::add_text({}), {:?}", text, tag);
         for c in text.chars() {
             if c.is_whitespace() {
                 /* Whitespace is mostly ignored, except to terminate words. */
@@ -268,6 +269,7 @@ impl<T:Clone+Eq+Debug+Default> WrappedBlock<T> {
                 self.word.push_char(c, tag);
                 self.wordlen += UnicodeWidthChar::width(c).unwrap();
             }
+            html_trace_quiet!("  Added char {:?}, wordlen={}", c, self.wordlen);
         }
     }
 
@@ -359,11 +361,13 @@ impl<D:TextDecorator+Clone> TextRenderer<D> {
     /// Consumes this renderer and return a multiline `String` with the result.
     pub fn into_string(self) -> String {
         let mut result = String::new();
+        #[cfg(feature="html_trace")]
+        let width: usize = self.width;
         for line in self.into_lines() {
             result.push_str(&line.into_string());
             result.push('\n');
         }
-        html_trace!("into_string({}, {:?})", self.width, result);
+        html_trace!("into_string({}, {:?})", width, result);
         result
     }
 

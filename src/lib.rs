@@ -770,6 +770,16 @@ wrapped correctly.
      }
 
      #[test]
+     fn test_wrap3() {
+         test_html(br#"<p><a href="dest">http://example.org/blah/</a> one two three"#,
+r#"[http://example.org/blah/
+][1] one two three
+
+[1] dest
+"#, 25);
+     }
+
+     #[test]
      fn test_div() {
          test_html(br"<p>Hello</p><div>Div</div>",
 r#"Hello
