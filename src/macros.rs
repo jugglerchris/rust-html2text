@@ -2,11 +2,11 @@
  * `match_on_same_arms`.
  * See https://github.com/Manishearth/rust-clippy/issues/1390
  */
-#[cfg(not(html_trace))]
+#[cfg(not(feature = "html_trace"))]
 #[inline(always)]
 pub fn nop() {}
 
-#[cfg(html_trace)]
+#[cfg(feature = "html_trace")]
 #[macro_export]
 #[doc(hidden)]
 macro_rules! html_trace {
@@ -19,7 +19,7 @@ macro_rules! html_trace {
          println!( concat!($fmt, " at {:?}"), $( $args ),* , bt );
     };
 }
-#[cfg(not(html_trace))]
+#[cfg(not(feature = "html_trace"))]
 #[macro_export]
 #[doc(hidden)]
 macro_rules! html_trace {
@@ -27,7 +27,7 @@ macro_rules! html_trace {
     ($fmt:expr, $( $args:expr ),*) => { $crate::macros::nop(); };
 }
 
-#[cfg(html_trace)]
+#[cfg(feature = "html_trace")]
 #[macro_export]
 #[doc(hidden)]
 macro_rules! html_trace_quiet {
@@ -39,7 +39,7 @@ macro_rules! html_trace_quiet {
     };
 }
 
-#[cfg(not(html_trace))]
+#[cfg(not(feature = "html_trace"))]
 #[macro_export]
 #[doc(hidden)]
 macro_rules! html_trace_quiet {
