@@ -1,3 +1,5 @@
+[![Build Status](https://travis-ci.org/jugglerchris/rust-html2text.svg?branch=master)](https://travis-ci.org/jugglerchris/rust-html2text)
+
 # html2text
 
 html2text is a [Rust](http://www.rust-lang.org/) crate which converts HTML to
