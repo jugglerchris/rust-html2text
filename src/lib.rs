@@ -189,7 +189,7 @@ fn dom_to_string<T:Write, R:Renderer>(builder: &mut R, handle: Handle,
                     return render_pre(builder, handle.clone(), err_out);
                 },
                 qualname!(html, "br") => {
-                    builder.add_empty_line();
+                    builder.new_line();
                     return;
                 }
                 qualname!(html, "table") => return render_table(builder, handle.clone(), err_out),
@@ -824,5 +824,11 @@ Div2
      fn test_img_alt() {
          test_html(br"<p>Hello <img src='foo.jpg' alt='world'></p>",
                    "Hello [world]\n", 80);
+     }
+
+     #[test]
+     fn test_br() {
+         test_html(br"<p>Hello<br/>World</p>",
+                   "Hello\nWorld\n", 20);
      }
 }
