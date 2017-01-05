@@ -299,6 +299,10 @@ pub trait TextDecorator {
     /// Return an annotation and rendering prefix for a link.
     fn decorate_image(&mut self, title: &str) -> (String, Self::Annotation);
 
+    /// Return a new decorator of the same type which can be used
+    /// for sub blocks.
+    fn make_subblock_decorator(&self) -> Self;
+
     /// Finish with a document, and return extra lines (eg footnotes)
     /// to add to the rendered text.
     fn finalise(self) -> Vec<TaggedLine<Self::Annotation>>;
@@ -306,7 +310,7 @@ pub trait TextDecorator {
 
 /// A renderer which just outputs plain text with
 /// annotations depending on a decorator.
-pub struct TextRenderer<D:TextDecorator+Clone> {
+pub struct TextRenderer<D:TextDecorator> {
     width: usize,
     lines: Vec<TaggedLine<Vec<D::Annotation>>>,
     /// True at the end of a block, meaning we should add
@@ -317,7 +321,7 @@ pub struct TextRenderer<D:TextDecorator+Clone> {
     ann_stack: Vec<D::Annotation>,
 }
 
-impl<D:TextDecorator+Clone> TextRenderer<D> {
+impl<D:TextDecorator> TextRenderer<D> {
     /// Construct a new empty TextRenderer.
     pub fn new(width: usize, decorator: D) -> TextRenderer<D> {
         html_trace!("new({})", width);
@@ -408,7 +412,7 @@ impl<D:TextDecorator+Clone> TextRenderer<D> {
     }
 }
 
-impl<D:TextDecorator+Clone> Renderer for TextRenderer<D> {
+impl<D:TextDecorator> Renderer for TextRenderer<D> {
     type Sub = Self;
     fn add_empty_line(&mut self) {
         html_trace!("add_empty_line()");
@@ -420,7 +424,7 @@ impl<D:TextDecorator+Clone> Renderer for TextRenderer<D> {
     }
 
     fn new_sub_renderer(&self, width: usize) -> Self {
-        TextRenderer::new(width, self.decorator.as_ref().unwrap().clone())
+        TextRenderer::new(width, self.decorator.as_ref().unwrap().make_subblock_decorator())
     }
 
     fn start_block(&mut self) {
@@ -631,6 +635,10 @@ impl TextDecorator for PlainDecorator {
         self.links.into_iter().enumerate().map(|(idx,s)|
             TaggedLine::from_string(format!("[{}] {}", idx+1, s), &())).collect()
     }
+
+    fn make_subblock_decorator(&self) -> Self {
+        PlainDecorator::new()
+    }
 }
 
 /// A decorator to generate rich text (styled) rather than
@@ -698,5 +706,9 @@ impl TextDecorator for RichDecorator {
 
     fn finalise(self) -> Vec<TaggedLine<RichAnnotation>> {
         Vec::new()
+    }
+
+    fn make_subblock_decorator(&self) -> Self {
+        RichDecorator::new()
     }
 }

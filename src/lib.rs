@@ -831,4 +831,24 @@ Div2
          test_html(br"<p>Hello<br/>World</p>",
                    "Hello\nWorld\n", 20);
      }
+
+     #[test]
+     fn test_subblock() {
+         test_html(br#"<div>
+         <div>Here's a <a href="https://example.com/">link</a>.</div>
+         <div><ul>
+         <li>Bullet</li>
+         <li>Bullet</li>
+         <li>Bullet</li>
+         </ul></div>
+         </div>"#,
+r"Here's a [link][1].
+
+* Bullet
+* Bullet
+* Bullet
+
+[1] https://example.com/
+", 80);
+     }
 }
