@@ -24,6 +24,9 @@ pub trait Renderer {
     /// Start a new line, if necessary (but don't add a new line).
     fn new_line(&mut self);
 
+    /// Add a horizontal table border.
+    fn add_horizontal_border(&mut self);
+
     /// Add a new block of preformatted text.
     fn add_preformatted_block(&mut self, text: &str);
 

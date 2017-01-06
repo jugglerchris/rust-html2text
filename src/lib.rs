@@ -341,7 +341,8 @@ fn handle_tbody<T:Write, R:Renderer>(builder: &mut R, handle: Handle, err_out: &
      * same width.  TODO: be cleverer, and handle multi-width cells, etc. */
     let num_columns = table.rows().map(|r| r.num_cells()).max().unwrap();
 
-    /* Heuristic: scale the column widths according to how much content there is. */
+    /* Heuristic: scale the column widths according to how much content there is.
+     * FIXME: this could get very slow for deeply nested tables. */
     let test_col_width = 1000;  // Render width for measurement; shouldn't make much difference.
     let min_width = 5;
     let mut col_sizes = vec![0usize; num_columns];
@@ -386,15 +387,7 @@ fn handle_tbody<T:Write, R:Renderer>(builder: &mut R, handle: Handle, err_out: &
 
     builder.start_block();
 
-    let mut rowline = String::new();
-    for width in col_widths.iter().cloned().filter(|w:&usize| *w > 0) {
-        rowline.push_str(&(0..(width-1)).map(|_| '-').collect::<String>());
-        rowline.push('+');
-    }
-    if !rowline.is_empty() {
-        rowline.pop().unwrap();  // Remove the last '+'.
-    }
-    builder.add_block_line(&rowline);
+    builder.add_horizontal_border();
 
     for row in table.rows() {
         let rendered_cells: Vec<R::Sub> = row.cell_columns()
@@ -412,7 +405,7 @@ fn handle_tbody<T:Write, R:Renderer>(builder: &mut R, handle: Handle, err_out: &
                                               }).collect();
         if rendered_cells.iter().any(|r| !r.empty()) {
             builder.append_columns(rendered_cells, '|');
-            builder.add_block_line(&rowline);
+            builder.add_horizontal_border();
         }
     }
 }

@@ -308,6 +308,35 @@ pub trait TextDecorator {
     fn finalise(self) -> Vec<TaggedLine<Self::Annotation>>;
 }
 
+/// A space on a horizontal row.
+#[derive(Copy,Clone)]
+pub enum BorderSegHoriz {
+    /// Pure horizontal line
+    Straight,
+    /// Joined with a line above
+    JoinAbove,
+    /// Joins with a line below
+    JoinBelow,
+    /// Joins both ways
+    JoinCross,
+}
+
+/// A dividing line between table rows which tracks intersections
+/// with vertical lines.
+pub struct BorderHoriz {
+    /// The segments for the line.
+    pub segments: Vec<BorderSegHoriz>,
+}
+
+impl BorderHoriz {
+    /// Create a new blank border line.
+    pub fn new(width: usize) -> BorderHoriz {
+        BorderHoriz {
+            segments: vec![BorderSegHoriz::Straight; width],
+        }
+    }
+}
+
 /// A renderer which just outputs plain text with
 /// annotations depending on a decorator.
 pub struct TextRenderer<D:TextDecorator> {
@@ -319,6 +348,8 @@ pub struct TextRenderer<D:TextDecorator> {
     wrapping: Option<WrappedBlock<Vec<D::Annotation>>>,
     decorator: Option<D>,
     ann_stack: Vec<D::Annotation>,
+    border_top: Option<BorderHoriz>,
+    border_bottom: Option<BorderHoriz>,
 }
 
 impl<D:TextDecorator> TextRenderer<D> {
@@ -332,6 +363,8 @@ impl<D:TextDecorator> TextRenderer<D> {
             wrapping: None,
             decorator: Some(decorator),
             ann_stack: Vec::new(),
+            border_top: None,
+            border_bottom: None,
         }
     }
 
@@ -359,6 +392,15 @@ impl<D:TextDecorator> TextRenderer<D> {
     fn flush_wrapping(&mut self) {
         if let Some(w) = self.wrapping.take() {
             self.lines.extend(w.into_lines())
+        }
+        if let Some(line) = self.border_bottom.take() {
+            self.add_subblock(
+                &line.segments
+                     .into_iter()
+                     .map(|seg| match seg {
+                           _ => '-',
+                          })
+                     .collect::<String>());
         }
     }
 
@@ -439,6 +481,21 @@ impl<D:TextDecorator> Renderer for TextRenderer<D> {
 
     fn new_line(&mut self) {
         self.flush_wrapping();
+    }
+
+    fn add_horizontal_border(&mut self) {
+        self.flush_wrapping();
+        if self.lines.len() == 0 {
+            match self.border_top.take() {
+                b@Some(_) => { self.border_top = b; },
+                _ => { self.border_top = Some(BorderHoriz::new(self.width)); },
+            }
+        } else {
+            match self.border_bottom.take() {
+                b@Some(_) => { self.border_bottom = b; },
+                _ => { self.border_bottom = Some(BorderHoriz::new(self.width)); },
+            }
+        }
     }
 
     fn add_preformatted_block(&mut self, text: &str) {
