@@ -404,8 +404,7 @@ fn handle_tbody<T:Write, R:Renderer>(builder: &mut R, handle: Handle, err_out: &
                                                   }
                                               }).collect();
         if rendered_cells.iter().any(|r| !r.empty()) {
-            builder.append_columns(rendered_cells, '|');
-            builder.add_horizontal_border();
+            builder.append_columns_with_borders(rendered_cells);
         }
     }
 }
@@ -586,7 +585,7 @@ mod tests {
 
      #[test]
      fn test_colspan() {
-        assert_eq!(from_read(&br##"
+        test_html(br##"
        <table>
          <tr>
            <td>1</td>
@@ -602,14 +601,14 @@ mod tests {
            <td colspan="2">23</td>
          </tr>
        </table>
-"##[..], 12), r#"---+---+----
+"##, r#"---+---+----
 1  |2  |3   
 ---+---+----
 12     |3   
 ---+---+----
 1  |23      
----+---+----
-"#);
+---+--------
+"#, 12);
      }
 
      #[test]

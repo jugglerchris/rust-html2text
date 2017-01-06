@@ -45,8 +45,9 @@ pub trait Renderer {
     fn append_subrender<'a, I>(&mut self, other: Self::Sub, prefixes: I)
                            where I:Iterator<Item=&'a str>;
 
-    /// Append a set of Sub joined left-to-right with a separator.
-    fn append_columns<I>(&mut self, cols: I, separator: char)
+    /// Append a set of Sub joined left-to-right with a vertical line,
+    /// and add a horizontal line below.
+    fn append_columns_with_borders<I>(&mut self, cols: I)
                            where I:IntoIterator<Item=Self::Sub>;
 
     /// Returns true if this renderer has no content.

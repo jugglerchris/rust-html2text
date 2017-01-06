@@ -335,6 +335,39 @@ impl BorderHoriz {
             segments: vec![BorderSegHoriz::Straight; width],
         }
     }
+
+    /// Make a join to a line above at the xth cell
+    pub fn join_above(&mut self, x: usize) {
+        use self::BorderSegHoriz::*;
+        let prev = self.segments[x];
+        self.segments[x] = match prev {
+            Straight | JoinAbove => JoinAbove,
+            JoinBelow | JoinCross => JoinCross,
+        }
+    }
+
+    /// Make a join to a line below at the xth cell
+    pub fn join_below(&mut self, x: usize) {
+        use self::BorderSegHoriz::*;
+        let prev = self.segments[x];
+        self.segments[x] = match prev {
+            Straight | JoinBelow => JoinBelow,
+            JoinAbove | JoinCross => JoinAbove,
+        }
+    }
+
+    /// Turn into a string with drawing characters
+    pub fn into_string(self) -> String {
+        self.segments
+            .into_iter()
+            .map(|seg| match seg {
+                BorderSegHoriz::Straight => '-',
+                BorderSegHoriz::JoinAbove => '+',
+                BorderSegHoriz::JoinBelow => '+',
+                BorderSegHoriz::JoinCross => '+',
+            })
+            .collect::<String>()
+    }
 }
 
 /// A renderer which just outputs plain text with
@@ -393,15 +426,25 @@ impl<D:TextDecorator> TextRenderer<D> {
         if let Some(w) = self.wrapping.take() {
             self.lines.extend(w.into_lines())
         }
+    }
+
+    /// Flush the (currently) bottom border in preparation for adding following
+    /// text.
+    fn flush_border(&mut self) {
         if let Some(line) = self.border_bottom.take() {
-            self.add_subblock(
-                &line.segments
-                     .into_iter()
-                     .map(|seg| match seg {
-                           _ => '-',
-                          })
-                     .collect::<String>());
+            if self.lines.len() > 0 {
+                self.add_subblock(&line.into_string());
+            } else {
+                self.border_top = Some(line);
+            }
         }
+    }
+
+    /// Flush the wrapping text and border.  Only one should have
+    /// anything to do.
+    fn flush_all(&mut self) {
+        self.flush_wrapping();
+        self.flush_border();
     }
 
     /// Consumes this renderer and return a multiline `String` with the result.
@@ -419,6 +462,10 @@ impl<D:TextDecorator> TextRenderer<D> {
 
     /// Returns a `Vec` of `TaggedLine`s with therendered text.
     pub fn into_lines(mut self) -> Vec<TaggedLine<Vec<D::Annotation>>> {
+        // Insert the first border.
+        if let Some(border) = self.border_top.take() {
+            self.lines.insert(0, TaggedLine::from_string(border.into_string(), &vec![]));
+        }
         self.flush_wrapping();
         // And add the links
         let mut trailer = self.decorator.take().unwrap().finalise();
@@ -450,6 +497,9 @@ impl<D:TextDecorator> TextRenderer<D> {
                 self.lines.push(TaggedLine::from_string(output, &vec![]));
             }
         }
+        if let Some(border) = self.border_bottom.take() {
+            self.lines.push(TaggedLine::from_string(border.into_string(), &vec![]));
+        }
         self.lines
     }
 }
@@ -458,7 +508,7 @@ impl<D:TextDecorator> Renderer for TextRenderer<D> {
     type Sub = Self;
     fn add_empty_line(&mut self) {
         html_trace!("add_empty_line()");
-        self.flush_wrapping();
+        self.flush_all();
         self.lines.push(TaggedLine::new());
         html_trace_quiet!("add_empty_line: at_block_end <- false");
         self.at_block_end = false;
@@ -471,7 +521,7 @@ impl<D:TextDecorator> Renderer for TextRenderer<D> {
 
     fn start_block(&mut self) {
         html_trace!("start_block({})", self.width);
-        self.flush_wrapping();
+        self.flush_all();
         if !self.lines.is_empty() {
             self.add_empty_line();
         }
@@ -480,21 +530,14 @@ impl<D:TextDecorator> Renderer for TextRenderer<D> {
     }
 
     fn new_line(&mut self) {
-        self.flush_wrapping();
+        self.flush_all();
     }
 
     fn add_horizontal_border(&mut self) {
         self.flush_wrapping();
-        if self.lines.len() == 0 {
-            match self.border_top.take() {
-                b@Some(_) => { self.border_top = b; },
-                _ => { self.border_top = Some(BorderHoriz::new(self.width)); },
-            }
-        } else {
-            match self.border_bottom.take() {
-                b@Some(_) => { self.border_bottom = b; },
-                _ => { self.border_bottom = Some(BorderHoriz::new(self.width)); },
-            }
+        match self.border_bottom.take() {
+            b@Some(_) => { self.border_bottom = b; },
+            _ => { self.border_bottom = Some(BorderHoriz::new(self.width)); },
         }
     }
 
@@ -551,9 +594,12 @@ impl<D:TextDecorator> Renderer for TextRenderer<D> {
                                 }));
     }
 
-    fn append_columns<I>(&mut self, cols: I, separator: char)
+    fn append_columns_with_borders<I>(&mut self, cols: I)
                            where I:IntoIterator<Item=Self> {
         self.flush_wrapping();
+
+        let mut prev_border = self.border_bottom.take().unwrap();
+        let mut next_border = BorderHoriz::new(self.width);
 
         let mut line_sets = cols.into_iter()
                             .map(|sub_r| {
@@ -564,6 +610,19 @@ impl<D:TextDecorator> Renderer for TextRenderer<D> {
                                              .collect())
                                  })
                             .collect::<Vec<(usize, Vec<TaggedLine<_>>)>>();
+
+        // Join the vertical lines to all the borders
+        {
+            let mut pos = 0;
+            for &(w, _) in &line_sets[..line_sets.len()-1] {
+                prev_border.join_below(pos+w);
+                next_border.join_above(pos+w);
+                pos += w+1;
+            }
+        }
+        self.border_bottom = Some(prev_border);
+        self.flush_border();
+        self.border_bottom = Some(next_border);
 
         let cell_height = line_sets.iter()
                                    .map(|&(_, ref v)| v.len())
@@ -582,7 +641,7 @@ impl<D:TextDecorator> Renderer for TextRenderer<D> {
                     });
                 }
                 if cellno != last_cellno {
-                    line.push_char(separator, &self.ann_stack);
+                    line.push_char('|', &self.ann_stack);
                 }
             }
             self.lines.push(line);
