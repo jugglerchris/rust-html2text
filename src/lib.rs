@@ -64,7 +64,7 @@ pub mod render;
 
 use render::Renderer;
 use render::text_renderer::{TextRenderer,PlainDecorator,RichDecorator,
-                            RichAnnotation,TaggedLine};
+                            RichAnnotation,TaggedLine,RenderLine};
 
 use std::io;
 use std::io::Write;
@@ -547,7 +547,7 @@ pub fn from_read_rich<R>(mut input: R, width: usize) -> Vec<TaggedLine<Vec<RichA
     let decorator = RichDecorator::new();
     let mut builder = TextRenderer::new(width, decorator);
     dom_to_string(&mut builder, dom.document, &mut Discard{} /* &mut io::stderr()*/);
-    builder.into_lines()
+    builder.into_lines().into_iter().map(RenderLine::into_tagged_line).collect()
 }
 
 #[cfg(test)]
