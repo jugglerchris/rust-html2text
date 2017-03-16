@@ -857,4 +857,9 @@ r"Here's a [link][1].
 [1] https://example.com/
 ", 80);
      }
+
+     #[test]
+     fn test_controlchar() {
+         test_html("Foo\u{0080}Bar".as_bytes(), "FooBar", 80);
+     }
 }
