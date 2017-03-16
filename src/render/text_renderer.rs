@@ -264,10 +264,10 @@ impl<T:Clone+Eq+Debug+Default> WrappedBlock<T> {
                 /* Whitespace is mostly ignored, except to terminate words. */
                 self.flush_word();
                 self.spacetag = Some(tag.clone());
-            } else {
+            } else if let Some(charwidth) = UnicodeWidthChar::width(c) {
                 /* Not whitespace; add to the current word. */
                 self.word.push_char(c, tag);
-                self.wordlen += UnicodeWidthChar::width(c).unwrap();
+                self.wordlen += charwidth;
             }
             html_trace_quiet!("  Added char {:?}, wordlen={}", c, self.wordlen);
         }

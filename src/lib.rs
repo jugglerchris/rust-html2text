@@ -860,6 +860,6 @@ r"Here's a [link][1].
 
      #[test]
      fn test_controlchar() {
-         test_html("Foo\u{0080}Bar".as_bytes(), "FooBar", 80);
+         test_html("Foo\u{0080}Bar".as_bytes(), "FooBar\n", 80);
      }
 }
