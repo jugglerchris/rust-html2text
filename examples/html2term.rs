@@ -26,6 +26,9 @@ fn to_style(tag: &Vec<RichAnnotation>) -> String {
             RichAnnotation::Emphasis => {
                 style.push_str(&format!("{}", termion::color::Fg(termion::color::LightGreen)));
             },
+            RichAnnotation::Code => {
+                style.push_str(&format!("{}", termion::color::Fg(termion::color::LightYellow)));
+            },
         }
     }
     style

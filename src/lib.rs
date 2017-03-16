@@ -158,6 +158,12 @@ fn dom_to_string<T:Write, R:Renderer>(builder: &mut R, handle: Handle,
                     builder.end_emphasis();
                     return;
                 },
+                qualname!(html, "code") => {
+                    builder.start_code();
+                    render_children(builder, handle.clone(), err_out);
+                    builder.end_code();
+                    return;
+                },
                 qualname!(html, "img") => {
                     let mut title = None;
                     for attr in attrs {

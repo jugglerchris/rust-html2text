@@ -66,6 +66,12 @@ pub trait Renderer {
     /// Finish emphasised text started earlier.
     fn end_emphasis(&mut self);
 
+    /// Start a code region
+    fn start_code(&mut self);
+
+    /// End a code region
+    fn end_code(&mut self);
+
     /// Add an image
     fn add_image(&mut self, title: &str);
 }
