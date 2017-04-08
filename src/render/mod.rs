@@ -47,7 +47,9 @@ pub trait Renderer {
 
     /// Append a set of Sub joined left-to-right with a vertical line,
     /// and add a horizontal line below.
-    fn append_columns_with_borders<I>(&mut self, cols: I)
+    /// If collapse is true, then merge top/bottom borders of the subrenderer
+    /// with the surrounding one.
+    fn append_columns_with_borders<I>(&mut self, cols: I, collapse: bool)
                            where I:IntoIterator<Item=Self::Sub>;
 
     /// Returns true if this renderer has no content.

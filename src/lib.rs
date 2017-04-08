@@ -404,7 +404,7 @@ fn handle_tbody<T:Write, R:Renderer>(builder: &mut R, handle: Handle, err_out: &
                                                   }
                                               }).collect();
         if rendered_cells.iter().any(|r| !r.empty()) {
-            builder.append_columns_with_borders(rendered_cells);
+            builder.append_columns_with_borders(rendered_cells, true);
         }
     }
 }

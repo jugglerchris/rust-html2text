@@ -357,6 +357,19 @@ impl BorderHoriz {
         }
     }
 
+    /// Merge a (possibly partial) border line below into this one.
+    pub fn merge(&mut self, other: &BorderHoriz, pos: usize) {
+        use self::BorderSegHoriz::*;
+        for (idx, seg) in other.segments.iter().enumerate()
+        {
+            match *seg {
+                Straight => (),
+                JoinAbove => unreachable!(),
+                JoinBelow | JoinCross => { self.join_below(idx+pos); },
+            }
+        }
+    }
+
     /// Turn into a string with drawing characters
     pub fn into_string(self) -> String {
         self.segments
@@ -623,7 +636,7 @@ impl<D:TextDecorator> Renderer for TextRenderer<D> {
                                 }));
     }
 
-    fn append_columns_with_borders<I>(&mut self, cols: I)
+    fn append_columns_with_borders<I>(&mut self, cols: I, collapse: bool)
                            where I:IntoIterator<Item=Self> {
         self.flush_wrapping();
 
@@ -653,10 +666,36 @@ impl<D:TextDecorator> Renderer for TextRenderer<D> {
                 for &(w, _) in &line_sets[..line_sets.len()-1] {
                     prev_border.join_below(pos+w);
                     next_border.join_above(pos+w);
-                    pos += w+1;
+                    pos += w + 1;
                 }
             } else {
                 panic!("Expected a border line");
+            }
+        }
+
+        // If we're collapsing borders, do so.
+        if collapse {
+            let mut pos = 0;
+            for &mut (w, ref mut sublines) in &mut line_sets {
+                let starts_border = if sublines.len() > 0 {
+                    if let RenderLine::Line(_) = sublines[0] {
+                        true
+                    } else {
+                        false
+                    }
+                } else {
+                    false
+                };
+                if starts_border {
+                    if let &mut RenderLine::Line(ref mut prev_border) = self.lines.last_mut().expect("No previous line") {
+                        if let RenderLine::Line(line) = sublines.remove(0) {
+                            prev_border.merge(&line, pos);
+                        }
+                    } else {
+                        unreachable!();
+                    }
+                }
+                pos += w + 1;
             }
         }
 
