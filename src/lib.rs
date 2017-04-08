@@ -1,3 +1,4 @@
+#![feature(test)]
 //! Convert HTML to text formats.
 //!
 //! This crate renders HTML into a text format, wrapped to a specified width.
@@ -557,6 +558,9 @@ pub fn from_read_rich<R>(mut input: R, width: usize) -> Vec<TaggedLine<Vec<RichA
 }
 
 #[cfg(test)]
+extern crate test;
+
+#[cfg(test)]
 mod tests {
     use super::{from_read};
 
@@ -856,4 +860,10 @@ r"Here's a [link][1].
          test_html("Foo\u{0080}Bar".as_bytes(), "FooB\nar\n", 4);
          test_html("FooBa\u{0080}r".as_bytes(), "FooB\nar\n", 4);
      }
+
+    use ::test::Bencher;
+    #[bench]
+    fn bench_tab1(b: &mut Bencher) {
+        b.iter(|| from_read(&b"<html></html>"[..], 80));
+    }
 }
