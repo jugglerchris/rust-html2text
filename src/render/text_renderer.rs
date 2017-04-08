@@ -370,8 +370,7 @@ impl BorderHoriz {
         {
             match *seg {
                 Straight => (),
-                JoinAbove => unreachable!(),
-                JoinBelow | JoinCross => { self.join_below(idx+pos); },
+                JoinAbove | JoinBelow | JoinCross => { self.join_below(idx+pos); },
             }
         }
     }
@@ -681,6 +680,7 @@ impl<D:TextDecorator> Renderer for TextRenderer<D> {
 
         // If we're collapsing borders, do so.
         if collapse {
+            /* Collapse any top border */
             let mut pos = 0;
             for &mut (w, ref mut sublines) in &mut line_sets {
                 let starts_border = if sublines.len() > 0 {
@@ -699,6 +699,26 @@ impl<D:TextDecorator> Renderer for TextRenderer<D> {
                         }
                     } else {
                         unreachable!();
+                    }
+                }
+                pos += w + 1;
+            }
+
+            /* Collapse any bottom border */
+            let mut pos = 0;
+            for &mut (w, ref mut sublines) in &mut line_sets {
+                let ends_border = if sublines.len() > 0 {
+                    if let Some(&RenderLine::Line(_)) = sublines.last() {
+                        true
+                    } else {
+                        false
+                    }
+                } else {
+                    false
+                };
+                if ends_border {
+                    if let RenderLine::Line(line) = sublines.pop().unwrap() {
+                        next_border.merge(&line, pos);
                     }
                 }
                 pos += w + 1;
