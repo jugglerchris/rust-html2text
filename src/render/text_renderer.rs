@@ -264,10 +264,10 @@ impl<T:Clone+Eq+Debug+Default> WrappedBlock<T> {
                 /* Whitespace is mostly ignored, except to terminate words. */
                 self.flush_word();
                 self.spacetag = Some(tag.clone());
-            } else {
+            } else if let Some(charwidth) = UnicodeWidthChar::width(c) {
                 /* Not whitespace; add to the current word. */
                 self.word.push_char(c, tag);
-                self.wordlen += UnicodeWidthChar::width(c).unwrap();
+                self.wordlen += charwidth;
             }
             html_trace_quiet!("  Added char {:?}, wordlen={}", c, self.wordlen);
         }
@@ -295,6 +295,12 @@ pub trait TextDecorator {
 
     /// Return a suffix for after an em.
     fn decorate_em_end(&mut self) -> String;
+
+    /// Return an annotation and rendering prefix for code
+    fn decorate_code_start(&mut self) -> (String, Self::Annotation);
+
+    /// Return a suffix for after an code.
+    fn decorate_code_end(&mut self) -> String;
 
     /// Return an annotation and rendering prefix for a link.
     fn decorate_image(&mut self, title: &str) -> (String, Self::Annotation);
@@ -780,6 +786,20 @@ impl<D:TextDecorator> Renderer for TextRenderer<D> {
             self.ann_stack.pop();
         }
     }
+    fn start_code(&mut self)
+    {
+        if let Some((s, annotation)) = self.decorator.as_mut().map(|d| d.decorate_code_start()) {
+            self.ann_stack.push(annotation);
+            self.add_inline_text(&s);
+        }
+    }
+    fn end_code(&mut self)
+    {
+        if let Some(s) = self.decorator.as_mut().map(|d| d.decorate_code_end()) {
+            self.add_inline_text(&s);
+            self.ann_stack.pop();
+        }
+    }
     fn add_image(&mut self, title: &str)
     {
         if let Some((s, tag)) = self.decorator.as_mut().map(|d| d.decorate_image(title)) {
@@ -831,6 +851,16 @@ impl TextDecorator for PlainDecorator {
         "*".to_string()
     }
 
+    fn decorate_code_start(&mut self) -> (String, Self::Annotation)
+    {
+        ("`".to_string(), ())
+    }
+
+    fn decorate_code_end(&mut self) -> String
+    {
+        "`".to_string()
+    }
+
     fn decorate_image(&mut self, title: &str) -> (String, Self::Annotation)
     {
         (format!("[{}]", title), ())
@@ -864,6 +894,8 @@ pub enum RichAnnotation {
     Image,
     /// Emphasised text, which might be rendered in bold or another colour.
     Emphasis,
+    /// Code
+    Code,
 }
 
 impl Default for RichAnnotation {
@@ -902,6 +934,16 @@ impl TextDecorator for RichDecorator {
     fn decorate_em_end(&mut self) -> String
     {
         "".to_string()
+    }
+
+    fn decorate_code_start(&mut self) -> (String, Self::Annotation)
+    {
+        ("`".to_string(), RichAnnotation::Code)
+    }
+
+    fn decorate_code_end(&mut self) -> String
+    {
+        "`".to_string()
     }
 
     fn decorate_image(&mut self, title: &str) -> (String, Self::Annotation)

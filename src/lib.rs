@@ -158,6 +158,12 @@ fn dom_to_string<T:Write, R:Renderer>(builder: &mut R, handle: Handle,
                     builder.end_emphasis();
                     return;
                 },
+                qualname!(html, "code") => {
+                    builder.start_code();
+                    render_children(builder, handle.clone(), err_out);
+                    builder.end_code();
+                    return;
+                },
                 qualname!(html, "img") => {
                     let mut title = None;
                     for attr in attrs {
@@ -842,5 +848,12 @@ r"Here's a [link][1].
 
 [1] https://example.com/
 ", 80);
+     }
+
+     #[test]
+     fn test_controlchar() {
+         test_html("Foo\u{0080}Bar".as_bytes(), "FooBar\n", 80);
+         test_html("Foo\u{0080}Bar".as_bytes(), "FooB\nar\n", 4);
+         test_html("FooBa\u{0080}r".as_bytes(), "FooB\nar\n", 4);
      }
 }
