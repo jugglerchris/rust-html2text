@@ -115,6 +115,122 @@ fn render_children<T:Write, R:Renderer>(builder: &mut R, handle: Handle,
     }
 }
 
+/// A render tree distilled from the HTML DOM.
+pub enum RenderNode {
+    /// Some text.
+    Text(String),
+    /// A group of nodes collected together.
+    Container(Vec<RenderNode>),
+}
+
+/// Convert a DOM tree or subtree into a render tree.
+pub fn dom_to_render_tree<T:Write>(handle: Handle, err_out: &mut T) -> Option<RenderNode> {
+    let node = handle.borrow();
+    match node.node {
+        Document | Comment(_) => None,
+        Element(ref name, _, ref attrs) => {
+            match *name {
+                qualname!(html, "html") |
+                qualname!(html, "span") |
+                qualname!(html, "body") => {
+                    /* process children, but don't add anything */
+                    let children = handle.borrow().children
+                                                  .iter()
+                                                  .flat_map(|ch| dom_to_render_tree(ch.clone(), err_out))
+                                                  .collect();
+                    Some(RenderNode::Container(children))
+                },
+                qualname!(html, "link") |
+                qualname!(html, "meta") |
+                qualname!(html, "hr") |
+                qualname!(html, "script") |
+                qualname!(html, "style") |
+                qualname!(html, "head") => {
+                    /* Ignore the head and its children */
+                    None
+                },
+                /*
+                qualname!(html, "a") => {
+                    let mut target = None;
+                    for attr in attrs {
+                        if &attr.name.local == "href" {
+                            target = Some(&*attr.value);
+                            break;
+                        }
+                    }
+                    if let Some(href) = target {
+                        builder.start_link(href);
+                        render_children(builder, handle.clone(), err_out);
+                        builder.end_link();
+                    } else {
+                        render_children(builder, handle.clone(), err_out);
+                    }
+                    return;
+                },
+                qualname!(html, "em") => {
+                    builder.start_emphasis();
+                    render_children(builder, handle.clone(), err_out);
+                    builder.end_emphasis();
+                    return;
+                },
+                qualname!(html, "code") => {
+                    builder.start_code();
+                    render_children(builder, handle.clone(), err_out);
+                    builder.end_code();
+                    return;
+                },
+                qualname!(html, "img") => {
+                    let mut title = None;
+                    for attr in attrs {
+                        if &attr.name.local == "alt" {
+                            title = Some(&*attr.value);
+                            break;
+                        }
+                    }
+                    if let Some(title) = title {
+                        builder.add_image(title);
+                    }
+                    return;
+                },
+                qualname!(html, "h1") |
+                qualname!(html, "h2") |
+                qualname!(html, "h3") |
+                qualname!(html, "h4") |
+                qualname!(html, "p") => {
+                    render_block(builder, handle.clone(), err_out);
+                    return;
+                },
+                qualname!(html, "div") => {
+                    builder.new_line();
+                    render_children(builder, handle.clone(), err_out);
+                    builder.new_line();
+                    return;
+                },
+                qualname!(html, "pre") => {
+                    return render_pre(builder, handle.clone(), err_out);
+                },
+                qualname!(html, "br") => {
+                    builder.new_line();
+                    return;
+                }
+                qualname!(html, "table") => return render_table(builder, handle.clone(), err_out),
+                qualname!(html, "blockquote") => return render_blockquote(builder, handle.clone(), err_out),
+                qualname!(html, "ul") => return render_ul(builder, handle.clone(), err_out),
+                qualname!(html, "ol") => return render_ol(builder, handle.clone(), err_out),
+                */
+                _ => {
+                    write!(err_out, "Unhandled element: {:?}\n", name.local).unwrap();
+                    None
+                },
+            }
+          },
+        Text(ref tstr) => {
+            Some(RenderNode::Text(tstr.into()))
+        }
+        _ => { write!(err_out, "Unhandled: {:?}\n", node).unwrap(); None },
+    }
+}
+
 fn dom_to_string<T:Write, R:Renderer>(builder: &mut R, handle: Handle,
                           err_out: &mut T) {
     let node = handle.borrow();
