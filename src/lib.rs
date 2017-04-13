@@ -116,11 +116,24 @@ fn render_children<T:Write, R:Renderer>(builder: &mut R, handle: Handle,
 }
 
 /// A render tree distilled from the HTML DOM.
+#[derive(Debug)]
 pub enum RenderNode {
     /// Some text.
     Text(String),
     /// A group of nodes collected together.
     Container(Vec<RenderNode>),
+    /// A link with contained nodes
+    Link(String, Vec<RenderNode>),
+}
+
+/// Make a Vec of RenderNodes from the children of a node.
+fn children_to_render_nodes<T:Write>(handle: Handle, err_out: &mut T) -> Vec<RenderNode> {
+    /* process children, but don't add anything */
+    let children = handle.borrow().children
+                                  .iter()
+                                  .flat_map(|ch| dom_to_render_tree(ch.clone(), err_out))
+                                  .collect();
+    children
 }
 
 /// Convert a DOM tree or subtree into a render tree.
@@ -134,11 +147,7 @@ pub fn dom_to_render_tree<T:Write>(handle: Handle, err_out: &mut T) -> Option<Re
                 qualname!(html, "span") |
                 qualname!(html, "body") => {
                     /* process children, but don't add anything */
-                    let children = handle.borrow().children
-                                                  .iter()
-                                                  .flat_map(|ch| dom_to_render_tree(ch.clone(), err_out))
-                                                  .collect();
-                    Some(RenderNode::Container(children))
+                    Some(RenderNode::Container(children_to_render_nodes(handle.clone(), err_out)))
                 },
                 qualname!(html, "link") |
                 qualname!(html, "meta") |
@@ -149,7 +158,6 @@ pub fn dom_to_render_tree<T:Write>(handle: Handle, err_out: &mut T) -> Option<Re
                     /* Ignore the head and its children */
                     None
                 },
-                /*
                 qualname!(html, "a") => {
                     let mut target = None;
                     for attr in attrs {
@@ -158,15 +166,14 @@ pub fn dom_to_render_tree<T:Write>(handle: Handle, err_out: &mut T) -> Option<Re
                             break;
                         }
                     }
+                    let children = children_to_render_nodes(handle.clone(), err_out);
                     if let Some(href) = target {
-                        builder.start_link(href);
-                        render_children(builder, handle.clone(), err_out);
-                        builder.end_link();
+                        Some(RenderNode::Link(href.into(), children))
                     } else {
-                        render_children(builder, handle.clone(), err_out);
+                        Some(RenderNode::Container(children))
                     }
-                    return;
                 },
+                /*
                 qualname!(html, "em") => {
                     builder.start_emphasis();
                     render_children(builder, handle.clone(), err_out);
