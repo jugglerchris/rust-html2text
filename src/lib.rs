@@ -124,6 +124,20 @@ pub enum RenderNode {
     Container(Vec<RenderNode>),
     /// A link with contained nodes
     Link(String, Vec<RenderNode>),
+    /// An emphasised region
+    Em(Vec<RenderNode>),
+    /// A code region
+    Code(Vec<RenderNode>),
+    /// An image (title)
+    Img(String),
+    /// A block element with children
+    Block(Vec<RenderNode>),
+    /// A Div element with children
+    Div(Vec<RenderNode>),
+    /// A preformatted region.
+    Pre(Vec<RenderNode>),
+    /// A line break
+    Break,
 }
 
 /// Make a Vec of RenderNodes from the children of a node.
@@ -173,18 +187,11 @@ pub fn dom_to_render_tree<T:Write>(handle: Handle, err_out: &mut T) -> Option<Re
                         Some(RenderNode::Container(children))
                     }
                 },
-                /*
                 qualname!(html, "em") => {
-                    builder.start_emphasis();
-                    render_children(builder, handle.clone(), err_out);
-                    builder.end_emphasis();
-                    return;
+                    Some(RenderNode::Em(children_to_render_nodes(handle.clone(), err_out)))
                 },
                 qualname!(html, "code") => {
-                    builder.start_code();
-                    render_children(builder, handle.clone(), err_out);
-                    builder.end_code();
-                    return;
+                    Some(RenderNode::Code(children_to_render_nodes(handle.clone(), err_out)))
                 },
                 qualname!(html, "img") => {
                     let mut title = None;
@@ -195,31 +202,28 @@ pub fn dom_to_render_tree<T:Write>(handle: Handle, err_out: &mut T) -> Option<Re
                         }
                     }
                     if let Some(title) = title {
-                        builder.add_image(title);
+                        Some(RenderNode::Img(title.into()))
+                    } else {
+                        None
                     }
-                    return;
                 },
                 qualname!(html, "h1") |
                 qualname!(html, "h2") |
                 qualname!(html, "h3") |
                 qualname!(html, "h4") |
                 qualname!(html, "p") => {
-                    render_block(builder, handle.clone(), err_out);
-                    return;
+                    Some(RenderNode::Block(children_to_render_nodes(handle.clone(), err_out)))
                 },
                 qualname!(html, "div") => {
-                    builder.new_line();
-                    render_children(builder, handle.clone(), err_out);
-                    builder.new_line();
-                    return;
+                    Some(RenderNode::Div(children_to_render_nodes(handle.clone(), err_out)))
                 },
                 qualname!(html, "pre") => {
-                    return render_pre(builder, handle.clone(), err_out);
+                    Some(RenderNode::Pre(children_to_render_nodes(handle.clone(), err_out)))
                 },
                 qualname!(html, "br") => {
-                    builder.new_line();
-                    return;
+                    Some(RenderNode::Break)
                 }
+                /*
                 qualname!(html, "table") => return render_table(builder, handle.clone(), err_out),
                 qualname!(html, "blockquote") => return render_blockquote(builder, handle.clone(), err_out),
                 qualname!(html, "ul") => return render_ul(builder, handle.clone(), err_out),
