@@ -136,6 +136,12 @@ pub enum RenderNode {
     Div(Vec<RenderNode>),
     /// A preformatted region.
     Pre(Vec<RenderNode>),
+    /// A blockquote
+    BlockQuote(Vec<RenderNode>),
+    /// An unordered list
+    Ul(Vec<RenderNode>),
+    /// An ordered list
+    Ol(Vec<RenderNode>),
     /// A line break
     Break,
 }
@@ -225,10 +231,16 @@ pub fn dom_to_render_tree<T:Write>(handle: Handle, err_out: &mut T) -> Option<Re
                 }
                 /*
                 qualname!(html, "table") => return render_table(builder, handle.clone(), err_out),
-                qualname!(html, "blockquote") => return render_blockquote(builder, handle.clone(), err_out),
-                qualname!(html, "ul") => return render_ul(builder, handle.clone(), err_out),
-                qualname!(html, "ol") => return render_ol(builder, handle.clone(), err_out),
                 */
+                qualname!(html, "blockquote") => {
+                    Some(RenderNode::BlockQuote(children_to_render_nodes(handle.clone(), err_out)))
+                },
+                qualname!(html, "ul") => {
+                    Some(RenderNode::Ul(children_to_render_nodes(handle.clone(), err_out)))
+                },
+                qualname!(html, "ol") => {
+                    Some(RenderNode::Ol(children_to_render_nodes(handle.clone(), err_out)))
+                },
                 _ => {
                     write!(err_out, "Unhandled element: {:?}\n", name.local).unwrap();
                     None
