@@ -116,20 +116,61 @@ fn render_children<T:Write, R:Renderer>(builder: &mut R, handle: Handle,
 }
 
 #[derive(Debug)]
-struct RenderTableCell {
+/// Render tree table cell
+pub struct RenderTableCell {
     colspan: usize,
     content: Vec<RenderNode>,
 }
 
+impl RenderTableCell {
+    /// Render this cell to a builder.
+    pub fn render<T:Write, R:Renderer>(&mut self, builder: &mut R, err_out: &mut T)
+    {
+        render_tree_children_to_string(builder, &mut self.content, err_out)
+    }
+}
+
 #[derive(Debug)]
-struct RenderTableRow {
+/// Render tree table row
+pub struct RenderTableRow {
     cells: Vec<RenderTableCell>,
+}
+
+impl RenderTableRow {
+    /// Return a mutable iterator over the cells.
+    pub fn cells(&mut self) -> std::slice::IterMut<RenderTableCell> {
+        self.cells.iter_mut()
+    }
+    /// Count the number of cells in the row.
+    /// Takes into account colspan.
+    pub fn num_cells(&self) -> usize {
+        self.cells.iter().map(|cell| cell.colspan).sum()
+    }
+    /// Return an iterator over (column, &cell)s, which
+    /// takes into account colspan.
+    pub fn cell_columns(&mut self) -> Vec<(usize, &mut RenderTableCell)> {
+        let mut result = Vec::new();
+        let mut colno = 0;
+        for cell in &mut self.cells {
+            let colspan = cell.colspan;
+            result.push((colno, cell));
+            colno += colspan;
+        }
+        result
+    }
 }
 
 #[derive(Debug)]
 /// A representation of a table render tree with metadata.
 pub struct RenderTable {
     rows: Vec<RenderTableRow>,
+}
+
+impl RenderTable {
+    /// Return an iterator over the rows.
+    pub fn rows(&mut self) -> std::slice::IterMut<RenderTableRow> {
+        self.rows.iter_mut()
+    }
 }
 
 /// A render tree distilled from the HTML DOM.
@@ -152,7 +193,7 @@ pub enum RenderNode {
     /// A Div element with children
     Div(Vec<RenderNode>),
     /// A preformatted region.
-    Pre(Vec<RenderNode>),
+    Pre(String),
     /// A blockquote
     BlockQuote(Vec<RenderNode>),
     /// An unordered list
@@ -172,6 +213,29 @@ fn children_to_render_nodes<T:Write>(handle: Handle, err_out: &mut T) -> Vec<Ren
                                   .iter()
                                   .flat_map(|ch| dom_to_render_tree(ch.clone(), err_out))
                                   .collect();
+    children
+}
+
+/// Make a Vec of RenderNodes from the <li>children of a node.
+fn list_children_to_render_nodes<T:Write>(handle: Handle, err_out: &mut T) -> Vec<RenderNode> {
+    let node = handle.borrow();
+    let mut children = Vec::new();
+
+    for child in &node.children {
+        match child.borrow().node {
+            Element(ref name, _, _) => {
+                match *name {
+                    qualname!(html, "li") => {
+                        let li_children = children_to_render_nodes(child.clone(), err_out);
+                        children.push(RenderNode::Block(li_children));
+                    },
+                    _ => {},
+                }
+            },
+            Comment(_) => {},
+            _ => { html_trace!("Unhandled in table: {:?}\n", node); },
+        }
+    }
     children
 }
 
@@ -214,9 +278,13 @@ fn tbody_to_render_tree<T:Write>(handle: Handle, err_out: &mut T) -> Option<Rend
             _ => { html_trace!("Unhandled in table: {:?}\n", node); },
         }
     }
-    Some(RenderNode::Table(RenderTable {
-        rows: rows,
-    }))
+    if rows.len() > 0 {
+        Some(RenderNode::Table(RenderTable {
+            rows: rows,
+        }))
+    } else {
+        None
+    }
 }
 
 /// Convert a table row to a RenderTableRow
@@ -333,7 +401,7 @@ pub fn dom_to_render_tree<T:Write>(handle: Handle, err_out: &mut T) -> Option<Re
                     Some(RenderNode::Div(children_to_render_nodes(handle.clone(), err_out)))
                 },
                 qualname!(html, "pre") => {
-                    Some(RenderNode::Pre(children_to_render_nodes(handle.clone(), err_out)))
+                    Some(RenderNode::Pre(get_text(handle.clone())))
                 },
                 qualname!(html, "br") => {
                     Some(RenderNode::Break)
@@ -343,10 +411,10 @@ pub fn dom_to_render_tree<T:Write>(handle: Handle, err_out: &mut T) -> Option<Re
                     Some(RenderNode::BlockQuote(children_to_render_nodes(handle.clone(), err_out)))
                 },
                 qualname!(html, "ul") => {
-                    Some(RenderNode::Ul(children_to_render_nodes(handle.clone(), err_out)))
+                    Some(RenderNode::Ul(list_children_to_render_nodes(handle.clone(), err_out)))
                 },
                 qualname!(html, "ol") => {
-                    Some(RenderNode::Ol(children_to_render_nodes(handle.clone(), err_out)))
+                    Some(RenderNode::Ol(list_children_to_render_nodes(handle.clone(), err_out)))
                 },
                 _ => {
                     write!(err_out, "Unhandled element: {:?}\n", name.local).unwrap();
@@ -358,6 +426,169 @@ pub fn dom_to_render_tree<T:Write>(handle: Handle, err_out: &mut T) -> Option<Re
             Some(RenderNode::Text(tstr.into()))
         }
         _ => { write!(err_out, "Unhandled: {:?}\n", node).unwrap(); None },
+    }
+}
+
+fn render_tree_children_to_string<T:Write, R:Renderer>(builder: &mut R,
+                                                      children: &mut Vec<RenderNode>,
+                                                      err_out: &mut T) {
+    for child in children {
+        render_tree_to_string(builder, child, err_out);
+    }
+}
+
+fn render_tree_to_string<T:Write, R:Renderer>(builder: &mut R, tree: &mut RenderNode,
+                          err_out: &mut T) {
+    use RenderNode::*;
+    match *tree {
+        Text(ref tstr) => {
+            builder.add_inline_text(tstr);
+        },
+        Container(ref mut children) => {
+            render_tree_children_to_string(builder, children, err_out);
+        },
+        Link(ref href, ref mut children) => {
+            builder.start_link(href);
+            render_tree_children_to_string(builder, children, err_out);
+            builder.end_link();
+        },
+        Em(ref mut children) => {
+            builder.start_emphasis();
+            render_tree_children_to_string(builder, children, err_out);
+            builder.end_emphasis();
+        },
+        Code(ref mut children) => {
+            builder.start_code();
+            render_tree_children_to_string(builder, children, err_out);
+            builder.end_code();
+        },
+        Img(ref title) => {
+            builder.add_image(title);
+        },
+        Block(ref mut children) => {
+            builder.start_block();
+            render_tree_children_to_string(builder, children, err_out);
+            builder.end_block();
+        },
+        Div(ref mut children) => {
+            builder.new_line();
+            render_tree_children_to_string(builder, children, err_out);
+            builder.new_line();
+        },
+        Pre(ref formatted) => {
+            builder.add_preformatted_block(formatted);
+        },
+        BlockQuote(ref mut children) => {
+            let mut sub_builder = builder.new_sub_renderer(builder.width()-2);
+            render_tree_children_to_string(&mut sub_builder, children, err_out);
+
+            builder.start_block();
+            builder.append_subrender(sub_builder, repeat("> "));
+            builder.end_block();
+        },
+        Ul(ref mut items) => {
+            builder.start_block();
+            for item in items {
+                let mut sub_builder = builder.new_sub_renderer(builder.width()-2);
+                render_tree_to_string(&mut sub_builder, item, err_out);
+                builder.append_subrender(sub_builder, once("* ").chain(repeat("  ")));
+            }
+        },
+        Ol(ref mut items) => {
+            let num_items = items.len();
+
+            builder.start_block();
+
+            let prefix_width = format!("{}", num_items).len() + 2;
+
+            let mut i = 1;
+            let prefixn = format!("{: <width$}", "", width=prefix_width);
+            for item in items {
+                let mut sub_builder = builder.new_sub_renderer(builder.width()-prefix_width);
+                render_tree_to_string(&mut sub_builder, item, err_out);
+                let prefix1 = format!("{}.", i);
+                let prefix1 = format!("{: <width$}", prefix1, width=prefix_width);
+                builder.append_subrender(sub_builder, once(prefix1.as_str()).chain(repeat(prefixn.as_str())));
+                i += 1;
+            }
+        },
+        Break => {
+            builder.new_line();
+        },
+        Table(ref mut tab) => {
+            render_table_tree(builder, tab, err_out);
+        },
+    }
+}
+
+fn render_table_tree<T:Write, R:Renderer>(builder: &mut R, table: &mut RenderTable, err_out: &mut T) {
+    /* Now lay out the table. */
+    let num_columns = table.rows().map(|r| r.num_cells()).max().unwrap();
+
+    /* Heuristic: scale the column widths according to how much content there is. */
+    let test_col_width = 1000;  // Render width for measurement; shouldn't make much difference.
+    let min_width = 5;
+    let mut col_sizes = vec![0usize; num_columns];
+
+    for row in table.rows() {
+        let mut colno = 0;
+        for cell in row.cells() {
+            let mut cellbuilder = builder.new_sub_renderer(test_col_width);
+            cell.render(&mut cellbuilder, &mut Discard{});
+            let cellsize = cellbuilder.text_len();
+            // If the cell has a colspan>1, then spread its size between the
+            // columns.
+            let col_size = cellsize / cell.colspan;
+            for i in 0..cell.colspan {
+                col_sizes[colno + i] += col_size;
+            }
+            colno += cell.colspan;
+        }
+    }
+    let tot_size: usize = col_sizes.iter().sum();
+    let width = builder.width();
+    let mut col_widths:Vec<usize> = col_sizes.iter()
+                                         .map(|sz| {
+                                             if *sz == 0 {
+                                                 0
+                                             } else {
+                                                 max(sz * width / tot_size, min_width)
+                                             }
+                                          }).collect();
+    /* The minimums may have put the total width too high */
+    while col_widths.iter().cloned().sum::<usize>() > width {
+        let (i, _) = col_widths.iter().cloned().enumerate().max_by_key(|k| k.1).unwrap();
+        col_widths[i] -= 1;
+    }
+    if !col_widths.is_empty() {
+        // Slight fudge; we're not drawing extreme edges, so one of the columns
+        // can gets a free character cell from not having a border.
+        // make it the last.
+        let last = col_widths.len() - 1;
+        col_widths[last] += 1;
+    }
+
+    builder.start_block();
+
+    builder.add_horizontal_border();
+
+    for row in table.rows() {
+        let rendered_cells: Vec<R::Sub> = row.cell_columns()
+                                             .into_iter()
+                                             .flat_map(|(colno, cell)| {
+                                                  let col_width:usize = col_widths[colno..colno+cell.colspan]
+                                                                     .iter().sum();
+                                                  if col_width > 0 {
+                                                      let mut cellbuilder = builder.new_sub_renderer(col_width-1);
+                                                      cell.render(&mut cellbuilder, err_out);
+                                                      Some(cellbuilder)
+                                                  } else {
+                                                      None
+                                                  }
+                                              }).collect();
+        if rendered_cells.iter().any(|r| !r.empty()) {
+            builder.append_columns_with_borders(rendered_cells, true);
+        }
     }
 }
 
@@ -773,10 +1004,17 @@ pub fn from_read<R>(mut input: R, width: usize) -> String where R: io::Read {
                    .read_from(&mut input)
                    .unwrap();
 
+let decorator2 = PlainDecorator::new();
+let mut builder2 = TextRenderer::new(width, decorator2);
+let render_tree = dom_to_render_tree(dom.document.clone(), &mut Discard{});
+render_tree_to_string(&mut builder2, &mut render_tree.unwrap(), &mut Discard{});
     let decorator = PlainDecorator::new();
     let mut builder = TextRenderer::new(width, decorator);
     dom_to_string(&mut builder, dom.document, &mut Discard{} /* &mut io::stderr()*/);
-    builder.into_string()
+
+    let result = builder.into_string();
+assert_eq!(result, builder2.into_string());
+    result
 }
 
 /// Reads HTML from `input`, and returns text wrapped to `width` columns.
