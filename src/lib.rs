@@ -209,6 +209,7 @@ pub enum RenderNodeInfo {
 /// Common fields from a node.
 #[derive(Debug)]
 pub struct RenderNode {
+    size_estimate: Option<usize>,
     info: RenderNodeInfo,
 }
 
@@ -216,8 +217,44 @@ impl RenderNode {
     /// Create a node from the RenderNodeInfo.
     pub fn new(info: RenderNodeInfo) -> RenderNode {
         RenderNode {
+            size_estimate: None,
             info: info,
         }
+    }
+
+    /// Get a size estimate (~characters)
+    pub fn get_size_estimate(&mut self) -> usize {
+        // If it's already calculated, then just return the answer.
+        if let Some(s) = self.size_estimate {
+            return s;
+        };
+
+        use RenderNodeInfo::*;
+
+        // Otherwise, make an estimate.
+        let estimate = match self.info {
+            Text(ref t) |
+            Img(ref t) |
+            Pre(ref t) => t.len(),
+
+            Container(ref mut v) |
+            Link(_, ref mut v) |
+            Em(ref mut v) |
+            Code(ref mut v) |
+            Block(ref mut v) |
+            Div(ref mut v) |
+            BlockQuote(ref mut v) |
+            Ul(ref mut v) |
+            Ol(ref mut v) => {
+                v.iter_mut().map(RenderNode::get_size_estimate).sum()
+            },
+            Break => 1,
+            Table(ref mut t) => {
+                unimplemented!()
+            },
+        };
+        self.size_estimate = Some(estimate);
+        estimate
     }
 }
 
