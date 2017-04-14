@@ -120,6 +120,7 @@ fn render_children<T:Write, R:Renderer>(builder: &mut R, handle: Handle,
 pub struct RenderTableCell {
     colspan: usize,
     content: Vec<RenderNode>,
+    size_estimate: Option<usize>,
 }
 
 impl RenderTableCell {
@@ -127,6 +128,18 @@ impl RenderTableCell {
     pub fn render<T:Write, R:Renderer>(&mut self, builder: &mut R, err_out: &mut T)
     {
         render_tree_children_to_string(builder, &mut self.content, err_out)
+    }
+
+    /// Calculate or return the estimate size of the cell
+    pub fn get_size_estimate(&mut self) -> usize {
+        if self.size_estimate.is_none() {
+            let size = self.content
+                           .iter_mut()
+                           .map(|node| node.get_size_estimate())
+                           .sum();
+            self.size_estimate = Some(size);
+        }
+        self.size_estimate.unwrap()
     }
 }
 
@@ -164,12 +177,44 @@ impl RenderTableRow {
 /// A representation of a table render tree with metadata.
 pub struct RenderTable {
     rows: Vec<RenderTableRow>,
+    num_columns: usize,
+    size_estimate: Option<usize>,
 }
 
 impl RenderTable {
+    /// Create a new RenderTable with the given rows
+    pub fn new(rows: Vec<RenderTableRow>) -> RenderTable {
+        let num_columns = rows.iter()
+                              .map(|r| r.num_cells()).max().unwrap_or(0);
+        RenderTable {
+            rows: rows,
+            num_columns: num_columns,
+            size_estimate: None,
+        }
+    }
+
     /// Return an iterator over the rows.
     pub fn rows(&mut self) -> std::slice::IterMut<RenderTableRow> {
         self.rows.iter_mut()
+    }
+
+    fn calc_size_estimate(&mut self) {
+        let mut size = 0;
+        // For now, a simple estimate based on adding up sub-parts.
+        for row in self.rows() {
+            for cell in row.cells() {
+                size += cell.get_size_estimate();
+            }
+        }
+        self.size_estimate = Some(size);
+    }
+
+    /// Calculate and store (or return stored value) of estimated size
+    pub fn get_size_estimate(&mut self) -> usize {
+        if self.size_estimate.is_none() {
+            self.calc_size_estimate();
+        }
+        self.size_estimate.unwrap()
     }
 }
 
@@ -250,7 +295,7 @@ impl RenderNode {
             },
             Break => 1,
             Table(ref mut t) => {
-                unimplemented!()
+                t.get_size_estimate()
             },
         };
         self.size_estimate = Some(estimate);
@@ -331,9 +376,7 @@ fn tbody_to_render_tree<T:Write>(handle: Handle, err_out: &mut T) -> Option<Rend
         }
     }
     if rows.len() > 0 {
-        Some(RenderNode::new(RenderNodeInfo::Table(RenderTable {
-            rows: rows,
-        })))
+        Some(RenderNode::new(RenderNodeInfo::Table(RenderTable::new(rows))))
     } else {
         None
     }
@@ -381,6 +424,7 @@ fn td_to_render_tree<T: Write>(handle: Handle, err_out: &mut T) -> RenderTableCe
     RenderTableCell {
         colspan: colspan,
         content: children,
+        size_estimate: None,
     }
 }
 
@@ -577,19 +621,16 @@ fn render_tree_to_string<T:Write, R:Renderer>(builder: &mut R, tree: &mut Render
 
 fn render_table_tree<T:Write, R:Renderer>(builder: &mut R, table: &mut RenderTable, err_out: &mut T) {
     /* Now lay out the table. */
-    let num_columns = table.rows().map(|r| r.num_cells()).max().unwrap();
+    let num_columns = table.num_columns;
 
     /* Heuristic: scale the column widths according to how much content there is. */
-    let test_col_width = 1000;  // Render width for measurement; shouldn't make much difference.
     let min_width = 5;
     let mut col_sizes = vec![0usize; num_columns];
 
     for row in table.rows() {
         let mut colno = 0;
         for cell in row.cells() {
-            let mut cellbuilder = builder.new_sub_renderer(test_col_width);
-            cell.render(&mut cellbuilder, &mut Discard{});
-            let cellsize = cellbuilder.text_len();
+            let cellsize = cell.get_size_estimate();
             // If the cell has a colspan>1, then spread its size between the
             // columns.
             let col_size = cellsize / cell.colspan;
