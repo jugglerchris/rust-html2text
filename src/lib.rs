@@ -337,7 +337,8 @@ fn td_to_render_tree<T: Write>(handle: Handle, err_out: &mut T) -> RenderTableCe
 pub fn dom_to_render_tree<T:Write>(handle: Handle, err_out: &mut T) -> Option<RenderNode> {
     let node = handle.borrow();
     match node.node {
-        Document | Comment(_) => None,
+        Document => Some(RenderNode::Container(children_to_render_nodes(handle.clone(), err_out))),
+        Comment(_) => None,
         Element(ref name, _, ref attrs) => {
             match *name {
                 qualname!(html, "html") |
