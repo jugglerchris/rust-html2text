@@ -1099,20 +1099,12 @@ pub fn from_read<R>(mut input: R, width: usize) -> String where R: io::Read {
                    .read_from(&mut input)
                    .unwrap();
 
-let decorator2 = PlainDecorator::new();
-let mut builder2 = TextRenderer::new(width, decorator2);
-let render_tree = dom_to_render_tree(dom.document.clone(), &mut Discard{});
-render_tree_to_string(&mut builder2, &mut render_tree.unwrap(), &mut Discard{});
-builder2.into_string()
-/*
     let decorator = PlainDecorator::new();
     let mut builder = TextRenderer::new(width, decorator);
-    dom_to_string(&mut builder, dom.document, &mut Discard{} /* &mut io::stderr()*/);
 
-    let result = builder.into_string();
-assert_eq!(result, builder2.into_string());
-    result
-    */
+    let render_tree = dom_to_render_tree(dom.document, &mut Discard{});
+    render_tree_to_string(&mut builder, &mut render_tree.unwrap(), &mut Discard{});
+    builder.into_string()
 }
 
 /// Reads HTML from `input`, and returns text wrapped to `width` columns.
