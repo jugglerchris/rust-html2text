@@ -115,6 +115,23 @@ fn render_children<T:Write, R:Renderer>(builder: &mut R, handle: Handle,
     }
 }
 
+#[derive(Debug)]
+struct RenderTableCell {
+    colspan: usize,
+    content: Vec<RenderNode>,
+}
+
+#[derive(Debug)]
+struct RenderTableRow {
+    cells: Vec<RenderTableCell>,
+}
+
+#[derive(Debug)]
+/// A representation of a table render tree with metadata.
+pub struct RenderTable {
+    rows: Vec<RenderTableRow>,
+}
+
 /// A render tree distilled from the HTML DOM.
 #[derive(Debug)]
 pub enum RenderNode {
@@ -144,6 +161,8 @@ pub enum RenderNode {
     Ol(Vec<RenderNode>),
     /// A line break
     Break,
+    /// A table
+    Table(RenderTable),
 }
 
 /// Make a Vec of RenderNodes from the children of a node.
@@ -155,6 +174,96 @@ fn children_to_render_nodes<T:Write>(handle: Handle, err_out: &mut T) -> Vec<Ren
                                   .collect();
     children
 }
+
+/// Convert a table into a RenderNode
+fn table_to_render_tree<T:Write>(handle: Handle, err_out: &mut T) -> Option<RenderNode> {
+    let node = handle.borrow();
+
+    for child in &node.children {
+        match child.borrow().node {
+            Element(ref name, _, _) => {
+                match *name {
+                    qualname!(html, "tbody") => return tbody_to_render_tree(child.clone(), err_out),
+                    _ => { writeln!(err_out, "  [[table child: {:?}]]", name).unwrap(); },
+                }
+            },
+            Comment(_) => {},
+            _ => { html_trace!("Unhandled in table: {:?}\n", node); },
+        }
+    }
+    None
+}
+
+/// Convert the tbody element to a RenderNode.
+fn tbody_to_render_tree<T:Write>(handle: Handle, err_out: &mut T) -> Option<RenderNode> {
+    let node = handle.borrow();
+
+    let mut rows = Vec::new();
+
+    for child in &node.children {
+        match child.borrow().node {
+            Element(ref name, _, _) => {
+                match *name {
+                    qualname!(html, "tr") => {
+                        rows.push(tr_to_render_tree(child.clone(), err_out));
+                    },
+                    _ => { html_trace!("  [[tbody child: {:?}]]", name); },
+                }
+            },
+            Comment(_) => {},
+            _ => { html_trace!("Unhandled in table: {:?}\n", node); },
+        }
+    }
+    Some(RenderNode::Table(RenderTable {
+        rows: rows,
+    }))
+}
+
+/// Convert a table row to a RenderTableRow
+fn tr_to_render_tree<T:Write>(handle: Handle, err_out: &mut T) -> RenderTableRow {
+    let node = handle.borrow();
+
+    let mut cells = Vec::new();
+
+    for child in &node.children {
+        match child.borrow().node {
+            Element(ref name, _, _) => {
+                match *name {
+                    qualname!(html, "th") |
+                    qualname!(html, "td") => {
+                        cells.push(td_to_render_tree(child.clone(), err_out));
+                    },
+                    _ => { html_trace!("  [[tr child: {:?}]]", name); },
+                }
+            },
+            Comment(_) => {},
+            _ => { html_trace!("Unhandled in table: {:?}\n", node); },
+        }
+    }
+
+    RenderTableRow {
+        cells: cells,
+    }
+}
+
+/// Convert a single table cell to a render node.
+fn td_to_render_tree<T: Write>(handle: Handle, err_out: &mut T) -> RenderTableCell {
+    let children = children_to_render_nodes(handle.clone(), err_out);
+    let mut colspan = 1;
+    if let Element(_, _, ref attrs) = handle.borrow().node {
+        for attr in attrs {
+            if &attr.name.local == "colspan" {
+                let v:&str = &*attr.value;
+                colspan = v.parse().unwrap_or(1);
+            }
+        }
+    }
+    RenderTableCell {
+        colspan: colspan,
+        content: children,
+    }
+}
+
 
 /// Convert a DOM tree or subtree into a render tree.
 pub fn dom_to_render_tree<T:Write>(handle: Handle, err_out: &mut T) -> Option<RenderNode> {
@@ -229,9 +338,7 @@ pub fn dom_to_render_tree<T:Write>(handle: Handle, err_out: &mut T) -> Option<Re
                 qualname!(html, "br") => {
                     Some(RenderNode::Break)
                 }
-                /*
-                qualname!(html, "table") => return render_table(builder, handle.clone(), err_out),
-                */
+                qualname!(html, "table") => table_to_render_tree(handle.clone(), err_out),
                 qualname!(html, "blockquote") => {
                     Some(RenderNode::BlockQuote(children_to_render_nodes(handle.clone(), err_out)))
                 },
