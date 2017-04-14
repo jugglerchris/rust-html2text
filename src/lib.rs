@@ -1127,7 +1127,8 @@ pub fn from_read_rich<R>(mut input: R, width: usize) -> Vec<TaggedLine<Vec<RichA
 
     let decorator = RichDecorator::new();
     let mut builder = TextRenderer::new(width, decorator);
-    dom_to_string(&mut builder, dom.document, &mut Discard{} /* &mut io::stderr()*/);
+    let render_tree = dom_to_render_tree(dom.document, &mut Discard{});
+    render_tree_to_string(&mut builder, &mut render_tree.unwrap(), &mut Discard{});
     builder.into_lines().into_iter().map(RenderLine::into_tagged_line).collect()
 }
 
