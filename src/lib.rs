@@ -74,7 +74,7 @@ use std::iter::{once,repeat};
 use html5ever::{parse_document};
 use html5ever::driver::ParseOpts;
 use html5ever::tree_builder::TreeBuilderOpts;
-use html5ever::rcdom::{RcDom,Handle,Text,Element,Document,Comment};
+use html5ever::rcdom::{self,RcDom,Handle,Text,Element,Document,Comment};
 use html5ever::tendril::TendrilSink;
 
 /// A dummy writer which does nothing
@@ -173,9 +173,9 @@ impl RenderTable {
     }
 }
 
-/// A render tree distilled from the HTML DOM.
+/// The node-specific information distilled from the DOM.
 #[derive(Debug)]
-pub enum RenderNode {
+pub enum RenderNodeInfo {
     /// Some text.
     Text(String),
     /// A group of nodes collected together.
@@ -206,6 +206,21 @@ pub enum RenderNode {
     Table(RenderTable),
 }
 
+/// Common fields from a node.
+#[derive(Debug)]
+pub struct RenderNode {
+    info: RenderNodeInfo,
+}
+
+impl RenderNode {
+    /// Create a node from the RenderNodeInfo.
+    pub fn new(info: RenderNodeInfo) -> RenderNode {
+        RenderNode {
+            info: info,
+        }
+    }
+}
+
 /// Make a Vec of RenderNodes from the children of a node.
 fn children_to_render_nodes<T:Write>(handle: Handle, err_out: &mut T) -> Vec<RenderNode> {
     /* process children, but don't add anything */
@@ -227,7 +242,7 @@ fn list_children_to_render_nodes<T:Write>(handle: Handle, err_out: &mut T) -> Ve
                 match *name {
                     qualname!(html, "li") => {
                         let li_children = children_to_render_nodes(child.clone(), err_out);
-                        children.push(RenderNode::Block(li_children));
+                        children.push(RenderNode::new(RenderNodeInfo::Block(li_children)));
                     },
                     _ => {},
                 }
@@ -279,9 +294,9 @@ fn tbody_to_render_tree<T:Write>(handle: Handle, err_out: &mut T) -> Option<Rend
         }
     }
     if rows.len() > 0 {
-        Some(RenderNode::Table(RenderTable {
+        Some(RenderNode::new(RenderNodeInfo::Table(RenderTable {
             rows: rows,
-        }))
+        })))
     } else {
         None
     }
@@ -335,9 +350,10 @@ fn td_to_render_tree<T: Write>(handle: Handle, err_out: &mut T) -> RenderTableCe
 
 /// Convert a DOM tree or subtree into a render tree.
 pub fn dom_to_render_tree<T:Write>(handle: Handle, err_out: &mut T) -> Option<RenderNode> {
+    use RenderNodeInfo::*;
     let node = handle.borrow();
     match node.node {
-        Document => Some(RenderNode::Container(children_to_render_nodes(handle.clone(), err_out))),
+        Document => Some(RenderNode::new(Container(children_to_render_nodes(handle.clone(), err_out)))),
         Comment(_) => None,
         Element(ref name, _, ref attrs) => {
             match *name {
@@ -345,7 +361,7 @@ pub fn dom_to_render_tree<T:Write>(handle: Handle, err_out: &mut T) -> Option<Re
                 qualname!(html, "span") |
                 qualname!(html, "body") => {
                     /* process children, but don't add anything */
-                    Some(RenderNode::Container(children_to_render_nodes(handle.clone(), err_out)))
+                    Some(RenderNode::new(Container(children_to_render_nodes(handle.clone(), err_out))))
                 },
                 qualname!(html, "link") |
                 qualname!(html, "meta") |
@@ -366,16 +382,16 @@ pub fn dom_to_render_tree<T:Write>(handle: Handle, err_out: &mut T) -> Option<Re
                     }
                     let children = children_to_render_nodes(handle.clone(), err_out);
                     if let Some(href) = target {
-                        Some(RenderNode::Link(href.into(), children))
+                        Some(RenderNode::new(Link(href.into(), children)))
                     } else {
-                        Some(RenderNode::Container(children))
+                        Some(RenderNode::new(Container(children)))
                     }
                 },
                 qualname!(html, "em") => {
-                    Some(RenderNode::Em(children_to_render_nodes(handle.clone(), err_out)))
+                    Some(RenderNode::new(Em(children_to_render_nodes(handle.clone(), err_out))))
                 },
                 qualname!(html, "code") => {
-                    Some(RenderNode::Code(children_to_render_nodes(handle.clone(), err_out)))
+                    Some(RenderNode::new(Code(children_to_render_nodes(handle.clone(), err_out))))
                 },
                 qualname!(html, "img") => {
                     let mut title = None;
@@ -386,7 +402,7 @@ pub fn dom_to_render_tree<T:Write>(handle: Handle, err_out: &mut T) -> Option<Re
                         }
                     }
                     if let Some(title) = title {
-                        Some(RenderNode::Img(title.into()))
+                        Some(RenderNode::new(Img(title.into())))
                     } else {
                         None
                     }
@@ -396,26 +412,26 @@ pub fn dom_to_render_tree<T:Write>(handle: Handle, err_out: &mut T) -> Option<Re
                 qualname!(html, "h3") |
                 qualname!(html, "h4") |
                 qualname!(html, "p") => {
-                    Some(RenderNode::Block(children_to_render_nodes(handle.clone(), err_out)))
+                    Some(RenderNode::new(Block(children_to_render_nodes(handle.clone(), err_out))))
                 },
                 qualname!(html, "div") => {
-                    Some(RenderNode::Div(children_to_render_nodes(handle.clone(), err_out)))
+                    Some(RenderNode::new(Div(children_to_render_nodes(handle.clone(), err_out))))
                 },
                 qualname!(html, "pre") => {
-                    Some(RenderNode::Pre(get_text(handle.clone())))
+                    Some(RenderNode::new(Pre(get_text(handle.clone()))))
                 },
                 qualname!(html, "br") => {
-                    Some(RenderNode::Break)
+                    Some(RenderNode::new(Break))
                 }
                 qualname!(html, "table") => table_to_render_tree(handle.clone(), err_out),
                 qualname!(html, "blockquote") => {
-                    Some(RenderNode::BlockQuote(children_to_render_nodes(handle.clone(), err_out)))
+                    Some(RenderNode::new(BlockQuote(children_to_render_nodes(handle.clone(), err_out))))
                 },
                 qualname!(html, "ul") => {
-                    Some(RenderNode::Ul(list_children_to_render_nodes(handle.clone(), err_out)))
+                    Some(RenderNode::new(Ul(list_children_to_render_nodes(handle.clone(), err_out))))
                 },
                 qualname!(html, "ol") => {
-                    Some(RenderNode::Ol(list_children_to_render_nodes(handle.clone(), err_out)))
+                    Some(RenderNode::new(Ol(list_children_to_render_nodes(handle.clone(), err_out))))
                 },
                 _ => {
                     write!(err_out, "Unhandled element: {:?}\n", name.local).unwrap();
@@ -423,8 +439,8 @@ pub fn dom_to_render_tree<T:Write>(handle: Handle, err_out: &mut T) -> Option<Re
                 },
             }
           },
-        Text(ref tstr) => {
-            Some(RenderNode::Text(tstr.into()))
+        rcdom::Text(ref tstr) => {
+            Some(RenderNode::new(Text(tstr.into())))
         }
         _ => { write!(err_out, "Unhandled: {:?}\n", node).unwrap(); None },
     }
@@ -440,8 +456,8 @@ fn render_tree_children_to_string<T:Write, R:Renderer>(builder: &mut R,
 
 fn render_tree_to_string<T:Write, R:Renderer>(builder: &mut R, tree: &mut RenderNode,
                           err_out: &mut T) {
-    use RenderNode::*;
-    match *tree {
+    use RenderNodeInfo::*;
+    match tree.info {
         Text(ref tstr) => {
             builder.add_inline_text(tstr);
         },
@@ -1009,6 +1025,8 @@ let decorator2 = PlainDecorator::new();
 let mut builder2 = TextRenderer::new(width, decorator2);
 let render_tree = dom_to_render_tree(dom.document.clone(), &mut Discard{});
 render_tree_to_string(&mut builder2, &mut render_tree.unwrap(), &mut Discard{});
+builder2.into_string()
+/*
     let decorator = PlainDecorator::new();
     let mut builder = TextRenderer::new(width, decorator);
     dom_to_string(&mut builder, dom.document, &mut Discard{} /* &mut io::stderr()*/);
@@ -1016,6 +1034,7 @@ render_tree_to_string(&mut builder2, &mut render_tree.unwrap(), &mut Discard{});
     let result = builder.into_string();
 assert_eq!(result, builder2.into_string());
     result
+    */
 }
 
 /// Reads HTML from `input`, and returns text wrapped to `width` columns.
