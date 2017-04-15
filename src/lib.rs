@@ -312,7 +312,7 @@ fn list_children_to_render_nodes<T:Write>(handle: Handle, err_out: &mut T) -> Ve
                 }
             },
             Comment(_) => {},
-            _ => { html_trace!("Unhandled in table: {:?}\n", node); },
+            _ => { html_trace!("Unhandled in list: {:?}\n", child); },
         }
     }
     children
@@ -331,7 +331,7 @@ fn table_to_render_tree<T:Write>(handle: Handle, err_out: &mut T) -> Option<Rend
                 }
             },
             Comment(_) => {},
-            _ => { html_trace!("Unhandled in table: {:?}\n", node); },
+            _ => { html_trace!("Unhandled in table: {:?}\n", child); },
         }
     }
     None
@@ -354,7 +354,7 @@ fn tbody_to_render_tree<T:Write>(handle: Handle, err_out: &mut T) -> Option<Rend
                 }
             },
             Comment(_) => {},
-            _ => { html_trace!("Unhandled in table: {:?}\n", node); },
+            _ => { html_trace!("Unhandled in tbody: {:?}\n", child); },
         }
     }
     if rows.len() > 0 {
@@ -382,7 +382,7 @@ fn tr_to_render_tree<T:Write>(handle: Handle, err_out: &mut T) -> RenderTableRow
                 }
             },
             Comment(_) => {},
-            _ => { html_trace!("Unhandled in table: {:?}\n", node); },
+            _ => { html_trace!("Unhandled in tr: {:?}\n", child); },
         }
     }
 
@@ -415,7 +415,7 @@ fn td_to_render_tree<T: Write>(handle: Handle, err_out: &mut T) -> RenderTableCe
 pub fn dom_to_render_tree<T:Write>(handle: Handle, err_out: &mut T) -> Option<RenderNode> {
     use RenderNodeInfo::*;
     let node = handle.borrow();
-    match node.node {
+    let result = match node.node {
         Document => Some(RenderNode::new(Container(children_to_render_nodes(handle.clone(), err_out)))),
         Comment(_) => None,
         Element(ref name, _, ref attrs) => {
@@ -497,8 +497,9 @@ pub fn dom_to_render_tree<T:Write>(handle: Handle, err_out: &mut T) -> Option<Re
                     Some(RenderNode::new(Ol(list_children_to_render_nodes(handle.clone(), err_out))))
                 },
                 _ => {
-                    write!(err_out, "Unhandled element: {:?}\n", name.local).unwrap();
-                    None
+                    html_trace!("Unhandled element: {:?}\n", name.local);
+                    Some(RenderNode::new(Container(children_to_render_nodes(handle.clone(), err_out))))
+                    //None
                 },
             }
           },
@@ -506,7 +507,10 @@ pub fn dom_to_render_tree<T:Write>(handle: Handle, err_out: &mut T) -> Option<Re
             Some(RenderNode::new(Text(tstr.into())))
         }
         _ => { write!(err_out, "Unhandled: {:?}\n", node).unwrap(); None },
-    }
+    };
+    html_trace!("### dom_to_render_tree: HTML: {:?}", node);
+    html_trace!("### dom_to_render_tree: out= {:#?}", result);
+    return result;
 }
 
 fn render_tree_children_to_string<T:Write, R:Renderer>(builder: &mut R,
@@ -858,6 +862,27 @@ foo
                 </td>
               </tr>
             </table>
+         "#, r"--------------------
+One Two Three       
+--------------------
+", 20);
+     }
+     #[test]
+     fn test_unknown_element() {
+         test_html(br#"
+           <foo>
+           <table>
+             <tr>
+                <td>
+                   One
+                   <span><yyy>
+                       Two
+                   </yyy></span>
+                   Three
+                </td>
+              </tr>
+            </table>
+            </foo>
          "#, r"--------------------
 One Two Three       
 --------------------

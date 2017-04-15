@@ -315,7 +315,7 @@ pub trait TextDecorator {
 }
 
 /// A space on a horizontal row.
-#[derive(Copy,Clone)]
+#[derive(Copy,Clone,Debug)]
 pub enum BorderSegHoriz {
     /// Pure horizontal line
     Straight,
@@ -329,7 +329,7 @@ pub enum BorderSegHoriz {
 
 /// A dividing line between table rows which tracks intersections
 /// with vertical lines.
-#[derive(Clone)]
+#[derive(Clone,Debug)]
 pub struct BorderHoriz {
     /// The segments for the line.
     pub segments: Vec<BorderSegHoriz>,
@@ -395,6 +395,7 @@ impl BorderHoriz {
 }
 
 /// A line, which can either be text or a line.
+#[derive(Debug)]
 pub enum RenderLine<T:PartialEq+Eq+Clone+Debug+Default> {
     /// Some rendered text
     Text(TaggedLine<T>),
