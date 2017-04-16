@@ -97,12 +97,40 @@ fn get_text(handle: Handle) -> String {
     result
 }
 
+const MIN_WIDTH: usize = 5;
+
+/// Size information/estimate
+#[derive(Debug,Copy,Clone)]
+pub struct SizeEstimate {
+    size: usize,       // Rough overall size
+    min_width: usize,  // The narrowest possible
+}
+
+impl Default for SizeEstimate {
+    fn default() -> SizeEstimate {
+        SizeEstimate {
+            size: 0,
+            min_width: 0,
+        }
+    }
+}
+
+impl SizeEstimate {
+    /// Combine two estimates into one (add size and widest required)
+    pub fn add(self, other: SizeEstimate) -> SizeEstimate {
+        SizeEstimate {
+            size: self.size + other.size,
+            min_width: max(self.min_width, other.min_width),
+        }
+    }
+}
+
 #[derive(Debug)]
 /// Render tree table cell
 pub struct RenderTableCell {
     colspan: usize,
     content: Vec<RenderNode>,
-    size_estimate: Option<usize>,
+    size_estimate: Option<SizeEstimate>,
 }
 
 impl RenderTableCell {
@@ -113,12 +141,12 @@ impl RenderTableCell {
     }
 
     /// Calculate or return the estimate size of the cell
-    pub fn get_size_estimate(&mut self) -> usize {
+    pub fn get_size_estimate(&mut self) -> SizeEstimate {
         if self.size_estimate.is_none() {
             let size = self.content
                            .iter_mut()
                            .map(|node| node.get_size_estimate())
-                           .sum();
+                           .fold(Default::default(), SizeEstimate::add);
             self.size_estimate = Some(size);
         }
         self.size_estimate.unwrap()
@@ -160,7 +188,7 @@ impl RenderTableRow {
 pub struct RenderTable {
     rows: Vec<RenderTableRow>,
     num_columns: usize,
-    size_estimate: Option<usize>,
+    size_estimate: Option<SizeEstimate>,
 }
 
 impl RenderTable {
@@ -181,18 +209,27 @@ impl RenderTable {
     }
 
     fn calc_size_estimate(&mut self) {
-        let mut size = 0;
+        let mut sizes: Vec<SizeEstimate> = vec![Default::default(); self.num_columns];
+
         // For now, a simple estimate based on adding up sub-parts.
         for row in self.rows() {
+            let mut colno = 0usize;
             for cell in row.cells() {
-                size += cell.get_size_estimate();
+                let cellsize = cell.get_size_estimate();
+                for colnum in 0..cell.colspan {
+                    sizes[colno + colnum].size += cellsize.size / cell.colspan;
+                    sizes[colno + colnum].min_width = max(sizes[colno+colnum].min_width/cell.colspan, cellsize.min_width);
+                }
+                colno += cell.colspan;
             }
         }
-        self.size_estimate = Some(size);
+        let size = sizes.iter().map(|s| s.size).sum();  // Include borders?
+        let min_width = sizes.iter().map(|s| s.min_width).sum::<usize>() + self.num_columns-1;
+        self.size_estimate = Some(SizeEstimate { size: size, min_width: min_width });
     }
 
     /// Calculate and store (or return stored value) of estimated size
-    pub fn get_size_estimate(&mut self) -> usize {
+    pub fn get_size_estimate(&mut self) -> SizeEstimate {
         if self.size_estimate.is_none() {
             self.calc_size_estimate();
         }
@@ -236,7 +273,7 @@ pub enum RenderNodeInfo {
 /// Common fields from a node.
 #[derive(Debug)]
 pub struct RenderNode {
-    size_estimate: Option<usize>,
+    size_estimate: Option<SizeEstimate>,
     info: RenderNodeInfo,
 }
 
@@ -250,7 +287,7 @@ impl RenderNode {
     }
 
     /// Get a size estimate (~characters)
-    pub fn get_size_estimate(&mut self) -> usize {
+    pub fn get_size_estimate(&mut self) -> SizeEstimate {
         // If it's already calculated, then just return the answer.
         if let Some(s) = self.size_estimate {
             return s;
@@ -262,7 +299,7 @@ impl RenderNode {
         let estimate = match self.info {
             Text(ref t) |
             Img(ref t) |
-            Pre(ref t) => t.len(),
+            Pre(ref t) => SizeEstimate { size: t.len(), min_width: MIN_WIDTH },
 
             Container(ref mut v) |
             Link(_, ref mut v) |
@@ -273,9 +310,11 @@ impl RenderNode {
             BlockQuote(ref mut v) |
             Ul(ref mut v) |
             Ol(ref mut v) => {
-                v.iter_mut().map(RenderNode::get_size_estimate).sum()
+                v.iter_mut()
+                 .map(RenderNode::get_size_estimate)
+                 .fold(Default::default(), SizeEstimate::add)
             },
-            Break => 1,
+            Break => SizeEstimate { size: 1, min_width: 1 },
             Table(ref mut t) => {
                 t.get_size_estimate()
             },
@@ -610,13 +649,12 @@ fn render_table_tree<T:Write, R:Renderer>(builder: &mut R, table: &mut RenderTab
     let num_columns = table.num_columns;
 
     /* Heuristic: scale the column widths according to how much content there is. */
-    let min_width = 5;
     let mut col_sizes = vec![0usize; num_columns];
 
     for row in table.rows() {
         let mut colno = 0;
         for cell in row.cells() {
-            let cellsize = cell.get_size_estimate();
+            let cellsize = cell.get_size_estimate().size;
             // If the cell has a colspan>1, then spread its size between the
             // columns.
             let col_size = cellsize / cell.colspan;
@@ -633,7 +671,7 @@ fn render_table_tree<T:Write, R:Renderer>(builder: &mut R, table: &mut RenderTab
                                              if *sz == 0 {
                                                  0
                                              } else {
-                                                 max(sz * width / tot_size, min_width)
+                                                 max(sz * width / tot_size, MIN_WIDTH)
                                              }
                                           }).collect();
     /* The minimums may have put the total width too high */
