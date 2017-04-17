@@ -649,34 +649,39 @@ fn render_table_tree<T:Write, R:Renderer>(builder: &mut R, table: &mut RenderTab
     let num_columns = table.num_columns;
 
     /* Heuristic: scale the column widths according to how much content there is. */
-    let mut col_sizes = vec![0usize; num_columns];
+    let mut col_sizes: Vec<SizeEstimate> = vec![Default::default(); num_columns];
 
     for row in table.rows() {
         let mut colno = 0;
         for cell in row.cells() {
-            let cellsize = cell.get_size_estimate().size;
+            let mut estimate = cell.get_size_estimate();
             // If the cell has a colspan>1, then spread its size between the
             // columns.
-            let col_size = cellsize / cell.colspan;
+            estimate.size /= cell.colspan;
+            estimate.min_width /= cell.colspan;
             for i in 0..cell.colspan {
-                col_sizes[colno + i] += col_size;
+                col_sizes[colno + i] = (col_sizes[colno + i]).add(estimate);
             }
             colno += cell.colspan;
         }
     }
-    let tot_size: usize = col_sizes.iter().sum();
+    let tot_size: usize = col_sizes.iter().map(|est| est.size).sum();
     let width = builder.width();
     let mut col_widths:Vec<usize> = col_sizes.iter()
                                          .map(|sz| {
-                                             if *sz == 0 {
+                                             if sz.size == 0 {
                                                  0
                                              } else {
-                                                 max(sz * width / tot_size, MIN_WIDTH)
+                                                 max(sz.size * width / tot_size, sz.min_width)
                                              }
                                           }).collect();
     /* The minimums may have put the total width too high */
     while col_widths.iter().cloned().sum::<usize>() > width {
-        let (i, _) = col_widths.iter().cloned().enumerate().max_by_key(|k| k.1).unwrap();
+        let (i, _) = col_widths.iter()
+                               .cloned()
+                               .enumerate()
+                               .max_by_key(|&(colno, width)| width - col_sizes[colno].min_width)
+                               .unwrap();
         col_widths[i] -= 1;
     }
     if !col_widths.is_empty() {
@@ -697,7 +702,7 @@ fn render_table_tree<T:Write, R:Renderer>(builder: &mut R, table: &mut RenderTab
                                              .flat_map(|(colno, cell)| {
                                                   let col_width:usize = col_widths[colno..colno+cell.colspan]
                                                                      .iter().sum();
-                                                  if col_width > 0 {
+                                                  if col_width > 1 {
                                                       let mut cellbuilder = builder.new_sub_renderer(col_width-1);
                                                       cell.render(&mut cellbuilder, err_out);
                                                       Some(cellbuilder)
@@ -729,8 +734,8 @@ pub fn from_read<R>(mut input: R, width: usize) -> String where R: io::Read {
     let decorator = PlainDecorator::new();
     let mut builder = TextRenderer::new(width, decorator);
 
-    let render_tree = dom_to_render_tree(dom.document, &mut Discard{});
-    render_tree_to_string(&mut builder, &mut render_tree.unwrap(), &mut Discard{});
+    let mut render_tree = dom_to_render_tree(dom.document, &mut Discard{}).unwrap();
+    render_tree_to_string(&mut builder, &mut render_tree, &mut Discard{});
     builder.into_string()
 }
 
@@ -754,8 +759,8 @@ pub fn from_read_rich<R>(mut input: R, width: usize) -> Vec<TaggedLine<Vec<RichA
 
     let decorator = RichDecorator::new();
     let mut builder = TextRenderer::new(width, decorator);
-    let render_tree = dom_to_render_tree(dom.document, &mut Discard{});
-    render_tree_to_string(&mut builder, &mut render_tree.unwrap(), &mut Discard{});
+    let mut render_tree = dom_to_render_tree(dom.document, &mut Discard{}).unwrap();
+    render_tree_to_string(&mut builder, &mut render_tree, &mut Discard{});
     builder.into_lines().into_iter().map(RenderLine::into_tagged_line).collect()
 }
 
