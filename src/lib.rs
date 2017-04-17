@@ -680,7 +680,7 @@ fn render_table_tree<T:Write, R:Renderer>(builder: &mut R, table: &mut RenderTab
         let (i, _) = col_widths.iter()
                                .cloned()
                                .enumerate()
-                               .max_by_key(|&(colno, width)| width - col_sizes[colno].min_width)
+                               .max_by_key(|&(colno, width)| (width.saturating_sub(col_sizes[colno].min_width), width, usize::max_value() - colno ))
                                .unwrap();
         col_widths[i] -= 1;
     }
