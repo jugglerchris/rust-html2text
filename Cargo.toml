@@ -31,5 +31,7 @@ name = "html2text"
 path = "examples/html2text.rs"
 
 [dev-dependencies]
-termion = "1.0"
 argparse = "0.2"
+
+[target.'cfg(unix)'.dev-dependencies]
+termion = "1.0"
