@@ -365,13 +365,25 @@ impl BorderHoriz {
     }
 
     /// Merge a (possibly partial) border line below into this one.
-    pub fn merge(&mut self, other: &BorderHoriz, pos: usize) {
+    pub fn merge_from_below(&mut self, other: &BorderHoriz, pos: usize) {
         use self::BorderSegHoriz::*;
         for (idx, seg) in other.segments.iter().enumerate()
         {
             match *seg {
                 Straight => (),
                 JoinAbove | JoinBelow | JoinCross => { self.join_below(idx+pos); },
+            }
+        }
+    }
+
+    /// Merge a (possibly partial) border line above into this one.
+    pub fn merge_from_above(&mut self, other: &BorderHoriz, pos: usize) {
+        use self::BorderSegHoriz::*;
+        for (idx, seg) in other.segments.iter().enumerate()
+        {
+            match *seg {
+                Straight => (),
+                JoinAbove | JoinBelow | JoinCross => { self.join_above(idx+pos); },
             }
         }
     }
@@ -698,7 +710,7 @@ impl<D:TextDecorator> Renderer for TextRenderer<D> {
                 if starts_border {
                     if let &mut RenderLine::Line(ref mut prev_border) = self.lines.last_mut().expect("No previous line") {
                         if let RenderLine::Line(line) = sublines.remove(0) {
-                            prev_border.merge(&line, pos);
+                            prev_border.merge_from_below(&line, pos);
                         }
                     } else {
                         unreachable!();
@@ -721,7 +733,7 @@ impl<D:TextDecorator> Renderer for TextRenderer<D> {
                 };
                 if ends_border {
                     if let RenderLine::Line(line) = sublines.pop().unwrap() {
-                        next_border.merge(&line, pos);
+                        next_border.merge_from_above(&line, pos);
                     }
                 }
                 pos += w + 1;
