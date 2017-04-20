@@ -360,7 +360,7 @@ impl BorderHoriz {
         let prev = self.segments[x];
         self.segments[x] = match prev {
             Straight | JoinBelow => JoinBelow,
-            JoinAbove | JoinCross => JoinAbove,
+            JoinAbove | JoinCross => JoinCross,
         }
     }
 
