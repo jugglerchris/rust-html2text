@@ -381,10 +381,10 @@ impl BorderHoriz {
         self.segments
             .into_iter()
             .map(|seg| match seg {
-                BorderSegHoriz::Straight => '-',
-                BorderSegHoriz::JoinAbove => '+',
-                BorderSegHoriz::JoinBelow => '+',
-                BorderSegHoriz::JoinCross => '+',
+                BorderSegHoriz::Straight => '─',
+                BorderSegHoriz::JoinAbove => '┴',
+                BorderSegHoriz::JoinBelow => '┬',
+                BorderSegHoriz::JoinCross => '┼',
             })
             .collect::<String>()
     }
@@ -755,7 +755,7 @@ impl<D:TextDecorator> Renderer for TextRenderer<D> {
                     });
                 }
                 if cellno != last_cellno {
-                    line.push_char('|', &self.ann_stack);
+                    line.push_char('│', &self.ann_stack);
                 }
             }
             self.lines.push(RenderLine::Text(line));
