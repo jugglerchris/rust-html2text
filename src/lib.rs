@@ -1085,4 +1085,51 @@ r"Here's a [link][1].
          test_html("FooBa\u{0080}r".as_bytes(), "FooB\nar\n", 4);
      }
 
+     #[test]
+     fn test_nested_table_1() {
+        test_html(br##"
+       <table>
+         <tr>
+           <td>
+              <table><tr><td>1</td><td>2</td><td>3</td></tr></table>
+           </td>
+           <td>
+              <table><tr><td>4</td><td>5</td><td>6</td></tr></table>
+           </td>
+           <td>
+              <table><tr><td>7</td><td>8</td><td>9</td></tr></table>
+           </td>
+         </tr>
+         <tr>
+           <td>
+              <table><tr><td>1</td><td>2</td><td>3</td></tr></table>
+           </td>
+           <td>
+              <table><tr><td>4</td><td>5</td><td>6</td></tr></table>
+           </td>
+           <td>
+              <table><tr><td>7</td><td>8</td><td>9</td></tr></table>
+           </td>
+         </tr>
+         <tr>
+           <td>
+              <table><tr><td>1</td><td>2</td><td>3</td></tr></table>
+           </td>
+           <td>
+              <table><tr><td>4</td><td>5</td><td>6</td></tr></table>
+           </td>
+           <td>
+              <table><tr><td>7</td><td>8</td><td>9</td></tr></table>
+           </td>
+         </tr>
+       </table>
+"##, r#"─┬─┬──┬─┬─┬──┬─┬─┬───
+1│2│3 │4│5│6 │7│8│9
+─┼─┼──┼─┼─┼──┼─┼─┼───
+1│2│3 │4│5│6 │7│8│9
+─┼─┼──┼─┼─┼──┼─┼─┼───
+1│2│3 │4│5│6 │7│8│9
+─┴─┴──┴─┴─┴──┴─┴─┴───
+"#, 21);
+     }
 }
