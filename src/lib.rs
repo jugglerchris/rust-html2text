@@ -298,7 +298,13 @@ impl RenderNode {
         let estimate = match self.info {
             Text(ref t) |
             Img(ref t) |
-            Pre(ref t) => SizeEstimate { size: t.len(), min_width: MIN_WIDTH },
+            Pre(ref t) => {
+                let len = t.trim().len();
+                SizeEstimate {
+                    size: len,
+                    min_width: if len > 0 { MIN_WIDTH } else { 0 },
+                }
+            },
 
             Container(ref mut v) |
             Link(_, ref mut v) |
