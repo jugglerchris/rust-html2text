@@ -1,4 +1,5 @@
 [![Build Status](https://travis-ci.org/jugglerchris/rust-html2text.svg?branch=master)](https://travis-ci.org/jugglerchris/rust-html2text)
+[![Build status](https://ci.appveyor.com/api/projects/status/bud4fnrvjbvuw26m/branch/master?svg=true)](https://ci.appveyor.com/project/jugglerchris/rust-html2text/branch/master)
 
 # html2text
 
