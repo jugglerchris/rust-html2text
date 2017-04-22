@@ -1,6 +1,6 @@
 [package]
 name = "html2text"
-version = "0.1.4"
+version = "0.1.5"
 authors = ["Chris Emerson <github@mail.nosreme.org>"]
 description = "Render HTML as plain text."
 repository = "https://github.com/jugglerchris/rust-html2text/"
@@ -9,6 +9,10 @@ documentation = "https://docs.rs/html2text/"
 
 keywords = ["html", "text"]
 license = "MIT"
+
+[badges]
+travis-ci = { repository = "jugglerchris/rust-html2text" }
+appveyor = { repository = "jugglerchris/rust-html2text", service = "github" }
 
 [dependencies]
 clippy = { version = "0.0.104", optional=true }
