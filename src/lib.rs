@@ -208,6 +208,10 @@ impl RenderTable {
     }
 
     fn calc_size_estimate(&mut self) {
+        if self.num_columns == 0 {
+            self.size_estimate = Some(SizeEstimate { size: 0, min_width: 0 });
+            return;
+        }
         let mut sizes: Vec<SizeEstimate> = vec![Default::default(); self.num_columns];
 
         // For now, a simple estimate based on adding up sub-parts.
