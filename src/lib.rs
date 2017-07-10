@@ -257,6 +257,8 @@ pub enum RenderNodeInfo {
     Img(String),
     /// A block element with children
     Block(Vec<RenderNode>),
+    /// A header (h1, h2, ...) with children
+    Header(usize, Vec<RenderNode>),
     /// A Div element with children
     Div(Vec<RenderNode>),
     /// A preformatted region.
@@ -315,6 +317,7 @@ impl RenderNode {
             Em(ref mut v) |
             Code(ref mut v) |
             Block(ref mut v) |
+            Header(_, ref mut v) |
             Div(ref mut v) |
             BlockQuote(ref mut v) |
             Ul(ref mut v) |
@@ -521,7 +524,10 @@ pub fn dom_to_render_tree<T:Write>(handle: Handle, err_out: &mut T) -> Option<Re
                 qualname!(html, "h1") |
                 qualname!(html, "h2") |
                 qualname!(html, "h3") |
-                qualname!(html, "h4") |
+                qualname!(html, "h4") => {
+                    let level: usize = name.local[1..].parse().unwrap();
+                    Some(RenderNode::new(Header(level, children_to_render_nodes(handle.clone(), err_out))))
+                },
                 qualname!(html, "p") => {
                     Some(RenderNode::new(Block(children_to_render_nodes(handle.clone(), err_out))))
                 },
@@ -600,6 +606,16 @@ fn render_tree_to_string<T:Write, R:Renderer>(builder: &mut R, tree: &mut Render
         Block(ref mut children) => {
             builder.start_block();
             render_tree_children_to_string(builder, children, err_out);
+            builder.end_block();
+        },
+        Header(level, ref mut children) => {
+            let mut sub_builder = builder.new_sub_renderer(builder.width()-(1+level));
+            render_tree_children_to_string(&mut sub_builder, children, err_out);
+
+            let qs: String = "#".repeat(level) + " ";
+
+            builder.start_block();
+            builder.append_subrender(sub_builder, repeat(&qs[..]));
             builder.end_block();
         },
         Div(ref mut children) => {
@@ -1140,6 +1156,28 @@ r"Here's a [link][1].
 ─┼─┼──┼─┼─┼──┼─┼─┼───
 1│2│3 │4│5│6 │7│8│9  
 ─┴─┴──┴─┴─┴──┴─┴─┴───
+"#, 21);
+     }
+
+     #[test]
+     fn test_h1() {
+        test_html(br##"
+       <h1>Hi</h1>
+       <p>foo</p>
+"##, r#"# Hi
+
+foo
+"#, 21);
+     }
+
+     #[test]
+     fn test_h3() {
+        test_html(br##"
+       <h3>Hi</h3>
+       <p>foo</p>
+"##, r#"### Hi
+
+foo
 "#, 21);
      }
 }
