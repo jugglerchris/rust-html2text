@@ -388,6 +388,19 @@ impl BorderHoriz {
         }
     }
 
+    /// Return a string of spaces and vertical lines which would match
+    /// just above this line.
+    pub fn to_vertical_lines_above(&self) -> String {
+        use self::BorderSegHoriz::*;
+        self.segments
+            .iter()
+            .map(|seg| match *seg {
+                          Straight | JoinBelow => ' ',
+                          JoinAbove | JoinCross => '│',
+                      })
+            .collect()
+    }
+
     /// Turn into a string with drawing characters
     pub fn into_string(self) -> String {
         self.segments
@@ -693,6 +706,14 @@ impl<D:TextDecorator> Renderer for TextRenderer<D> {
             }
         }
 
+        // If we're collapsing bottom borders, then the bottom border of a
+        // nested table is being merged into the bottom border of the
+        // containing cell.  If that cell happens not to be the tallest
+        // cell in the row, then we need to extend any vertical lines
+        // to the bottom.  We'll remember what to do when we update the
+        // containing border.
+        let mut column_padding = vec![None; line_sets.len()];
+
         // If we're collapsing borders, do so.
         if collapse {
             /* Collapse any top border */
@@ -721,7 +742,7 @@ impl<D:TextDecorator> Renderer for TextRenderer<D> {
 
             /* Collapse any bottom border */
             let mut pos = 0;
-            for &mut (w, ref mut sublines) in &mut line_sets {
+            for (col_no, &mut (w, ref mut sublines)) in line_sets.iter_mut().enumerate() {
                 let ends_border = if sublines.len() > 0 {
                     if let Some(&RenderLine::Line(_)) = sublines.last() {
                         true
@@ -734,6 +755,7 @@ impl<D:TextDecorator> Renderer for TextRenderer<D> {
                 if ends_border {
                     if let RenderLine::Line(line) = sublines.pop().unwrap() {
                         next_border.merge_from_above(&line, pos);
+                        column_padding[col_no] = Some(line.to_vertical_lines_above())
                     }
                 }
                 pos += w + 1;
@@ -762,7 +784,9 @@ impl<D:TextDecorator> Renderer for TextRenderer<D> {
                     };
                 } else {
                     line.push(TaggedString {
-                        s: spaces[0..width].to_string(),
+                        s: column_padding[cellno].as_ref().map(|s| s.clone())
+                                                 .unwrap_or_else(||spaces[0..width].to_string()),
+
                         tag: self.ann_stack.clone(),
                     });
                 }

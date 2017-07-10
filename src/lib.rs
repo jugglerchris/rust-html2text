@@ -1160,7 +1160,37 @@ r"Here's a [link][1].
      }
 
      #[test]
-     fn test_h1() {
+     fn test_nested_table_2() {
+        test_html(br##"
+       <table>
+         <tr>
+           <td>
+              <table>
+                 <tr><td>1</td><td>a</td></tr>
+                 <tr><td>2</td><td>b</td></tr>
+              </table>
+           </td>
+           <td><pre>one
+two
+three
+four
+five
+</pre>
+           </td>
+         </tr>
+       </table>
+"##, r#"─┬───┬─────
+1│a  │one  
+─┼───│two  
+2│b  │three
+ │   │four 
+ │   │five 
+─┴───┴─────
+"#, 11);
+    }
+
+    #[test]
+    fn test_h1() {
         test_html(br##"
        <h1>Hi</h1>
        <p>foo</p>
@@ -1168,10 +1198,10 @@ r"Here's a [link][1].
 
 foo
 "#, 21);
-     }
+    }
 
-     #[test]
-     fn test_h3() {
+    #[test]
+    fn test_h3() {
         test_html(br##"
        <h3>Hi</h3>
        <p>foo</p>
@@ -1179,5 +1209,5 @@ foo
 
 foo
 "#, 21);
-     }
+    }
 }
