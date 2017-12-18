@@ -303,6 +303,13 @@ pub trait TextDecorator {
     /// Return a suffix for after an code.
     fn decorate_code_end(&mut self) -> String;
 
+    /// Return an annotation for the initial part of a preformatted line
+    fn decorate_preformat_first(&mut self) -> Self::Annotation;
+
+    /// Return an annotation for a continuation line when a preformatted
+    /// line doesn't fit.
+    fn decorate_preformat_cont(&mut self) -> Self::Annotation;
+
     /// Return an annotation and rendering prefix for a link.
     fn decorate_image(&mut self, title: &str) -> (String, Self::Annotation);
 
@@ -602,8 +609,71 @@ impl<D:TextDecorator> Renderer for TextRenderer<D> {
 
     fn add_preformatted_block(&mut self, text: &str) {
         html_trace!("add_block({}, {})", self.width, text);
+
+        // Get the tags ready for normal and continuation lines.
+        let mut tag_first = self.ann_stack.clone();
+        let mut tag_cont = self.ann_stack.clone();
+        tag_first.push(self.decorator.as_mut().unwrap().decorate_preformat_first());
+        tag_cont.push(self.decorator.as_mut().unwrap().decorate_preformat_cont());
+        // Drop mutability
+        let tag_first = tag_first;
+        let tag_cont = tag_cont;
+
+        let width = self.width;
         self.start_block();
-        self.add_subblock(text);
+
+        /* We do actually want to wrap, but just a hard wrapping
+         * at the end, and add a "continuation line" tag so that the
+         * UI can show them differently.
+         */
+        for formatted_line in text.lines() {
+            let mut acc = String::new();
+            let mut cur_width = 0;
+            let mut first = true;
+            for c in formatted_line.chars() {
+                if let Some(char_width) = UnicodeWidthChar::width(c) {
+                    if cur_width + char_width > width {
+                        let mut line = TaggedLine::new();
+                        /* Push what we have */
+                        line.push(TaggedString {
+                            s: acc,
+                            tag: if first { tag_first.clone() } else { tag_cont.clone() },
+                        });
+                        self.lines.push(RenderLine::Text(line));
+                        acc = String::new();
+                        cur_width = 0;
+                        first = false;
+                    }
+                    acc.push(c);
+                    cur_width += char_width;
+                } else {
+                    match c {
+                        '\t' => {
+                            let tab_stop = 8;
+                            let wanted_pos = cur_width + tab_stop - (cur_width % tab_stop);
+                            let spaces = if wanted_pos > width {
+                                    width - cur_width
+                                } else {
+                                    wanted_pos - cur_width
+                                };
+                            acc.extend((0..spaces).map(|_| ' '));
+                            cur_width += spaces;
+                        },
+                        _ => (),
+                    }
+                }
+            }
+            if acc.len() > 0 {
+                let mut line = TaggedLine::new();
+                /* Push what we have */
+                line.push(TaggedString {
+                    s: acc,
+                    tag: if first { tag_first.clone() } else { tag_cont.clone() },
+                });
+                self.lines.push(RenderLine::Text(line));
+            }
+        }
+
         html_trace_quiet!("add_block: at_block_end <- true");
         self.at_block_end = true;
     }
@@ -920,6 +990,9 @@ impl TextDecorator for PlainDecorator {
         "`".to_string()
     }
 
+    fn decorate_preformat_first(&mut self) -> Self::Annotation { () }
+    fn decorate_preformat_cont(&mut self) -> Self::Annotation { () }
+
     fn decorate_image(&mut self, title: &str) -> (String, Self::Annotation)
     {
         (format!("[{}]", title), ())
@@ -955,6 +1028,8 @@ pub enum RichAnnotation {
     Emphasis,
     /// Code
     Code,
+    /// Preformatted; true if a continuation line for an overly-long line.
+    Preformat(bool),
 }
 
 impl Default for RichAnnotation {
@@ -1003,6 +1078,16 @@ impl TextDecorator for RichDecorator {
     fn decorate_code_end(&mut self) -> String
     {
         "`".to_string()
+    }
+
+    fn decorate_preformat_first(&mut self) -> Self::Annotation
+    {
+        RichAnnotation::Preformat(false)
+    }
+
+    fn decorate_preformat_cont(&mut self) -> Self::Annotation
+    {
+        RichAnnotation::Preformat(true)
     }
 
     fn decorate_image(&mut self, title: &str) -> (String, Self::Annotation)

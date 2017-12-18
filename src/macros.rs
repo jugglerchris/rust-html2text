@@ -1,3 +1,6 @@
+#[cfg(feature = "html_trace")]
+extern crate backtrace;
+
 /* This is to work around a false positive for the clippy warning
  * `match_on_same_arms`.
  * See https://github.com/Manishearth/rust-clippy/issues/1390

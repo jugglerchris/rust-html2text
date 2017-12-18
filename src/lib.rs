@@ -55,7 +55,6 @@
 extern crate html5ever_atoms;
 extern crate html5ever;
 extern crate unicode_width;
-extern crate backtrace;
 
 #[macro_use]
 mod macros;
@@ -1209,5 +1208,41 @@ foo
 
 foo
 "#, 21);
+    }
+
+    // General test that spacing is preserved
+    #[test]
+    fn test_pre2() {
+        test_html(br##"<pre>Hello  sp
+  world</pre>"##, r#"Hello  sp
+  world
+"#, 21);
+    }
+
+    // Check that spans work correctly inside <pre>
+    #[test]
+    fn test_pre_span() {
+        test_html(br##"
+<pre>Hello <span>$</span>sp
+<span>Hi</span> <span>$</span><span>foo</span>
+<span>Hi</span> <span>foo</span><span>, </span><span>bar</span>
+</pre>"##, r#"Hello $sp
+Hi $foo
+Hi foo, bar
+"#, 21);
+    }
+
+    // Check tab behaviour
+    #[test]
+    fn test_pre_tab() {
+        test_html(b"<pre>\tworld</pre>",         "        world\n", 40);
+        test_html(b"<pre>H\tworld</pre>",        "H       world\n", 40);
+        test_html(b"<pre>He\tworld</pre>",       "He      world\n", 40);
+        test_html(b"<pre>Hel\tworld</pre>",      "Hel     world\n", 40);
+        test_html(b"<pre>Hell\tworld</pre>",     "Hell    world\n", 40);
+        test_html(b"<pre>Hello\tworld</pre>",    "Hello   world\n", 40);
+        test_html(b"<pre>Helloo\tworld</pre>",   "Helloo  world\n", 40);
+        test_html(b"<pre>Hellooo\tworld</pre>",  "Hellooo world\n", 40);
+        test_html(b"<pre>Helloooo\tworld</pre>", "Helloooo        world\n", 40);
     }
 }
