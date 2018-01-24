@@ -553,7 +553,7 @@ impl<D:TextDecorator> TextRenderer<D> {
                         '\n' => ' ',
                         x => x,
                     };
-                    let c_width = UnicodeWidthChar::width(c).unwrap();
+                    let c_width = UnicodeWidthChar::width(c).unwrap_or(0);
                     if pos + c_width > self.width {
                         let mut tmp_s = String::new();
                         mem::swap(&mut output, &mut tmp_s);
