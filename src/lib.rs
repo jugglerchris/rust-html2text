@@ -821,6 +821,33 @@ mod tests {
 "#, 12);
      }
 
+    #[test]
+    fn test_thead() {
+        test_html(br##"
+       <table>
+         <thead>
+           <tr>
+             <th>Col1</th>
+             <th>Col2</th>
+             <th>Col3</th>
+           </tr>
+         </thead>
+         <tbody>
+           <tr>
+             <td>1</td>
+             <td>2</td>
+             <td>3</td>
+           </tr>
+         </tbody>
+       </table>
+"##, r#"───┬───┬────
+Col1|Col2│Col3
+────┴────┴─────
+1   │2   │3    
+────┴────┴─────
+"#, 15);
+     }
+
      #[test]
      fn test_colspan() {
         test_html(br##"
