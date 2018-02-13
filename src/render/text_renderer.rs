@@ -542,7 +542,7 @@ impl<D:TextDecorator> TextRenderer<D> {
         let mut trailer = self.decorator.take().unwrap().finalise();
         if !trailer.is_empty() {
             self.start_block();
-            for line in trailer.drain((0..)) {
+            for line in trailer.drain(0..) {
                 /* Hard wrap */
                 let mut output = String::new();
                 let mut pos = 0;
