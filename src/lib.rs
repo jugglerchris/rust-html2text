@@ -372,11 +372,14 @@ fn list_children_to_render_nodes<T:Write>(handle: Handle, err_out: &mut T) -> Ve
 fn table_to_render_tree<T:Write>(handle: Handle, err_out: &mut T) -> Option<RenderNode> {
     let node = handle.borrow();
 
+    let mut rows = Vec::new();
+
     for child in &node.children {
         match child.borrow().node {
             Element(ref name, _, _) => {
                 match *name {
-                    qualname!(html, "tbody") => return tbody_to_render_tree(child.clone(), err_out),
+                    qualname!(html, "thead") |
+                    qualname!(html, "tbody") => tbody_to_render_tree(child.clone(), &mut rows, err_out),
                     _ => { writeln!(err_out, "  [[table child: {:?}]]", name).unwrap(); },
                 }
             },
@@ -384,14 +387,18 @@ fn table_to_render_tree<T:Write>(handle: Handle, err_out: &mut T) -> Option<Rend
             _ => { html_trace!("Unhandled in table: {:?}\n", child); },
         }
     }
-    None
+    if rows.len() > 0 {
+        Some(RenderNode::new(RenderNodeInfo::Table(RenderTable::new(rows))))
+    } else {
+        None
+    }
 }
 
-/// Convert the tbody element to a RenderNode.
-fn tbody_to_render_tree<T:Write>(handle: Handle, err_out: &mut T) -> Option<RenderNode> {
+/// Add rows from a thead or tbody.
+fn tbody_to_render_tree<T:Write>(handle: Handle,
+                                 rows: &mut Vec<RenderTableRow>,
+                                 err_out: &mut T) {
     let node = handle.borrow();
-
-    let mut rows = Vec::new();
 
     for child in &node.children {
         match child.borrow().node {
@@ -406,11 +413,6 @@ fn tbody_to_render_tree<T:Write>(handle: Handle, err_out: &mut T) -> Option<Rend
             Comment(_) => {},
             _ => { html_trace!("Unhandled in tbody: {:?}\n", child); },
         }
-    }
-    if rows.len() > 0 {
-        Some(RenderNode::new(RenderNodeInfo::Table(RenderTable::new(rows))))
-    } else {
-        None
     }
 }
 
@@ -840,9 +842,9 @@ mod tests {
            </tr>
          </tbody>
        </table>
-"##, r#"───┬───┬────
-Col1|Col2│Col3
-────┴────┴─────
+"##, r#"────┬────┬─────
+Col1│Col2│Col3 
+────┼────┼─────
 1   │2   │3    
 ────┴────┴─────
 "#, 15);
