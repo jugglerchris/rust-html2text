@@ -31,6 +31,9 @@ mod top {
                 RichAnnotation::Emphasis => {
                     style.push_str(&format!("{}", termion::color::Fg(termion::color::LightGreen)));
                 },
+                RichAnnotation::Strong => {
+                    style.push_str(&format!("{}", termion::color::Fg(termion::color::LightGreen)));
+                },
                 RichAnnotation::Code => {
                     style.push_str(&format!("{}", termion::color::Fg(termion::color::LightYellow)));
                 },

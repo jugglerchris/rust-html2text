@@ -297,6 +297,12 @@ pub trait TextDecorator {
     /// Return a suffix for after an em.
     fn decorate_em_end(&mut self) -> String;
 
+    /// Return an annotation and rendering prefix for strongm
+    fn decorate_strong_start(&mut self) -> (String, Self::Annotation);
+
+    /// Return a suffix for after an strong.
+    fn decorate_strong_end(&mut self) -> String;
+
     /// Return an annotation and rendering prefix for code
     fn decorate_code_start(&mut self) -> (String, Self::Annotation);
 
@@ -915,6 +921,20 @@ impl<D:TextDecorator> Renderer for TextRenderer<D> {
             self.ann_stack.pop();
         }
     }
+    fn start_strong(&mut self)
+    {
+        if let Some((s, annotation)) = self.decorator.as_mut().map(|d| d.decorate_strong_start()) {
+            self.ann_stack.push(annotation);
+            self.add_inline_text(&s);
+        }
+    }
+    fn end_strong(&mut self)
+    {
+        if let Some(s) = self.decorator.as_mut().map(|d| d.decorate_strong_end()) {
+            self.add_inline_text(&s);
+            self.ann_stack.pop();
+        }
+    }
     fn start_code(&mut self)
     {
         if let Some((s, annotation)) = self.decorator.as_mut().map(|d| d.decorate_code_start()) {
@@ -980,6 +1000,16 @@ impl TextDecorator for PlainDecorator {
         "*".to_string()
     }
 
+    fn decorate_strong_start(&mut self) -> (String, Self::Annotation)
+    {
+        ("**".to_string(), ())
+    }
+
+    fn decorate_strong_end(&mut self) -> String
+    {
+        "**".to_string()
+    }
+
     fn decorate_code_start(&mut self) -> (String, Self::Annotation)
     {
         ("`".to_string(), ())
@@ -1026,6 +1056,8 @@ pub enum RichAnnotation {
     Image,
     /// Emphasised text, which might be rendered in bold or another colour.
     Emphasis,
+    /// Strong text, which might be rendered in bold or another colour.
+    Strong,
     /// Code
     Code,
     /// Preformatted; true if a continuation line for an overly-long line.
@@ -1068,6 +1100,16 @@ impl TextDecorator for RichDecorator {
     fn decorate_em_end(&mut self) -> String
     {
         "".to_string()
+    }
+
+    fn decorate_strong_start(&mut self) -> (String, Self::Annotation)
+    {
+        ("*".to_string(), RichAnnotation::Strong)
+    }
+
+    fn decorate_strong_end(&mut self) -> String
+    {
+        "*".to_string()
     }
 
     fn decorate_code_start(&mut self) -> (String, Self::Annotation)

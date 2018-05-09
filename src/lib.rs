@@ -250,6 +250,8 @@ pub enum RenderNodeInfo {
     Link(String, Vec<RenderNode>),
     /// An emphasised region
     Em(Vec<RenderNode>),
+    /// A strong region
+    Strong(Vec<RenderNode>),
     /// A code region
     Code(Vec<RenderNode>),
     /// An image (title)
@@ -314,6 +316,7 @@ impl RenderNode {
             Container(ref mut v) |
             Link(_, ref mut v) |
             Em(ref mut v) |
+            Strong(ref mut v) |
             Code(ref mut v) |
             Block(ref mut v) |
             Header(_, ref mut v) |
@@ -505,6 +508,9 @@ pub fn dom_to_render_tree<T:Write>(handle: Handle, err_out: &mut T) -> Option<Re
                 qualname!(html, "em") => {
                     Some(RenderNode::new(Em(children_to_render_nodes(handle.clone(), err_out))))
                 },
+                qualname!(html, "strong") => {
+                    Some(RenderNode::new(Strong(children_to_render_nodes(handle.clone(), err_out))))
+                },
                 qualname!(html, "code") => {
                     Some(RenderNode::new(Code(children_to_render_nodes(handle.clone(), err_out))))
                 },
@@ -595,6 +601,11 @@ fn render_tree_to_string<T:Write, R:Renderer>(builder: &mut R, tree: &mut Render
             builder.start_emphasis();
             render_tree_children_to_string(builder, children, err_out);
             builder.end_emphasis();
+        },
+        Strong(ref mut children) => {
+            builder.start_strong();
+            render_tree_children_to_string(builder, children, err_out);
+            builder.end_strong();
         },
         Code(ref mut children) => {
             builder.start_code();
@@ -1273,5 +1284,13 @@ Hi foo, bar
         test_html(b"<pre>Helloo\tworld</pre>",   "Helloo  world\n", 40);
         test_html(b"<pre>Hellooo\tworld</pre>",  "Hellooo world\n", 40);
         test_html(b"<pre>Helloooo\tworld</pre>", "Helloooo        world\n", 40);
+    }
+
+    #[test]
+    fn test_em_strong() {
+        test_html(br##"
+       <p>Hi <em>em</em> <strong>strong</strong></p>
+"##, r#"Hi *em* **strong**
+"#, 21);
     }
 }
