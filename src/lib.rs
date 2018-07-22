@@ -1293,4 +1293,17 @@ Hi foo, bar
 "##, r#"Hi *em* **strong**
 "#, 21);
     }
+
+    #[test]
+    #[ignore]  // Not yet fixed!
+    fn test_nbsp_indent() {
+        test_html(br##"
+       <div>Top</div>
+       <div>&nbsp;Indented</div>
+       <div>&nbsp;&nbsp;Indented again</div>
+"##, r#"Top
+ Indented
+  Indented again
+"#, 21);
+    }
 }
