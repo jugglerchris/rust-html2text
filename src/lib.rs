@@ -1306,4 +1306,15 @@ Hi foo, bar
   Indented again
 "#, 21);
     }
+
+    #[test]
+    #[ignore]  // Not yet fixed!
+    fn test_deeply_nested() {
+        use ::std::iter::repeat;
+        let html = repeat("<foo>")
+                         .take(1000)
+                         .collect::<Vec<_>>()
+                         .concat();
+        test_html(html.as_bytes(), "", 10);
+    }
 }
