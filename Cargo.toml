@@ -15,12 +15,11 @@ travis-ci = { repository = "jugglerchris/rust-html2text" }
 appveyor = { repository = "jugglerchris/rust-html2text", service = "github" }
 
 [dependencies]
-clippy = { version = "0.0.104", optional=true }
-html5ever = "0.9"
-html5ever-atoms = "0.1"
-string_cache = "0.2.0"
-unicode-width = "0.1"
-backtrace = "0.2"
+clippy = { version = "0.0.212", optional=true }
+html5ever = "0.15"
+html5ever-atoms = "0.3.0"
+unicode-width = "0.1.5"
+backtrace = "0.3"
 
 [features]
 html_trace = []
@@ -35,7 +34,7 @@ name = "html2text"
 path = "examples/html2text.rs"
 
 [dev-dependencies]
-argparse = "0.2"
+argparse = "0.2.1"
 
 [target.'cfg(unix)'.dev-dependencies]
-termion = "1.0"
+termion = "1.5"
