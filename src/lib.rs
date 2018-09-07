@@ -354,7 +354,7 @@ fn list_children_to_render_nodes<T:Write>(handle: Handle, err_out: &mut T) -> Ve
 
     for child in handle.children.borrow().iter() {
         match child.data {
-            Element { name: ref name, .. } => {
+            Element { ref name, .. } => {
                 match name.expanded() {
                     expanded_name!(html "li") => {
                         let li_children = children_to_render_nodes(child.clone(), err_out);
@@ -376,7 +376,7 @@ fn table_to_render_tree<T:Write>(handle: Handle, err_out: &mut T) -> Option<Rend
 
     for child in handle.children.borrow().iter() {
         match child.data {
-            Element { name: ref name, .. } => {
+            Element { ref name, .. } => {
                 match name.expanded() {
                     expanded_name!(html "thead") |
                     expanded_name!(html "tbody") => tbody_to_render_tree(child.clone(), &mut rows, err_out),
@@ -400,7 +400,7 @@ fn tbody_to_render_tree<T:Write>(handle: Handle,
                                  err_out: &mut T) {
     for child in handle.children.borrow().iter() {
         match child.data {
-            Element { name: ref name, .. } => {
+            Element { ref name, .. } => {
                 match name.expanded() {
                     expanded_name!(html "tr") => {
                         rows.push(tr_to_render_tree(child.clone(), err_out));
@@ -420,7 +420,7 @@ fn tr_to_render_tree<T:Write>(handle: Handle, err_out: &mut T) -> RenderTableRow
 
     for child in handle.children.borrow().iter() {
         match child.data {
-            Element { name: ref name, .. } => {
+            Element { ref name, .. } => {
                 match name.expanded() {
                     expanded_name!(html "th") |
                     expanded_name!(html "td") => {
@@ -443,7 +443,7 @@ fn tr_to_render_tree<T:Write>(handle: Handle, err_out: &mut T) -> RenderTableRow
 fn td_to_render_tree<T: Write>(handle: Handle, err_out: &mut T) -> RenderTableCell {
     let children = children_to_render_nodes(handle.clone(), err_out);
     let mut colspan = 1;
-    if let Element { attrs: ref attrs, .. } = handle.data {
+    if let Element { ref attrs, .. } = handle.data {
         for attr in attrs.borrow().iter() {
             if &attr.name.local == "colspan" {
                 let v:&str = &*attr.value;
@@ -465,7 +465,7 @@ pub fn dom_to_render_tree<T:Write>(handle: Handle, err_out: &mut T) -> Option<Re
     let result = match handle.data {
         Document => Some(RenderNode::new(Container(children_to_render_nodes(handle.clone(), err_out)))),
         Comment { .. } => None,
-        Element { name: ref name, attrs: ref attrs, .. } => {
+        Element { ref name, ref attrs, .. } => {
             match name.expanded() {
                 expanded_name!(html "html") |
                 expanded_name!(html "span") |
