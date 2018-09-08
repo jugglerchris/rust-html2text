@@ -51,9 +51,8 @@
 #![cfg_attr(feature="clippy", plugin(clippy))]
 #![deny(missing_docs)]
 
-#[macro_use]
 extern crate html5ever_atoms;
-extern crate html5ever;
+#[macro_use] extern crate html5ever;
 extern crate unicode_width;
 
 #[macro_use]
@@ -72,7 +71,7 @@ use std::iter::{once,repeat};
 use html5ever::{parse_document};
 use html5ever::driver::ParseOpts;
 use html5ever::tree_builder::TreeBuilderOpts;
-use html5ever::rcdom::{self,RcDom,Handle,Text,Element,Document,Comment};
+use html5ever::rcdom::{self,RcDom,Handle,NodeData::{Text,Element,Document,Comment}};
 use html5ever::tendril::TendrilSink;
 
 /// A dummy writer which does nothing
@@ -83,12 +82,12 @@ impl Write for Discard {
 }
 
 fn get_text(handle: Handle) -> String {
-    let node = handle.borrow();
+    let node = &*handle;
     let mut result = String::new();
-    if let Text(ref tstr) = node.node {
-        result.push_str(tstr);
+    if let Text { contents: ref tstr } = node.data {
+        result.push_str(&tstr.borrow());
     } else {
-        for child in &node.children {
+        for child in &*node.children.borrow() {
             result.push_str(&get_text(child.clone()));
         }
     }
@@ -341,30 +340,30 @@ impl RenderNode {
 /// Make a Vec of RenderNodes from the children of a node.
 fn children_to_render_nodes<T:Write>(handle: Handle, err_out: &mut T) -> Vec<RenderNode> {
     /* process children, but don't add anything */
-    let children = handle.borrow().children
-                                  .iter()
-                                  .flat_map(|ch| dom_to_render_tree(ch.clone(), err_out))
-                                  .collect();
+    let children = handle.children
+                         .borrow()
+                         .iter()
+                         .flat_map(|ch| dom_to_render_tree(ch.clone(), err_out))
+                         .collect();
     children
 }
 
 /// Make a Vec of RenderNodes from the <li>children of a node.
 fn list_children_to_render_nodes<T:Write>(handle: Handle, err_out: &mut T) -> Vec<RenderNode> {
-    let node = handle.borrow();
     let mut children = Vec::new();
 
-    for child in &node.children {
-        match child.borrow().node {
-            Element(ref name, _, _) => {
-                match *name {
-                    qualname!(html, "li") => {
+    for child in handle.children.borrow().iter() {
+        match child.data {
+            Element { ref name, .. } => {
+                match name.expanded() {
+                    expanded_name!(html "li") => {
                         let li_children = children_to_render_nodes(child.clone(), err_out);
                         children.push(RenderNode::new(RenderNodeInfo::Block(li_children)));
                     },
                     _ => {},
                 }
             },
-            Comment(_) => {},
+            Comment { .. } => {},
             _ => { html_trace!("Unhandled in list: {:?}\n", child); },
         }
     }
@@ -373,20 +372,18 @@ fn list_children_to_render_nodes<T:Write>(handle: Handle, err_out: &mut T) -> Ve
 
 /// Convert a table into a RenderNode
 fn table_to_render_tree<T:Write>(handle: Handle, err_out: &mut T) -> Option<RenderNode> {
-    let node = handle.borrow();
-
     let mut rows = Vec::new();
 
-    for child in &node.children {
-        match child.borrow().node {
-            Element(ref name, _, _) => {
-                match *name {
-                    qualname!(html, "thead") |
-                    qualname!(html, "tbody") => tbody_to_render_tree(child.clone(), &mut rows, err_out),
+    for child in handle.children.borrow().iter() {
+        match child.data {
+            Element { ref name, .. } => {
+                match name.expanded() {
+                    expanded_name!(html "thead") |
+                    expanded_name!(html "tbody") => tbody_to_render_tree(child.clone(), &mut rows, err_out),
                     _ => { writeln!(err_out, "  [[table child: {:?}]]", name).unwrap(); },
                 }
             },
-            Comment(_) => {},
+            Comment { .. } => {},
             _ => { html_trace!("Unhandled in table: {:?}\n", child); },
         }
     }
@@ -401,19 +398,17 @@ fn table_to_render_tree<T:Write>(handle: Handle, err_out: &mut T) -> Option<Rend
 fn tbody_to_render_tree<T:Write>(handle: Handle,
                                  rows: &mut Vec<RenderTableRow>,
                                  err_out: &mut T) {
-    let node = handle.borrow();
-
-    for child in &node.children {
-        match child.borrow().node {
-            Element(ref name, _, _) => {
-                match *name {
-                    qualname!(html, "tr") => {
+    for child in handle.children.borrow().iter() {
+        match child.data {
+            Element { ref name, .. } => {
+                match name.expanded() {
+                    expanded_name!(html "tr") => {
                         rows.push(tr_to_render_tree(child.clone(), err_out));
                     },
                     _ => { html_trace!("  [[tbody child: {:?}]]", name); },
                 }
             },
-            Comment(_) => {},
+            Comment { .. } => {},
             _ => { html_trace!("Unhandled in tbody: {:?}\n", child); },
         }
     }
@@ -421,22 +416,20 @@ fn tbody_to_render_tree<T:Write>(handle: Handle,
 
 /// Convert a table row to a RenderTableRow
 fn tr_to_render_tree<T:Write>(handle: Handle, err_out: &mut T) -> RenderTableRow {
-    let node = handle.borrow();
-
     let mut cells = Vec::new();
 
-    for child in &node.children {
-        match child.borrow().node {
-            Element(ref name, _, _) => {
-                match *name {
-                    qualname!(html, "th") |
-                    qualname!(html, "td") => {
+    for child in handle.children.borrow().iter() {
+        match child.data {
+            Element { ref name, .. } => {
+                match name.expanded() {
+                    expanded_name!(html "th") |
+                    expanded_name!(html "td") => {
                         cells.push(td_to_render_tree(child.clone(), err_out));
                     },
                     _ => { html_trace!("  [[tr child: {:?}]]", name); },
                 }
             },
-            Comment(_) => {},
+            Comment { .. } => {},
             _ => { html_trace!("Unhandled in tr: {:?}\n", child); },
         }
     }
@@ -450,8 +443,8 @@ fn tr_to_render_tree<T:Write>(handle: Handle, err_out: &mut T) -> RenderTableRow
 fn td_to_render_tree<T: Write>(handle: Handle, err_out: &mut T) -> RenderTableCell {
     let children = children_to_render_nodes(handle.clone(), err_out);
     let mut colspan = 1;
-    if let Element(_, _, ref attrs) = handle.borrow().node {
-        for attr in attrs {
+    if let Element { ref attrs, .. } = handle.data {
+        for attr in attrs.borrow().iter() {
             if &attr.name.local == "colspan" {
                 let v:&str = &*attr.value;
                 colspan = v.parse().unwrap_or(1);
@@ -469,30 +462,30 @@ fn td_to_render_tree<T: Write>(handle: Handle, err_out: &mut T) -> RenderTableCe
 /// Convert a DOM tree or subtree into a render tree.
 pub fn dom_to_render_tree<T:Write>(handle: Handle, err_out: &mut T) -> Option<RenderNode> {
     use RenderNodeInfo::*;
-    let node = handle.borrow();
-    let result = match node.node {
+    let result = match handle.data {
         Document => Some(RenderNode::new(Container(children_to_render_nodes(handle.clone(), err_out)))),
-        Comment(_) => None,
-        Element(ref name, _, ref attrs) => {
-            match *name {
-                qualname!(html, "html") |
-                qualname!(html, "span") |
-                qualname!(html, "body") => {
+        Comment { .. } => None,
+        Element { ref name, ref attrs, .. } => {
+            match name.expanded() {
+                expanded_name!(html "html") |
+                expanded_name!(html "span") |
+                expanded_name!(html "body") => {
                     /* process children, but don't add anything */
                     Some(RenderNode::new(Container(children_to_render_nodes(handle.clone(), err_out))))
                 },
-                qualname!(html, "link") |
-                qualname!(html, "meta") |
-                qualname!(html, "hr") |
-                qualname!(html, "script") |
-                qualname!(html, "style") |
-                qualname!(html, "head") => {
+                expanded_name!(html "link") |
+                expanded_name!(html "meta") |
+                expanded_name!(html "hr") |
+                expanded_name!(html "script") |
+                expanded_name!(html "style") |
+                expanded_name!(html "head") => {
                     /* Ignore the head and its children */
                     None
                 },
-                qualname!(html, "a") => {
+                expanded_name!(html "a") => {
+                    let borrowed = attrs.borrow();
                     let mut target = None;
-                    for attr in attrs {
+                    for attr in borrowed.iter() {
                         if &attr.name.local == "href" {
                             target = Some(&*attr.value);
                             break;
@@ -505,18 +498,19 @@ pub fn dom_to_render_tree<T:Write>(handle: Handle, err_out: &mut T) -> Option<Re
                         Some(RenderNode::new(Container(children)))
                     }
                 },
-                qualname!(html, "em") => {
+                expanded_name!(html "em") => {
                     Some(RenderNode::new(Em(children_to_render_nodes(handle.clone(), err_out))))
                 },
-                qualname!(html, "strong") => {
+                expanded_name!(html "strong") => {
                     Some(RenderNode::new(Strong(children_to_render_nodes(handle.clone(), err_out))))
                 },
-                qualname!(html, "code") => {
+                expanded_name!(html "code") => {
                     Some(RenderNode::new(Code(children_to_render_nodes(handle.clone(), err_out))))
                 },
-                qualname!(html, "img") => {
+                expanded_name!(html "img") => {
+                    let borrowed = attrs.borrow();
                     let mut title = None;
-                    for attr in attrs {
+                    for attr in borrowed.iter() {
                         if &attr.name.local == "alt" {
                             title = Some(&*attr.value);
                             break;
@@ -528,33 +522,33 @@ pub fn dom_to_render_tree<T:Write>(handle: Handle, err_out: &mut T) -> Option<Re
                         None
                     }
                 },
-                qualname!(html, "h1") |
-                qualname!(html, "h2") |
-                qualname!(html, "h3") |
-                qualname!(html, "h4") => {
+                expanded_name!(html "h1") |
+                expanded_name!(html "h2") |
+                expanded_name!(html "h3") |
+                expanded_name!(html "h4") => {
                     let level: usize = name.local[1..].parse().unwrap();
                     Some(RenderNode::new(Header(level, children_to_render_nodes(handle.clone(), err_out))))
                 },
-                qualname!(html, "p") => {
+                expanded_name!(html "p") => {
                     Some(RenderNode::new(Block(children_to_render_nodes(handle.clone(), err_out))))
                 },
-                qualname!(html, "div") => {
+                expanded_name!(html "div") => {
                     Some(RenderNode::new(Div(children_to_render_nodes(handle.clone(), err_out))))
                 },
-                qualname!(html, "pre") => {
+                expanded_name!(html "pre") => {
                     Some(RenderNode::new(Pre(get_text(handle.clone()))))
                 },
-                qualname!(html, "br") => {
+                expanded_name!(html "br") => {
                     Some(RenderNode::new(Break))
                 }
-                qualname!(html, "table") => table_to_render_tree(handle.clone(), err_out),
-                qualname!(html, "blockquote") => {
+                expanded_name!(html "table") => table_to_render_tree(handle.clone(), err_out),
+                expanded_name!(html "blockquote") => {
                     Some(RenderNode::new(BlockQuote(children_to_render_nodes(handle.clone(), err_out))))
                 },
-                qualname!(html, "ul") => {
+                expanded_name!(html "ul") => {
                     Some(RenderNode::new(Ul(list_children_to_render_nodes(handle.clone(), err_out))))
                 },
-                qualname!(html, "ol") => {
+                expanded_name!(html "ol") => {
                     Some(RenderNode::new(Ol(list_children_to_render_nodes(handle.clone(), err_out))))
                 },
                 _ => {
@@ -564,10 +558,13 @@ pub fn dom_to_render_tree<T:Write>(handle: Handle, err_out: &mut T) -> Option<Re
                 },
             }
           },
-        rcdom::Text(ref tstr) => {
-            Some(RenderNode::new(Text(tstr.into())))
+        rcdom::NodeData::Text { contents: ref tstr } => {
+            Some(RenderNode::new(Text((&*tstr.borrow()).into())))
         }
-        _ => { write!(err_out, "Unhandled: {:?}\n", node).unwrap(); None },
+        _ => {
+            // NodeData doesn't have a Debug impl.
+            write!(err_out, "Unhandled node type.\n").unwrap(); None
+        },
     };
     html_trace!("### dom_to_render_tree: HTML: {:?}", node);
     html_trace!("### dom_to_render_tree: out= {:#?}", result);
