@@ -458,20 +458,99 @@ fn td_to_render_tree<T: Write>(handle: Handle, err_out: &mut T) -> RenderTableCe
     }
 }
 
+/// A job waiting for the children to be parsed.
+type NeedsChildren = Fn(Vec<RenderNode>) -> Option<RenderNode>;
+
+/// The result of trying to render one node.
+enum NodeRenderResult {
+    /// A completed render node.
+    Finished(RenderNode),
+    /// Deferred completion - can be turned into a RenderNode
+    /// once the children (of handle) are converted.
+    PendingChildren(Handle, Box<NeedsChildren>),
+    /// Nothing (e.g. a comment or other ignored element).
+    Nothing
+}
+
+/// A node partially decoded, waiting for its children to
+/// be processed.
+struct PendingNode {
+    /// How to make the node once finished
+    construct: Box<NeedsChildren>,
+    /// Children already processed
+    children: Vec<RenderNode>,
+    /// Child DOM nodes not yet processed
+    to_process: std::vec::IntoIter<Handle>,
+}
 
 /// Convert a DOM tree or subtree into a render tree.
 pub fn dom_to_render_tree<T:Write>(handle: Handle, err_out: &mut T) -> Option<RenderNode> {
+    let mut pending_stack = vec![
+        PendingNode {
+            // We only expect one child, which we'll just return.
+            construct: Box::new(|mut cs| cs.pop()),
+            children: Vec::new(),
+            to_process: vec![handle].into_iter(),
+        }
+    ];
+    let result = loop {
+        // Get the next child node to process
+        let next_handle = pending_stack.last_mut()
+                                       .unwrap()
+                                       .to_process
+                                       .next();
+        if let Some(h) = next_handle {
+            match process_node(h, err_out) {
+                NodeRenderResult::Finished(result) => {
+                    pending_stack.last_mut().unwrap().children.push(result);
+                }
+                NodeRenderResult::PendingChildren(ch, cons) => {
+                    pending_stack.push(PendingNode {
+                        construct: cons,
+                        children: Vec::new(),
+                        to_process: ch.children.borrow().clone().into_iter(),
+                    });
+                },
+                NodeRenderResult::Nothing => {},
+            };
+        } else {
+            // No more children, so finally construct the parent.
+            let mut completed = pending_stack.pop().unwrap();
+            let render_node = (completed.construct)(completed.children);
+            if let Some(node) = render_node {
+                if let Some(parent) = pending_stack.last_mut() {
+                    parent.children.push(node);
+                } else {
+                    // Finished the whole stack!
+                    break Some(node);
+                }
+            }
+        }
+    };
+
+    html_trace!("### dom_to_render_tree: HTML: {:?}", node);
+    html_trace!("### dom_to_render_tree: out= {:#?}", result);
+    result
+}
+
+fn pending<F: Fn(Vec<RenderNode>) -> Option<RenderNode> + 'static>(handle: Handle, f: F) -> NodeRenderResult {
+    NodeRenderResult::PendingChildren(handle, Box::new(f))
+}
+
+fn process_node<T:Write>(handle: Handle, err_out: &mut T) -> NodeRenderResult {
+    use NodeRenderResult::*;
     use RenderNodeInfo::*;
-    let result = match handle.data {
-        Document => Some(RenderNode::new(Container(children_to_render_nodes(handle.clone(), err_out)))),
-        Comment { .. } => None,
+
+    match handle.clone().data {
+        Document => pending(handle, |cs| Some(RenderNode::new(Container(cs)))),
+        Comment { .. } => Nothing,
         Element { ref name, ref attrs, .. } => {
             match name.expanded() {
                 expanded_name!(html "html") |
                 expanded_name!(html "span") |
                 expanded_name!(html "body") => {
                     /* process children, but don't add anything */
-                    Some(RenderNode::new(Container(children_to_render_nodes(handle.clone(), err_out))))
+                    pending(handle, |cs| Some(RenderNode::new(Container(cs))))
                 },
                 expanded_name!(html "link") |
                 expanded_name!(html "meta") |
@@ -480,7 +559,7 @@ pub fn dom_to_render_tree<T:Write>(handle: Handle, err_out: &mut T) -> Option<Re
                 expanded_name!(html "style") |
                 expanded_name!(html "head") => {
                     /* Ignore the head and its children */
-                    None
+                    Nothing
                 },
                 expanded_name!(html "a") => {
                     let borrowed = attrs.borrow();
@@ -491,21 +570,27 @@ pub fn dom_to_render_tree<T:Write>(handle: Handle, err_out: &mut T) -> Option<Re
                             break;
                         }
                     }
-                    let children = children_to_render_nodes(handle.clone(), err_out);
-                    if let Some(href) = target {
-                        Some(RenderNode::new(Link(href.into(), children)))
-                    } else {
-                        Some(RenderNode::new(Container(children)))
-                    }
+                    PendingChildren(handle,
+                        if let Some(href) = target {
+                            // We need the closure to own the string it's going to use.
+                            // Unfortunately that means we ideally want FnOnce; but
+                            // that doesn't yet work in a Box.  Box<FnBox()> does, but
+                            // is unstable.  So we'll just move a string in and clone
+                            // it on use.
+                            let href: String = href.into();
+                            Box::new(move |cs| Some(RenderNode::new(Link(href.clone(), cs))))
+                        } else {
+                            Box::new(|cs| Some(RenderNode::new(Container(cs))))
+                        })
                 },
                 expanded_name!(html "em") => {
-                    Some(RenderNode::new(Em(children_to_render_nodes(handle.clone(), err_out))))
+                    pending(handle, |cs| Some(RenderNode::new(Em(cs))))
                 },
                 expanded_name!(html "strong") => {
-                    Some(RenderNode::new(Strong(children_to_render_nodes(handle.clone(), err_out))))
+                    pending(handle, |cs| Some(RenderNode::new(Strong(cs))))
                 },
                 expanded_name!(html "code") => {
-                    Some(RenderNode::new(Code(children_to_render_nodes(handle.clone(), err_out))))
+                    pending(handle, |cs| Some(RenderNode::new(Code(cs))))
                 },
                 expanded_name!(html "img") => {
                     let borrowed = attrs.borrow();
@@ -517,9 +602,9 @@ pub fn dom_to_render_tree<T:Write>(handle: Handle, err_out: &mut T) -> Option<Re
                         }
                     }
                     if let Some(title) = title {
-                        Some(RenderNode::new(Img(title.into())))
+                        Finished(RenderNode::new(Img(title.into())))
                     } else {
-                        None
+                        Nothing
                     }
                 },
                 expanded_name!(html "h1") |
@@ -527,48 +612,48 @@ pub fn dom_to_render_tree<T:Write>(handle: Handle, err_out: &mut T) -> Option<Re
                 expanded_name!(html "h3") |
                 expanded_name!(html "h4") => {
                     let level: usize = name.local[1..].parse().unwrap();
-                    Some(RenderNode::new(Header(level, children_to_render_nodes(handle.clone(), err_out))))
+                    pending(handle, move |cs| Some(RenderNode::new(Header(level, cs))))
                 },
                 expanded_name!(html "p") => {
-                    Some(RenderNode::new(Block(children_to_render_nodes(handle.clone(), err_out))))
+                    pending(handle, |cs| Some(RenderNode::new(Block(cs))))
                 },
                 expanded_name!(html "div") => {
-                    Some(RenderNode::new(Div(children_to_render_nodes(handle.clone(), err_out))))
+                    pending(handle, |cs| Some(RenderNode::new(Div(cs))))
                 },
                 expanded_name!(html "pre") => {
-                    Some(RenderNode::new(Pre(get_text(handle.clone()))))
+                    Finished(RenderNode::new(Pre(get_text(handle))))
                 },
                 expanded_name!(html "br") => {
-                    Some(RenderNode::new(Break))
+                    Finished(RenderNode::new(Break))
                 }
-                expanded_name!(html "table") => table_to_render_tree(handle.clone(), err_out),
+                expanded_name!(html "table") => {
+                    Finished(table_to_render_tree(handle.clone(), err_out).unwrap())
+                },
                 expanded_name!(html "blockquote") => {
-                    Some(RenderNode::new(BlockQuote(children_to_render_nodes(handle.clone(), err_out))))
+                    pending(handle, |cs| Some(RenderNode::new(BlockQuote(cs))))
                 },
                 expanded_name!(html "ul") => {
-                    Some(RenderNode::new(Ul(list_children_to_render_nodes(handle.clone(), err_out))))
+                    Finished(RenderNode::new(Ul(list_children_to_render_nodes(handle.clone(), err_out))))
                 },
                 expanded_name!(html "ol") => {
-                    Some(RenderNode::new(Ol(list_children_to_render_nodes(handle.clone(), err_out))))
+                    Finished(RenderNode::new(Ol(list_children_to_render_nodes(handle.clone(), err_out))))
                 },
                 _ => {
                     html_trace!("Unhandled element: {:?}\n", name.local);
-                    Some(RenderNode::new(Container(children_to_render_nodes(handle.clone(), err_out))))
+                    pending(handle, |cs| Some(RenderNode::new(Container(cs))))
                     //None
                 },
             }
           },
         rcdom::NodeData::Text { contents: ref tstr } => {
-            Some(RenderNode::new(Text((&*tstr.borrow()).into())))
+            Finished(RenderNode::new(Text((&*tstr.borrow()).into())))
         }
         _ => {
             // NodeData doesn't have a Debug impl.
-            write!(err_out, "Unhandled node type.\n").unwrap(); None
+            write!(err_out, "Unhandled node type.\n").unwrap();
+            Nothing
         },
-    };
-    html_trace!("### dom_to_render_tree: HTML: {:?}", node);
-    html_trace!("### dom_to_render_tree: out= {:#?}", result);
-    return result;
+    }
 }
 
 fn render_tree_children_to_string<T:Write, R:Renderer>(builder: &mut R,
