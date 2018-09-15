@@ -458,66 +458,72 @@ fn td_to_render_tree<T: Write>(handle: Handle, err_out: &mut T) -> RenderTableCe
     }
 }
 
-/// A job waiting for the children to be parsed.
-type NeedsChildren = Fn(Vec<RenderNode>) -> Option<RenderNode>;
+/// A reducer which combines results from mapping children into
+/// the result for the current node.  Takes a vector of results
+/// and returns a new result (or nothing).
+type ResultReducer<R> = Fn(Vec<R>) -> Option<R>;
 
 /// The result of trying to render one node.
-enum NodeRenderResult {
+enum TreeMapResult<N, R> {
     /// A completed render node.
-    Finished(RenderNode),
+    Finished(R),
     /// Deferred completion - can be turned into a RenderNode
     /// once the children (of handle) are converted.
-    PendingChildren(Handle, Box<NeedsChildren>),
+    PendingChildren(N, Box<ResultReducer<R>>),
     /// Nothing (e.g. a comment or other ignored element).
     Nothing
 }
 
-/// A node partially decoded, waiting for its children to
-/// be processed.
-struct PendingNode {
-    /// How to make the node once finished
-    construct: Box<NeedsChildren>,
-    /// Children already processed
-    children: Vec<RenderNode>,
-    /// Child DOM nodes not yet processed
-    to_process: std::vec::IntoIter<Handle>,
-}
+fn tree_map_reduce<N, R, M, C>(top: N,
+                               mut process_node: M,
+                               get_children: C) -> Option<R>
+    where M: FnMut(N) -> TreeMapResult<N, R>,
+          C: Fn(N) -> Vec<N>
+{
+    /// A node partially decoded, waiting for its children to
+    /// be processed.
+    struct PendingNode<R, N> {
+        /// How to make the node once finished
+        construct: Box<ResultReducer<R>>,
+        /// Children already processed
+        children: Vec<R>,
+        /// Iterator of child nodes not yet processed
+        to_process: std::vec::IntoIter<N>,
+    }
 
-/// Convert a DOM tree or subtree into a render tree.
-pub fn dom_to_render_tree<T:Write>(handle: Handle, err_out: &mut T) -> Option<RenderNode> {
     let mut pending_stack = vec![
         PendingNode {
             // We only expect one child, which we'll just return.
             construct: Box::new(|mut cs| cs.pop()),
             children: Vec::new(),
-            to_process: vec![handle].into_iter(),
+            to_process: vec![top].into_iter(),
         }
     ];
     let result = loop {
         // Get the next child node to process
-        let next_handle = pending_stack.last_mut()
-                                       .unwrap()
-                                       .to_process
-                                       .next();
-        if let Some(h) = next_handle {
-            match process_node(h, err_out) {
-                NodeRenderResult::Finished(result) => {
+        let next_node = pending_stack.last_mut()
+                                     .unwrap()
+                                     .to_process
+                                     .next();
+        if let Some(h) = next_node {
+            match process_node(h) {
+                TreeMapResult::Finished(result) => {
                     pending_stack.last_mut().unwrap().children.push(result);
                 }
-                NodeRenderResult::PendingChildren(ch, cons) => {
+                TreeMapResult::PendingChildren(node, cons) => {
                     pending_stack.push(PendingNode {
                         construct: cons,
                         children: Vec::new(),
-                        to_process: ch.children.borrow().clone().into_iter(),
+                        to_process: get_children(node).into_iter(),
                     });
                 },
-                NodeRenderResult::Nothing => {},
+                TreeMapResult::Nothing => {},
             };
         } else {
             // No more children, so finally construct the parent.
             let mut completed = pending_stack.pop().unwrap();
-            let render_node = (completed.construct)(completed.children);
-            if let Some(node) = render_node {
+            let reduced = (completed.construct)(completed.children);
+            if let Some(node) = reduced {
                 if let Some(parent) = pending_stack.last_mut() {
                     parent.children.push(node);
                 } else {
@@ -533,12 +539,20 @@ pub fn dom_to_render_tree<T:Write>(handle: Handle, err_out: &mut T) -> Option<Re
     result
 }
 
-fn pending<F: Fn(Vec<RenderNode>) -> Option<RenderNode> + 'static>(handle: Handle, f: F) -> NodeRenderResult {
-    NodeRenderResult::PendingChildren(handle, Box::new(f))
+/// Convert a DOM tree or subtree into a render tree.
+pub fn dom_to_render_tree<T:Write>(handle: Handle, err_out: &mut T) -> Option<RenderNode> {
+    tree_map_reduce(handle,
+                    |handle| process_node(handle, err_out),
+                    |handle| handle.children.borrow().clone()
+                )
 }
 
-fn process_node<T:Write>(handle: Handle, err_out: &mut T) -> NodeRenderResult {
-    use NodeRenderResult::*;
+fn pending<F: Fn(Vec<RenderNode>) -> Option<RenderNode> + 'static>(handle: Handle, f: F) -> TreeMapResult<Handle, RenderNode> {
+    TreeMapResult::PendingChildren(handle, Box::new(f))
+}
+
+fn process_node<T:Write>(handle: Handle, err_out: &mut T) -> TreeMapResult<Handle, RenderNode> {
+    use TreeMapResult::*;
     use RenderNodeInfo::*;
 
     match handle.clone().data {
@@ -1390,7 +1404,7 @@ Hi foo, bar
     }
 
     #[test]
-    #[ignore]  // Not yet fixed!
+    #[ignore]
     fn test_deeply_nested() {
         use ::std::iter::repeat;
         let html = repeat("<foo>")
