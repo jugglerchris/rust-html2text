@@ -499,7 +499,7 @@ fn tree_map_reduce<N, R, M, C>(top: N,
             to_process: vec![top].into_iter(),
         }
     ];
-    let result = loop {
+    loop {
         // Get the next child node to process
         let next_node = pending_stack.last_mut()
                                      .unwrap()
@@ -532,19 +532,19 @@ fn tree_map_reduce<N, R, M, C>(top: N,
                 }
             }
         }
-    };
-
-    html_trace!("### dom_to_render_tree: HTML: {:?}", node);
-    html_trace!("### dom_to_render_tree: out= {:#?}", result);
-    result
+    }
 }
 
 /// Convert a DOM tree or subtree into a render tree.
 pub fn dom_to_render_tree<T:Write>(handle: Handle, err_out: &mut T) -> Option<RenderNode> {
-    tree_map_reduce(handle,
+    let result = tree_map_reduce(handle,
                     |handle| process_node(handle, err_out),
                     |handle| handle.children.borrow().clone()
-                )
+                );
+
+    html_trace!("### dom_to_render_tree: HTML: {:?}", handle);
+    html_trace!("### dom_to_render_tree: out= {:#?}", result);
+    result
 }
 
 fn pending<F: Fn(Vec<RenderNode>) -> Option<RenderNode> + 'static>(handle: Handle, f: F) -> TreeMapResult<Handle, RenderNode> {
