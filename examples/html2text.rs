@@ -1,5 +1,5 @@
 extern crate html2text;
-#[cfg(unix)] extern crate argparse;
+extern crate argparse;
 use std::io;
 use std::io::Write;
 use argparse::{ArgumentParser, Store, StoreOption};
