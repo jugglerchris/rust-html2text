@@ -1449,7 +1449,6 @@ Hi foo, bar
     }
 
     #[test]
-    #[ignore]
     fn test_deeply_nested() {
         use ::std::iter::repeat;
         let html = repeat("<foo>")
