@@ -68,6 +68,7 @@ use std::io;
 use std::io::Write;
 use std::cmp::max;
 use std::iter::{once,repeat};
+use std::ops::{Deref,DerefMut};
 use html5ever::{parse_document};
 use html5ever::driver::ParseOpts;
 use html5ever::tree_builder::TreeBuilderOpts;
@@ -683,21 +684,70 @@ fn render_tree_children_to_string<T:Write, R:Renderer>(builder: &mut R,
     */
 }
 
-fn render_tree_to_string<T:Write, R:Renderer>(builder: &mut R, tree: RenderNode,
-                          err_out: &mut T) {
-    tree_map_reduce(builder, tree,
-        |builder, node| do_render_node(builder, node, err_out),
-    );
+/// Context to use during tree parsing.
+/// This mainly gives access to a Renderer, but needs to be able to push
+/// new ones on for nested structures.
+struct BuilderStack<R:Renderer> {
+    builders: Vec<R>,
 }
 
-fn pending2<R: Renderer, F: Fn(&mut R, Vec<()>) -> Option<()> + 'static>(children: Vec<RenderNode>, f: F) -> TreeMapResult<R, RenderNode, ()> {
+impl<R:Renderer> BuilderStack<R> {
+    pub fn new(builder: R) -> BuilderStack<R> {
+        BuilderStack {
+            builders: vec![builder],
+        }
+    }
+
+    /// Push a new builder onto the stack
+    pub fn push(&mut self, builder: R) {
+        self.builders.push(builder);
+    }
+
+    /// Pop off the top builder and return it.
+    /// Panics if empty
+    pub fn pop(&mut self) -> R {
+        self.builders.pop().unwrap()
+    }
+
+    /// Pop off the only builder and return it.
+    /// panics if there aren't exactly 1 available.
+    pub fn into_inner(mut self) -> R {
+        assert!(self.builders.len() == 1);
+        self.builders.pop().unwrap()
+    }
+}
+
+impl<R:Renderer> Deref for BuilderStack<R> {
+    type Target = R;
+    fn deref(&self) -> &R {
+        self.builders.last().expect("Underflow in BuilderStack")
+    }
+}
+
+impl<R:Renderer> DerefMut for BuilderStack<R> {
+    fn deref_mut(&mut self) -> &mut R {
+        self.builders.last_mut().expect("Underflow in BuilderStack")
+    }
+}
+
+fn render_tree_to_string<T:Write, R:Renderer>(builder: R, tree: RenderNode,
+                          err_out: &mut T) -> R {
+    let mut bs = BuilderStack::new(builder);
+    tree_map_reduce(&mut bs, tree,
+        |builders, node| do_render_node(builders, node, err_out),
+    );
+    bs.into_inner()
+}
+
+fn pending2<R: Renderer, F: Fn(&mut BuilderStack<R>, Vec<()>) -> Option<()> + 'static>(children: Vec<RenderNode>, f: F) -> TreeMapResult<BuilderStack<R>, RenderNode, ()> {
     TreeMapResult::PendingChildren(children, Box::new(f))
 }
 
 
-fn do_render_node<'a, 'b, T: Write, R: Renderer>(builder: &'a mut R, tree: RenderNode,
-                                             err_out: &'b mut T)
-  -> TreeMapResult<R, RenderNode, ()>
+fn do_render_node<'a, 'b, T: Write, R: Renderer>(builder: &mut BuilderStack<R>,
+                                                 tree: RenderNode,
+                                                 err_out: &'b mut T)
+  -> TreeMapResult<BuilderStack<R>, RenderNode, ()>
 {
     use TreeMapResult::*;
     use RenderNodeInfo::*;
@@ -711,28 +761,28 @@ fn do_render_node<'a, 'b, T: Write, R: Renderer>(builder: &'a mut R, tree: Rende
         },
         Link(href, children) => {
             builder.start_link(&href);
-            pending2(children, |builder:&mut R, _| {
+            pending2(children, |builder:&mut BuilderStack<R>, _| {
                 builder.end_link();
                 Some(())
             })
         },
         Em(children) => {
             builder.start_emphasis();
-            pending2(children, |builder:&mut R, _| {
+            pending2(children, |builder:&mut BuilderStack<R>, _| {
                 builder.end_emphasis();
                 Some(())
             })
         },
         Strong(children) => {
             builder.start_strong();
-            pending2(children, |builder:&mut R, _| {
+            pending2(children, |builder:&mut BuilderStack<R>, _| {
                 builder.end_strong();
                 Some(())
             })
         },
         Code(children) => {
             builder.start_code();
-            pending2(children, |builder:&mut R, _| {
+            pending2(children, |builder:&mut BuilderStack<R>, _| {
                 builder.end_code();
                 Some(())
             })
@@ -743,26 +793,28 @@ fn do_render_node<'a, 'b, T: Write, R: Renderer>(builder: &'a mut R, tree: Rende
         },
         Block(children) => {
             builder.start_block();
-            pending2(children, |builder:&mut R, _| {
+            pending2(children, |builder:&mut BuilderStack<R>, _| {
                 builder.end_block();
                 Some(())
             })
         },
-        /*
-        Header(level, ref mut children) => {
+        Header(level, children) => {
             let mut sub_builder = builder.new_sub_renderer(builder.width()-(1+level));
-            render_tree_children_to_string(&mut sub_builder, children, err_out);
+            builder.push(sub_builder);
+            pending2(children, move |builder: &mut BuilderStack<R>, _| {
+                let sub_builder = builder.pop();
 
-            let qs: String = "#".repeat(level) + " ";
+                let qs: String = "#".repeat(level) + " ";
 
-            builder.start_block();
-            builder.append_subrender(sub_builder, repeat(&qs[..]));
-            builder.end_block();
+                builder.start_block();
+                builder.append_subrender(sub_builder, repeat(&qs[..]));
+                builder.end_block();
+                Some(())
+            })
         },
-        */
         Div(children) => {
             builder.new_line();
-            pending2(children, |builder:&mut R, _| {
+            pending2(children, |builder:&mut BuilderStack<R>, _| {
                 builder.new_line();
                 Some(())
             })
@@ -812,7 +864,7 @@ fn do_render_node<'a, 'b, T: Write, R: Renderer>(builder: &'a mut R, tree: Rende
             Finished(())
         },
         Table(mut tab) => {
-            render_table_tree(builder, &mut tab, err_out);
+            render_table_tree(builder.deref_mut(), &mut tab, err_out);
             Finished(())
         },
         dummy => {
@@ -875,7 +927,7 @@ fn render_table_tree<T:Write, R:Renderer>(builder: &mut R, table: &mut RenderTab
     builder.add_horizontal_border();
 
     for row in table.rows() {
-        let rendered_cells: Vec<R::Sub> = row.cell_columns()
+        let rendered_cells: Vec<R> = row.cell_columns()
                                              .into_iter()
                                              .flat_map(|(colno, cell)| {
                                                   let col_width:usize = col_widths[colno..colno+cell.colspan]
@@ -913,7 +965,7 @@ pub fn from_read<R>(mut input: R, width: usize) -> String where R: io::Read {
     let mut builder = TextRenderer::new(width, decorator);
 
     let mut render_tree = dom_to_render_tree(dom.document, &mut Discard{}).unwrap();
-    render_tree_to_string(&mut builder, render_tree, &mut Discard{});
+    let builder = render_tree_to_string(builder, render_tree, &mut Discard{});
     builder.into_string()
 }
 
@@ -938,7 +990,7 @@ pub fn from_read_rich<R>(mut input: R, width: usize) -> Vec<TaggedLine<Vec<RichA
     let decorator = RichDecorator::new();
     let mut builder = TextRenderer::new(width, decorator);
     let mut render_tree = dom_to_render_tree(dom.document, &mut Discard{}).unwrap();
-    render_tree_to_string(&mut builder, render_tree, &mut Discard{});
+    let builder = render_tree_to_string(builder, render_tree, &mut Discard{});
     builder.into_lines().into_iter().map(RenderLine::into_tagged_line).collect()
 }
 

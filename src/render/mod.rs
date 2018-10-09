@@ -5,15 +5,11 @@ pub mod text_renderer;
 
 /// A type which is a backend for HTML to text rendering.
 pub trait Renderer {
-    /// A type of a sub-renderer which will be used for rendering
-    /// nested blocks such as table cells and list items.
-    type Sub: Renderer;
-
     /// Add an empty line to the output (ie between blocks).
     fn add_empty_line(&mut self);
 
     /// Create a sub-renderer for nested blocks.
-    fn new_sub_renderer(&self, width: usize) -> Self::Sub;
+    fn new_sub_renderer(&self, width: usize) -> Self;
 
     /// Start a new block.
     fn start_block(&mut self);
@@ -40,17 +36,17 @@ pub trait Renderer {
     /// Add a line to the current block without starting a new one.
     fn add_block_line(&mut self, line: &str);
 
-    /// Add a new block from a Sub, and prefix every line by the
+    /// Add a new block from a sub renderer, and prefix every line by the
     /// corresponding text from each iteration of prefixes.
-    fn append_subrender<'a, I>(&mut self, other: Self::Sub, prefixes: I)
+    fn append_subrender<'a, I>(&mut self, other: Self, prefixes: I)
                            where I:Iterator<Item=&'a str>;
 
-    /// Append a set of Sub joined left-to-right with a vertical line,
+    /// Append a set of sub renderers joined left-to-right with a vertical line,
     /// and add a horizontal line below.
     /// If collapse is true, then merge top/bottom borders of the subrenderer
     /// with the surrounding one.
     fn append_columns_with_borders<I>(&mut self, cols: I, collapse: bool)
-                           where I:IntoIterator<Item=Self::Sub>;
+                           where I:IntoIterator<Item=Self>, Self: Sized;
 
     /// Returns true if this renderer has no content.
     fn empty(&self) -> bool;
