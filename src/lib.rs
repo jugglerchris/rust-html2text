@@ -823,15 +823,19 @@ fn do_render_node<'a, 'b, T: Write, R: Renderer>(builder: &mut BuilderStack<R>,
             builder.add_preformatted_block(formatted);
             Finished(())
         },
-        /*
-        BlockQuote(ref mut children) => {
+        BlockQuote(children) => {
             let mut sub_builder = builder.new_sub_renderer(builder.width()-2);
-            render_tree_children_to_string(&mut sub_builder, children, err_out);
+            builder.push(sub_builder);
+            pending2(children, |builder: &mut BuilderStack<R>, _| {
+                let sub_builder = builder.pop();
 
-            builder.start_block();
-            builder.append_subrender(sub_builder, repeat("> "));
-            builder.end_block();
+                builder.start_block();
+                builder.append_subrender(sub_builder, repeat("> "));
+                builder.end_block();
+                Some(())
+            })
         },
+        /*
         Ul(ref mut items) => {
             builder.start_block();
             for item in items {
