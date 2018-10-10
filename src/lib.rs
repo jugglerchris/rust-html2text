@@ -888,26 +888,32 @@ fn do_render_node<'a, 'b, T: Write, R: Renderer>(builder: &mut BuilderStack<R>,
                 })),
             }
         },
-        /*
-        Ol(ref mut items) => {
-            let num_items = items.len();
-
+        Ol(items) => {
             builder.start_block();
 
+            let num_items = items.len();
             let prefix_width = format!("{}", num_items).len() + 2;
-
-            let mut i = 1;
             let prefixn = format!("{: <width$}", "", width=prefix_width);
-            for item in items {
-                let mut sub_builder = builder.new_sub_renderer(builder.width()-prefix_width);
-                render_tree_to_string(&mut sub_builder, item, err_out);
-                let prefix1 = format!("{}.", i);
-                let prefix1 = format!("{: <width$}", prefix1, width=prefix_width);
-                builder.append_subrender(sub_builder, once(prefix1.as_str()).chain(repeat(prefixn.as_str())));
-                i += 1;
+            use std::cell::Cell;
+            let i: Cell<_> = Cell::new(1);
+
+            TreeMapResult::PendingChildren{
+                children: items,
+                cons: Box::new(|_, _| Some(())),
+                prefn: Some(Box::new(move |builder: &mut BuilderStack<R>, _| {
+                    let mut sub_builder = builder.new_sub_renderer(builder.width()-prefix_width);
+                    builder.push(sub_builder);
+                })),
+                postfn: Some(Box::new(move |builder: &mut BuilderStack<R>, _| {
+                    let sub_builder = builder.pop();
+                    let prefix1 = format!("{}.", i.get());
+                    let prefix1 = format!("{: <width$}", prefix1, width=prefix_width);
+
+                    builder.append_subrender(sub_builder, once(prefix1.as_str()).chain(repeat(prefixn.as_str())));
+                    i.set(i.get() + 1);
+                })),
             }
         },
-        */
         Break => {
             builder.new_line();
             Finished(())
@@ -1170,6 +1176,49 @@ foo
 * Item
   three
 "#, 10);
+     }
+
+     #[test]
+     fn test_ol1() {
+         test_html(br#"
+            <ol>
+              <li>Item one</li>
+              <li>Item two</li>
+              <li>Item three</li>
+            </ol>
+         "#, r#"1. Item one
+2. Item two
+3. Item
+   three
+"#, 11);
+     }
+
+     #[test]
+     fn test_ol2() {
+         test_html(br#"
+            <ol>
+              <li>Item one</li>
+              <li>Item two</li>
+              <li>Item three</li>
+              <li>Item four</li>
+              <li>Item five</li>
+              <li>Item six</li>
+              <li>Item seven</li>
+              <li>Item eight</li>
+              <li>Item nine</li>
+              <li>Item ten</li>
+            </ol>
+         "#, r#"1.  Item one
+2.  Item two
+3.  Item three
+4.  Item four
+5.  Item five
+6.  Item six
+7.  Item seven
+8.  Item eight
+9.  Item nine
+10. Item ten
+"#, 20);
      }
 
      #[test]
