@@ -133,9 +133,8 @@ pub struct RenderTableCell {
 
 impl RenderTableCell {
     /// Render this cell to a builder.
-    pub fn render<T:Write, R:Renderer>(&mut self, builder: &mut R, err_out: &mut T)
+    pub fn render<T:Write, R:Renderer>(&mut self, _builder: &mut R, _err_out: &mut T)
     {
-    unimplemented!()
         //render_tree_children_to_string(builder, &mut self.content, err_out)
     }
 
@@ -705,9 +704,9 @@ fn process_dom_node<T:Write>(handle: Handle, err_out: &mut T) -> TreeMapResult<(
     }
 }
 
-fn render_tree_children_to_string<T:Write, R:Renderer>(builder: &mut R,
-                                                      children: &mut Vec<RenderNode>,
-                                                      err_out: &mut T) {
+fn render_tree_children_to_string<T:Write, R:Renderer>(_builder: &mut R,
+                                                      _children: &mut Vec<RenderNode>,
+                                                      _err_out: &mut T) {
     unimplemented!()
     /*
     for child in children {
@@ -879,7 +878,7 @@ fn do_render_node<'a, 'b, T: Write, R: Renderer>(builder: &mut BuilderStack<R>,
                 children: items,
                 cons: Box::new(|_, _| Some(())),
                 prefn: Some(Box::new(|builder: &mut BuilderStack<R>, _| {
-                    let mut sub_builder = builder.new_sub_renderer(builder.width()-2);
+                    let sub_builder = builder.new_sub_renderer(builder.width()-2);
                     builder.push(sub_builder);
                 })),
                 postfn: Some(Box::new(|builder: &mut BuilderStack<R>, _| {
@@ -901,7 +900,7 @@ fn do_render_node<'a, 'b, T: Write, R: Renderer>(builder: &mut BuilderStack<R>,
                 children: items,
                 cons: Box::new(|_, _| Some(())),
                 prefn: Some(Box::new(move |builder: &mut BuilderStack<R>, _| {
-                    let mut sub_builder = builder.new_sub_renderer(builder.width()-prefix_width);
+                    let sub_builder = builder.new_sub_renderer(builder.width()-prefix_width);
                     builder.push(sub_builder);
                 })),
                 postfn: Some(Box::new(move |builder: &mut BuilderStack<R>, _| {
@@ -922,10 +921,6 @@ fn do_render_node<'a, 'b, T: Write, R: Renderer>(builder: &mut BuilderStack<R>,
             render_table_tree(builder.deref_mut(), &mut tab, err_out);
             Finished(())
         },
-        dummy => {
-            eprintln!("{:?}", dummy);
-            unimplemented!()
-        }
     }
 }
 
