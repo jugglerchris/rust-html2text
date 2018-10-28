@@ -135,6 +135,7 @@ impl RenderTableCell {
     /// Render this cell to a builder.
     pub fn render<T:Write, R:Renderer>(&mut self, _builder: &mut R, _err_out: &mut T)
     {
+        unimplemented!()
         //render_tree_children_to_string(builder, &mut self.content, err_out)
     }
 
@@ -274,6 +275,12 @@ pub enum RenderNodeInfo {
     Break,
     /// A table
     Table(RenderTable),
+    /// A set of table rows (from either <thead> or <tbody>
+    TableBody(Vec<RenderTableRow>),
+    /// Table row (must only appear within a table body)
+    TableRow(RenderTableRow),
+    /// Table cell (must only appear within a table row)
+    TableCell(RenderTableCell),
 }
 
 /// Common fields from a node.
@@ -332,6 +339,9 @@ impl RenderNode {
             Table(ref mut t) => {
                 t.get_size_estimate()
             },
+            TableRow(_)|TableBody(_)|TableCell(_) => {
+                unimplemented!()
+            },
         };
         self.size_estimate = Some(estimate);
         estimate
@@ -372,77 +382,57 @@ fn list_children_to_render_nodes<T:Write>(handle: Handle, err_out: &mut T) -> Ve
 }
 
 /// Convert a table into a RenderNode
-fn table_to_render_tree<T:Write>(handle: Handle, err_out: &mut T) -> Option<RenderNode> {
-    let mut rows = Vec::new();
-
-    for child in handle.children.borrow().iter() {
-        match child.data {
-            Element { ref name, .. } => {
-                match name.expanded() {
-                    expanded_name!(html "thead") |
-                    expanded_name!(html "tbody") => tbody_to_render_tree(child.clone(), &mut rows, err_out),
-                    _ => { writeln!(err_out, "  [[table child: {:?}]]", name).unwrap(); },
-                }
-            },
-            Comment { .. } => {},
-            _ => { html_trace!("Unhandled in table: {:?}\n", child); },
+fn table_to_render_tree<T:Write>(handle: Handle, _err_out: &mut T) ->  TreeMapResult<(), Handle, RenderNode> {
+    pending(handle, |_,rowset| {
+        eprintln!("making a table");
+        let mut rows = vec![];
+        for bodynode in rowset {
+            if let RenderNodeInfo::TableBody(body) = bodynode.info {
+                rows.extend(body);
+            } else {
+                html_trace!("Found in table: {:?}", body);
+            }
         }
-    }
-    if rows.len() > 0 {
         Some(RenderNode::new(RenderNodeInfo::Table(RenderTable::new(rows))))
-    } else {
-        None
-    }
+    })
 }
 
 /// Add rows from a thead or tbody.
-fn tbody_to_render_tree<T:Write>(handle: Handle,
-                                 rows: &mut Vec<RenderTableRow>,
-                                 err_out: &mut T) {
-    for child in handle.children.borrow().iter() {
-        match child.data {
-            Element { ref name, .. } => {
-                match name.expanded() {
-                    expanded_name!(html "tr") => {
-                        rows.push(tr_to_render_tree(child.clone(), err_out));
-                    },
-                    _ => { html_trace!("  [[tbody child: {:?}]]", name); },
-                }
-            },
-            Comment { .. } => {},
-            _ => { html_trace!("Unhandled in tbody: {:?}\n", child); },
-        }
-    }
+fn tbody_to_render_tree<T:Write>(handle: Handle, _err_out: &mut T) ->  TreeMapResult<(), Handle, RenderNode> {
+    pending(handle, |_,rowchildren| {
+        eprintln!("Making a tbody");
+        let rows = rowchildren.into_iter()
+                              .flat_map(|rownode| {
+                                  if let RenderNodeInfo::TableRow(row) = rownode.info {
+                                      Some(row)
+                                  } else {
+                                      html_trace!("  [[tbody child: {:?}]]", rownode);
+                                      None
+                                  }})
+                              .collect();
+        Some(RenderNode::new(RenderNodeInfo::TableBody(rows)))
+    })
 }
 
 /// Convert a table row to a RenderTableRow
-fn tr_to_render_tree<T:Write>(handle: Handle, err_out: &mut T) -> RenderTableRow {
-    let mut cells = Vec::new();
-
-    for child in handle.children.borrow().iter() {
-        match child.data {
-            Element { ref name, .. } => {
-                match name.expanded() {
-                    expanded_name!(html "th") |
-                    expanded_name!(html "td") => {
-                        cells.push(td_to_render_tree(child.clone(), err_out));
-                    },
-                    _ => { html_trace!("  [[tr child: {:?}]]", name); },
-                }
-            },
-            Comment { .. } => {},
-            _ => { html_trace!("Unhandled in tr: {:?}\n", child); },
-        }
-    }
-
-    RenderTableRow {
-        cells: cells,
-    }
+fn tr_to_render_tree<T:Write>(handle: Handle, _err_out: &mut T) ->  TreeMapResult<(), Handle, RenderNode> {
+    pending(handle, |_, cellnodes| {
+        eprintln!("Making a tr");
+        let cells = cellnodes.into_iter()
+                             .flat_map(|cellnode| {
+                                 if let RenderNodeInfo::TableCell(cell) = cellnode.info {
+                                     Some(cell)
+                                 } else {
+                                     html_trace!("  [[tr child: {:?}]]", cellnode);
+                                     None
+                                 }})
+                             .collect();
+        Some(RenderNode::new(RenderNodeInfo::TableRow(RenderTableRow{cells})))
+    })
 }
 
 /// Convert a single table cell to a render node.
-fn td_to_render_tree<T: Write>(handle: Handle, err_out: &mut T) -> RenderTableCell {
-    let children = children_to_render_nodes(handle.clone(), err_out);
+fn td_to_render_tree<T:Write>(handle: Handle, _err_out: &mut T) ->  TreeMapResult<(), Handle, RenderNode> {
     let mut colspan = 1;
     if let Element { ref attrs, .. } = handle.data {
         for attr in attrs.borrow().iter() {
@@ -452,11 +442,14 @@ fn td_to_render_tree<T: Write>(handle: Handle, err_out: &mut T) -> RenderTableCe
             }
         }
     }
-    RenderTableCell {
-        colspan: colspan,
-        content: children,
-        size_estimate: None,
-    }
+    pending(handle, move |_, children| {
+        eprintln!("Making a td");
+        Some(RenderNode::new(RenderNodeInfo::TableCell(RenderTableCell {
+            colspan: colspan,
+            content: children,
+            size_estimate: None,
+        })))
+    })
 }
 
 /// A reducer which combines results from mapping children into
@@ -675,8 +668,19 @@ fn process_dom_node<T:Write>(handle: Handle, err_out: &mut T) -> TreeMapResult<(
                     Finished(RenderNode::new(Break))
                 }
                 expanded_name!(html "table") => {
-                    Finished(table_to_render_tree(handle.clone(), err_out).unwrap())
+                    table_to_render_tree(handle.clone(), err_out)
                 },
+                expanded_name!(html "thead") |
+                expanded_name!(html "tbody") => {
+                    tbody_to_render_tree(handle.clone(), err_out)
+                },
+                expanded_name!(html "tr") => {
+                    tr_to_render_tree(handle.clone(), err_out)
+                },
+                expanded_name!(html "th") |
+                expanded_name!(html "td") => {
+                    td_to_render_tree(handle.clone(), err_out)
+                }
                 expanded_name!(html "blockquote") => {
                     pending(handle, |_, cs| Some(RenderNode::new(BlockQuote(cs))))
                 },
@@ -920,6 +924,9 @@ fn do_render_node<'a, 'b, T: Write, R: Renderer>(builder: &mut BuilderStack<R>,
         Table(mut tab) => {
             render_table_tree(builder.deref_mut(), &mut tab, err_out);
             Finished(())
+        },
+        TableRow(_) | TableBody(_) | TableCell(_) => {
+            unimplemented!("Unexpected TableRow or TableBody or TableCell while rendering")
         },
     }
 }
