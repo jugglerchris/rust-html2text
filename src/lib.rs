@@ -416,7 +416,6 @@ fn list_children_to_render_nodes<T:Write>(handle: Handle, err_out: &mut T) -> Ve
 /// Convert a table into a RenderNode
 fn table_to_render_tree<T:Write>(handle: Handle, _err_out: &mut T) ->  TreeMapResult<(), Handle, RenderNode> {
     pending(handle, |_,rowset| {
-        eprintln!("making a table");
         let mut rows = vec![];
         for bodynode in rowset {
             if let RenderNodeInfo::TableBody(body) = bodynode.info {
@@ -432,7 +431,6 @@ fn table_to_render_tree<T:Write>(handle: Handle, _err_out: &mut T) ->  TreeMapRe
 /// Add rows from a thead or tbody.
 fn tbody_to_render_tree<T:Write>(handle: Handle, _err_out: &mut T) ->  TreeMapResult<(), Handle, RenderNode> {
     pending(handle, |_,rowchildren| {
-        eprintln!("Making a tbody");
         let rows = rowchildren.into_iter()
                               .flat_map(|rownode| {
                                   if let RenderNodeInfo::TableRow(row) = rownode.info {
@@ -449,7 +447,6 @@ fn tbody_to_render_tree<T:Write>(handle: Handle, _err_out: &mut T) ->  TreeMapRe
 /// Convert a table row to a RenderTableRow
 fn tr_to_render_tree<T:Write>(handle: Handle, _err_out: &mut T) ->  TreeMapResult<(), Handle, RenderNode> {
     pending(handle, |_, cellnodes| {
-        eprintln!("Making a tr");
         let cells = cellnodes.into_iter()
                              .flat_map(|cellnode| {
                                  if let RenderNodeInfo::TableCell(cell) = cellnode.info {
@@ -475,7 +472,6 @@ fn td_to_render_tree<T:Write>(handle: Handle, _err_out: &mut T) ->  TreeMapResul
         }
     }
     pending(handle, move |_, children| {
-        eprintln!("Making a td");
         Some(RenderNode::new(RenderNodeInfo::TableCell(RenderTableCell {
             colspan: colspan,
             content: children,
@@ -1657,5 +1653,23 @@ Hi foo, bar
                          .collect::<Vec<_>>()
                          .concat();
         test_html(html.as_bytes(), "", 10);
+    }
+
+    #[test]
+    fn test_deeply_nested_table() {
+        use ::std::iter::repeat;
+        let html = repeat("<table><tr><td>hi</td><td>")
+                         .take(1000)
+                         .collect::<Vec<_>>()
+                         .concat()
+                 + &repeat("</td></tr></table>")
+                         .take(1000)
+                         .collect::<Vec<_>>()
+                         .concat();
+        test_html(html.as_bytes(), r#"────┬─┬───
+hi  │h│   
+    │i│   
+────┴─┴───
+"#, 10);
     }
 }
