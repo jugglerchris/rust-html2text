@@ -60,8 +60,8 @@ mod macros;
 
 pub mod render;
 
-use render::Renderer;
-use render::text_renderer::{TextRenderer,PlainDecorator,RichDecorator,
+use crate::render::Renderer;
+use crate::render::text_renderer::{TextRenderer,PlainDecorator,RichDecorator,
                             RichAnnotation,TaggedLine,RenderLine};
 
 use std::io;
@@ -338,7 +338,7 @@ impl RenderNode {
             return s;
         };
 
-        use RenderNodeInfo::*;
+        use crate::RenderNodeInfo::*;
 
         // Otherwise, make an estimate.
         let estimate = match self.info {
@@ -605,8 +605,8 @@ where //for<'a> F: Fn(&'a mut C, Vec<RenderNode>) -> Option<RenderNode>+'static
 }
 
 fn process_dom_node<T:Write>(handle: Handle, err_out: &mut T) -> TreeMapResult<(), Handle, RenderNode> {
-    use TreeMapResult::*;
-    use RenderNodeInfo::*;
+    use crate::TreeMapResult::*;
+    use crate::RenderNodeInfo::*;
 
     match handle.clone().data {
         Document => pending(handle, |&mut (), cs| Some(RenderNode::new(Container(cs)))),
@@ -807,8 +807,8 @@ fn do_render_node<'a, 'b, T: Write, R: Renderer>(builder: &mut BuilderStack<R>,
                                                  err_out: &'b mut T)
   -> TreeMapResult<BuilderStack<R>, RenderNode, Option<R>>
 {
-    use TreeMapResult::*;
-    use RenderNodeInfo::*;
+    use crate::TreeMapResult::*;
+    use crate::RenderNodeInfo::*;
     match tree.info {
         Text(ref tstr) => {
             builder.add_inline_text(tstr);
