@@ -566,7 +566,7 @@ fn tree_map_reduce<C, N, R, M>(context: &mut C,
             };
         } else {
             // No more children, so finally construct the parent.
-            let mut completed = pending_stack.pop().unwrap();
+            let completed = pending_stack.pop().unwrap();
             let reduced = (completed.construct)(context, completed.children);
             if let Some(node) = reduced {
                 if let Some(parent) = pending_stack.last_mut() {
@@ -857,7 +857,7 @@ fn do_render_node<'a, 'b, T: Write, R: Renderer>(builder: &mut BuilderStack<R>,
             })
         },
         Header(level, children) => {
-            let mut sub_builder = builder.new_sub_renderer(builder.width()-(1+level));
+            let sub_builder = builder.new_sub_renderer(builder.width()-(1+level));
             builder.push(sub_builder);
             pending2(children, move |builder: &mut BuilderStack<R>, _| {
                 let sub_builder = builder.pop();
@@ -882,7 +882,7 @@ fn do_render_node<'a, 'b, T: Write, R: Renderer>(builder: &mut BuilderStack<R>,
             Finished(None)
         },
         BlockQuote(children) => {
-            let mut sub_builder = builder.new_sub_renderer(builder.width()-2);
+            let sub_builder = builder.new_sub_renderer(builder.width()-2);
             builder.push(sub_builder);
             pending2(children, |builder: &mut BuilderStack<R>, _| {
                 let sub_builder = builder.pop();
