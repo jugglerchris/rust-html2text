@@ -6,6 +6,7 @@ description = "Render HTML as plain text."
 repository = "https://github.com/jugglerchris/rust-html2text/"
 readme = "README.md"
 documentation = "https://docs.rs/html2text/"
+edition = "2018"
 
 keywords = ["html", "text"]
 license = "MIT"
