@@ -579,7 +579,6 @@ impl<D:TextDecorator> TextRenderer<D> {
 }
 
 impl<D:TextDecorator> Renderer for TextRenderer<D> {
-    type Sub = Self;
     fn add_empty_line(&mut self) {
         html_trace!("add_empty_line()");
         self.flush_all();

@@ -68,6 +68,7 @@ use std::io;
 use std::io::Write;
 use std::cmp::max;
 use std::iter::{once,repeat};
+use std::ops::{Deref,DerefMut};
 use html5ever::{parse_document};
 use html5ever::driver::ParseOpts;
 use html5ever::tree_builder::TreeBuilderOpts;
@@ -128,13 +129,15 @@ pub struct RenderTableCell {
     colspan: usize,
     content: Vec<RenderNode>,
     size_estimate: Option<SizeEstimate>,
+    col_width: Option<usize>,  // Actual width to use
 }
 
 impl RenderTableCell {
     /// Render this cell to a builder.
-    pub fn render<T:Write, R:Renderer>(&mut self, builder: &mut R, err_out: &mut T)
+    pub fn render<T:Write, R:Renderer>(&mut self, _builder: &mut R, _err_out: &mut T)
     {
-        render_tree_children_to_string(builder, &mut self.content, err_out)
+        unimplemented!()
+        //render_tree_children_to_string(builder, &mut self.content, err_out)
     }
 
     /// Calculate or return the estimate size of the cell
@@ -154,6 +157,7 @@ impl RenderTableCell {
 /// Render tree table row
 pub struct RenderTableRow {
     cells: Vec<RenderTableCell>,
+    col_sizes: Option<Vec<usize>>,
 }
 
 impl RenderTableRow {
@@ -174,6 +178,24 @@ impl RenderTableRow {
         for cell in &mut self.cells {
             let colspan = cell.colspan;
             result.push((colno, cell));
+            colno += colspan;
+        }
+        result
+    }
+
+    /// Return the contained cells as RenderNodes, annotated with their
+    /// widths if available.  Skips cells with no width allocated.
+    pub fn into_cells(self) -> Vec<RenderNode> {
+        let mut result = Vec::new();
+        let mut colno = 0;
+        let col_sizes = self.col_sizes.unwrap();
+        for mut cell in self.cells {
+            let colspan = cell.colspan;
+            let col_width: usize = col_sizes[colno..colno+cell.colspan].iter().sum();
+            if col_width > 1 {
+                cell.col_width = Some(col_width - 1);
+                result.push(RenderNode::new(RenderNodeInfo::TableCell(cell)));
+            }
             colno += colspan;
         }
         result
@@ -203,6 +225,18 @@ impl RenderTable {
     /// Return an iterator over the rows.
     pub fn rows(&mut self) -> std::slice::IterMut<RenderTableRow> {
         self.rows.iter_mut()
+    }
+
+    /// Consume this and return a Vec<RenderNode> containing the children;
+    /// the children know the column sizes required.
+    pub fn into_rows(self, col_sizes: Vec<usize>) -> Vec<RenderNode> {
+        self.rows
+            .into_iter()
+            .map(|mut tr| {
+                tr.col_sizes = Some(col_sizes.clone());
+                RenderNode::new(RenderNodeInfo::TableRow(tr))
+             })
+            .collect()
     }
 
     fn calc_size_estimate(&mut self) {
@@ -273,6 +307,12 @@ pub enum RenderNodeInfo {
     Break,
     /// A table
     Table(RenderTable),
+    /// A set of table rows (from either <thead> or <tbody>
+    TableBody(Vec<RenderTableRow>),
+    /// Table row (must only appear within a table body)
+    TableRow(RenderTableRow),
+    /// Table cell (must only appear within a table row)
+    TableCell(RenderTableCell),
 }
 
 /// Common fields from a node.
@@ -331,6 +371,9 @@ impl RenderNode {
             Table(ref mut t) => {
                 t.get_size_estimate()
             },
+            TableRow(_)|TableBody(_)|TableCell(_) => {
+                unimplemented!()
+            },
         };
         self.size_estimate = Some(estimate);
         estimate
@@ -371,77 +414,54 @@ fn list_children_to_render_nodes<T:Write>(handle: Handle, err_out: &mut T) -> Ve
 }
 
 /// Convert a table into a RenderNode
-fn table_to_render_tree<T:Write>(handle: Handle, err_out: &mut T) -> Option<RenderNode> {
-    let mut rows = Vec::new();
-
-    for child in handle.children.borrow().iter() {
-        match child.data {
-            Element { ref name, .. } => {
-                match name.expanded() {
-                    expanded_name!(html "thead") |
-                    expanded_name!(html "tbody") => tbody_to_render_tree(child.clone(), &mut rows, err_out),
-                    _ => { writeln!(err_out, "  [[table child: {:?}]]", name).unwrap(); },
-                }
-            },
-            Comment { .. } => {},
-            _ => { html_trace!("Unhandled in table: {:?}\n", child); },
+fn table_to_render_tree<T:Write>(handle: Handle, _err_out: &mut T) ->  TreeMapResult<(), Handle, RenderNode> {
+    pending(handle, |_,rowset| {
+        let mut rows = vec![];
+        for bodynode in rowset {
+            if let RenderNodeInfo::TableBody(body) = bodynode.info {
+                rows.extend(body);
+            } else {
+                html_trace!("Found in table: {:?}", body);
+            }
         }
-    }
-    if rows.len() > 0 {
         Some(RenderNode::new(RenderNodeInfo::Table(RenderTable::new(rows))))
-    } else {
-        None
-    }
+    })
 }
 
 /// Add rows from a thead or tbody.
-fn tbody_to_render_tree<T:Write>(handle: Handle,
-                                 rows: &mut Vec<RenderTableRow>,
-                                 err_out: &mut T) {
-    for child in handle.children.borrow().iter() {
-        match child.data {
-            Element { ref name, .. } => {
-                match name.expanded() {
-                    expanded_name!(html "tr") => {
-                        rows.push(tr_to_render_tree(child.clone(), err_out));
-                    },
-                    _ => { html_trace!("  [[tbody child: {:?}]]", name); },
-                }
-            },
-            Comment { .. } => {},
-            _ => { html_trace!("Unhandled in tbody: {:?}\n", child); },
-        }
-    }
+fn tbody_to_render_tree<T:Write>(handle: Handle, _err_out: &mut T) ->  TreeMapResult<(), Handle, RenderNode> {
+    pending(handle, |_,rowchildren| {
+        let rows = rowchildren.into_iter()
+                              .flat_map(|rownode| {
+                                  if let RenderNodeInfo::TableRow(row) = rownode.info {
+                                      Some(row)
+                                  } else {
+                                      html_trace!("  [[tbody child: {:?}]]", rownode);
+                                      None
+                                  }})
+                              .collect();
+        Some(RenderNode::new(RenderNodeInfo::TableBody(rows)))
+    })
 }
 
 /// Convert a table row to a RenderTableRow
-fn tr_to_render_tree<T:Write>(handle: Handle, err_out: &mut T) -> RenderTableRow {
-    let mut cells = Vec::new();
-
-    for child in handle.children.borrow().iter() {
-        match child.data {
-            Element { ref name, .. } => {
-                match name.expanded() {
-                    expanded_name!(html "th") |
-                    expanded_name!(html "td") => {
-                        cells.push(td_to_render_tree(child.clone(), err_out));
-                    },
-                    _ => { html_trace!("  [[tr child: {:?}]]", name); },
-                }
-            },
-            Comment { .. } => {},
-            _ => { html_trace!("Unhandled in tr: {:?}\n", child); },
-        }
-    }
-
-    RenderTableRow {
-        cells: cells,
-    }
+fn tr_to_render_tree<T:Write>(handle: Handle, _err_out: &mut T) ->  TreeMapResult<(), Handle, RenderNode> {
+    pending(handle, |_, cellnodes| {
+        let cells = cellnodes.into_iter()
+                             .flat_map(|cellnode| {
+                                 if let RenderNodeInfo::TableCell(cell) = cellnode.info {
+                                     Some(cell)
+                                 } else {
+                                     html_trace!("  [[tr child: {:?}]]", cellnode);
+                                     None
+                                 }})
+                             .collect();
+        Some(RenderNode::new(RenderNodeInfo::TableRow(RenderTableRow{cells, col_sizes: None})))
+    })
 }
 
 /// Convert a single table cell to a render node.
-fn td_to_render_tree<T: Write>(handle: Handle, err_out: &mut T) -> RenderTableCell {
-    let children = children_to_render_nodes(handle.clone(), err_out);
+fn td_to_render_tree<T:Write>(handle: Handle, _err_out: &mut T) ->  TreeMapResult<(), Handle, RenderNode> {
     let mut colspan = 1;
     if let Element { ref attrs, .. } = handle.data {
         for attr in attrs.borrow().iter() {
@@ -451,27 +471,153 @@ fn td_to_render_tree<T: Write>(handle: Handle, err_out: &mut T) -> RenderTableCe
             }
         }
     }
-    RenderTableCell {
-        colspan: colspan,
-        content: children,
-        size_estimate: None,
+    pending(handle, move |_, children| {
+        Some(RenderNode::new(RenderNodeInfo::TableCell(RenderTableCell {
+            colspan: colspan,
+            content: children,
+            size_estimate: None,
+            col_width: None,
+        })))
+    })
+}
+
+/// A reducer which combines results from mapping children into
+/// the result for the current node.  Takes a context and a
+/// vector of results and returns a new result (or nothing).
+type ResultReducer<C, R> = Fn(&mut C, Vec<R>) -> Option<R>;
+
+/// A closure to call before processing a child node.
+type ChildPreFn<C, N> = Fn(&mut C, &N);
+
+/// A closure to call after processing a child node,
+/// before adding the result to the processed results
+/// vector.
+type ChildPostFn<C, R> = Fn(&mut C, &R);
+
+/// The result of trying to render one node.
+enum TreeMapResult<C, N, R> {
+    /// A completed result.
+    Finished(R),
+    /// Deferred completion - can be turned into a result
+    /// once the vector of children are processed.
+    PendingChildren {
+        children: Vec<N>,
+        cons: Box<ResultReducer<C, R>>,
+        prefn: Option<Box<ChildPreFn<C, N>>>,
+        postfn: Option<Box<ChildPostFn<C, R>>>,
+    },
+    /// Nothing (e.g. a comment or other ignored element).
+    Nothing
+}
+
+fn tree_map_reduce<C, N, R, M>(context: &mut C,
+                               top: N,
+                               mut process_node: M) -> Option<R>
+    where M: FnMut(&mut C, N) -> TreeMapResult<C, N, R>,
+{
+    /// A node partially decoded, waiting for its children to
+    /// be processed.
+    struct PendingNode<C, R, N> {
+        /// How to make the node once finished
+        construct: Box<ResultReducer<C, R>>,
+        /// Called before processing each child
+        prefn: Option<Box<ChildPreFn<C, N>>>,
+        /// Called after processing each child
+        postfn: Option<Box<ChildPostFn<C, R>>>,
+        /// Children already processed
+        children: Vec<R>,
+        /// Iterator of child nodes not yet processed
+        to_process: std::vec::IntoIter<N>,
+    }
+
+    let mut pending_stack = vec![
+        PendingNode {
+            // We only expect one child, which we'll just return.
+            construct: Box::new(|_, mut cs| cs.pop()),
+            prefn: None,
+            postfn: None,
+            children: Vec::new(),
+            to_process: vec![top].into_iter(),
+        }
+    ];
+    loop {
+        // Get the next child node to process
+        let next_node = pending_stack.last_mut()
+                                     .unwrap()
+                                     .to_process
+                                     .next();
+        if let Some(h) = next_node {
+            pending_stack.last_mut().unwrap().prefn.as_ref().map(|ref f| f(context, &h));
+            match process_node(context, h) {
+                TreeMapResult::Finished(result) => {
+                    pending_stack.last_mut().unwrap().postfn.as_ref().map(|ref f| f(context, &result));
+                    pending_stack.last_mut().unwrap().children.push(result);
+                }
+                TreeMapResult::PendingChildren { children, cons, prefn, postfn } => {
+                    pending_stack.push(PendingNode {
+                        construct: cons,
+                        prefn,
+                        postfn,
+                        children: Vec::new(),
+                        to_process: children.into_iter(),
+                    });
+                },
+                TreeMapResult::Nothing => {},
+            };
+        } else {
+            // No more children, so finally construct the parent.
+            let mut completed = pending_stack.pop().unwrap();
+            let reduced = (completed.construct)(context, completed.children);
+            if let Some(node) = reduced {
+                if let Some(parent) = pending_stack.last_mut() {
+                    parent.postfn.as_ref().map(|ref f| f(context, &node));
+                    parent.children.push(node);
+                } else {
+                    // Finished the whole stack!
+                    break Some(node);
+                }
+            }
+        }
     }
 }
 
-
 /// Convert a DOM tree or subtree into a render tree.
 pub fn dom_to_render_tree<T:Write>(handle: Handle, err_out: &mut T) -> Option<RenderNode> {
+    let result = tree_map_reduce(&mut (), handle,
+                    |_, handle| process_dom_node(handle, err_out),
+                );
+
+    html_trace!("### dom_to_render_tree: HTML: {:?}", handle);
+    html_trace!("### dom_to_render_tree: out= {:#?}", result);
+    result
+}
+
+fn pending<F>(handle: Handle, f: F) -> TreeMapResult<(), Handle, RenderNode>
+where //for<'a> F: Fn(&'a mut C, Vec<RenderNode>) -> Option<RenderNode>+'static
+      for<'r> F: Fn(&'r mut (), std::vec::Vec<RenderNode>) -> Option<RenderNode>+'static
+{
+    TreeMapResult::PendingChildren{
+        children: handle.children.borrow().clone(),
+        cons: Box::new(f),
+        prefn: None,
+        postfn: None
+    }
+}
+
+fn process_dom_node<T:Write>(handle: Handle, err_out: &mut T) -> TreeMapResult<(), Handle, RenderNode> {
+    use TreeMapResult::*;
     use RenderNodeInfo::*;
-    let result = match handle.data {
-        Document => Some(RenderNode::new(Container(children_to_render_nodes(handle.clone(), err_out)))),
-        Comment { .. } => None,
+
+    match handle.clone().data {
+        Document => pending(handle, |&mut (), cs| Some(RenderNode::new(Container(cs)))),
+        Comment { .. } => Nothing,
         Element { ref name, ref attrs, .. } => {
             match name.expanded() {
                 expanded_name!(html "html") |
                 expanded_name!(html "span") |
                 expanded_name!(html "body") => {
                     /* process children, but don't add anything */
-                    Some(RenderNode::new(Container(children_to_render_nodes(handle.clone(), err_out))))
+                    pending(handle, |_,cs| Some(RenderNode::new(Container(cs))))
                 },
                 expanded_name!(html "link") |
                 expanded_name!(html "meta") |
@@ -480,7 +626,7 @@ pub fn dom_to_render_tree<T:Write>(handle: Handle, err_out: &mut T) -> Option<Re
                 expanded_name!(html "style") |
                 expanded_name!(html "head") => {
                     /* Ignore the head and its children */
-                    None
+                    Nothing
                 },
                 expanded_name!(html "a") => {
                     let borrowed = attrs.borrow();
@@ -491,21 +637,30 @@ pub fn dom_to_render_tree<T:Write>(handle: Handle, err_out: &mut T) -> Option<Re
                             break;
                         }
                     }
-                    let children = children_to_render_nodes(handle.clone(), err_out);
-                    if let Some(href) = target {
-                        Some(RenderNode::new(Link(href.into(), children)))
-                    } else {
-                        Some(RenderNode::new(Container(children)))
-                    }
+                    PendingChildren{
+                        children: handle.children.borrow().clone(),
+                        cons: if let Some(href) = target {
+                                // We need the closure to own the string it's going to use.
+                                // Unfortunately that means we ideally want FnOnce; but
+                                // that doesn't yet work in a Box.  Box<FnBox()> does, but
+                                // is unstable.  So we'll just move a string in and clone
+                                // it on use.
+                                let href: String = href.into();
+                                Box::new(move |_, cs| Some(RenderNode::new(Link(href.clone(), cs))))
+                            } else {
+                                Box::new(|_, cs| Some(RenderNode::new(Container(cs))))
+                            },
+                        prefn: None, postfn: None,
+                        }
                 },
                 expanded_name!(html "em") => {
-                    Some(RenderNode::new(Em(children_to_render_nodes(handle.clone(), err_out))))
+                    pending(handle, |_, cs| Some(RenderNode::new(Em(cs))))
                 },
                 expanded_name!(html "strong") => {
-                    Some(RenderNode::new(Strong(children_to_render_nodes(handle.clone(), err_out))))
+                    pending(handle, |_, cs| Some(RenderNode::new(Strong(cs))))
                 },
                 expanded_name!(html "code") => {
-                    Some(RenderNode::new(Code(children_to_render_nodes(handle.clone(), err_out))))
+                    pending(handle, |_, cs| Some(RenderNode::new(Code(cs))))
                 },
                 expanded_name!(html "img") => {
                     let borrowed = attrs.borrow();
@@ -517,9 +672,9 @@ pub fn dom_to_render_tree<T:Write>(handle: Handle, err_out: &mut T) -> Option<Re
                         }
                     }
                     if let Some(title) = title {
-                        Some(RenderNode::new(Img(title.into())))
+                        Finished(RenderNode::new(Img(title.into())))
                     } else {
-                        None
+                        Nothing
                     }
                 },
                 expanded_name!(html "h1") |
@@ -527,158 +682,280 @@ pub fn dom_to_render_tree<T:Write>(handle: Handle, err_out: &mut T) -> Option<Re
                 expanded_name!(html "h3") |
                 expanded_name!(html "h4") => {
                     let level: usize = name.local[1..].parse().unwrap();
-                    Some(RenderNode::new(Header(level, children_to_render_nodes(handle.clone(), err_out))))
+                    pending(handle, move |_, cs| Some(RenderNode::new(Header(level, cs))))
                 },
                 expanded_name!(html "p") => {
-                    Some(RenderNode::new(Block(children_to_render_nodes(handle.clone(), err_out))))
+                    pending(handle, |_, cs| Some(RenderNode::new(Block(cs))))
                 },
                 expanded_name!(html "div") => {
-                    Some(RenderNode::new(Div(children_to_render_nodes(handle.clone(), err_out))))
+                    pending(handle, |_, cs| Some(RenderNode::new(Div(cs))))
                 },
                 expanded_name!(html "pre") => {
-                    Some(RenderNode::new(Pre(get_text(handle.clone()))))
+                    Finished(RenderNode::new(Pre(get_text(handle))))
                 },
                 expanded_name!(html "br") => {
-                    Some(RenderNode::new(Break))
+                    Finished(RenderNode::new(Break))
                 }
-                expanded_name!(html "table") => table_to_render_tree(handle.clone(), err_out),
+                expanded_name!(html "table") => {
+                    table_to_render_tree(handle.clone(), err_out)
+                },
+                expanded_name!(html "thead") |
+                expanded_name!(html "tbody") => {
+                    tbody_to_render_tree(handle.clone(), err_out)
+                },
+                expanded_name!(html "tr") => {
+                    tr_to_render_tree(handle.clone(), err_out)
+                },
+                expanded_name!(html "th") |
+                expanded_name!(html "td") => {
+                    td_to_render_tree(handle.clone(), err_out)
+                }
                 expanded_name!(html "blockquote") => {
-                    Some(RenderNode::new(BlockQuote(children_to_render_nodes(handle.clone(), err_out))))
+                    pending(handle, |_, cs| Some(RenderNode::new(BlockQuote(cs))))
                 },
                 expanded_name!(html "ul") => {
-                    Some(RenderNode::new(Ul(list_children_to_render_nodes(handle.clone(), err_out))))
+                    Finished(RenderNode::new(Ul(list_children_to_render_nodes(handle.clone(), err_out))))
                 },
                 expanded_name!(html "ol") => {
-                    Some(RenderNode::new(Ol(list_children_to_render_nodes(handle.clone(), err_out))))
+                    Finished(RenderNode::new(Ol(list_children_to_render_nodes(handle.clone(), err_out))))
                 },
                 _ => {
                     html_trace!("Unhandled element: {:?}\n", name.local);
-                    Some(RenderNode::new(Container(children_to_render_nodes(handle.clone(), err_out))))
+                    pending(handle, |_, cs| Some(RenderNode::new(Container(cs))))
                     //None
                 },
             }
           },
         rcdom::NodeData::Text { contents: ref tstr } => {
-            Some(RenderNode::new(Text((&*tstr.borrow()).into())))
+            Finished(RenderNode::new(Text((&*tstr.borrow()).into())))
         }
         _ => {
             // NodeData doesn't have a Debug impl.
-            write!(err_out, "Unhandled node type.\n").unwrap(); None
+            write!(err_out, "Unhandled node type.\n").unwrap();
+            Nothing
         },
-    };
-    html_trace!("### dom_to_render_tree: HTML: {:?}", node);
-    html_trace!("### dom_to_render_tree: out= {:#?}", result);
-    return result;
-}
-
-fn render_tree_children_to_string<T:Write, R:Renderer>(builder: &mut R,
-                                                      children: &mut Vec<RenderNode>,
-                                                      err_out: &mut T) {
-    for child in children {
-        render_tree_to_string(builder, child, err_out);
     }
 }
 
-fn render_tree_to_string<T:Write, R:Renderer>(builder: &mut R, tree: &mut RenderNode,
-                          err_out: &mut T) {
+/// Context to use during tree parsing.
+/// This mainly gives access to a Renderer, but needs to be able to push
+/// new ones on for nested structures.
+struct BuilderStack<R:Renderer> {
+    builders: Vec<R>,
+}
+
+impl<R:Renderer> BuilderStack<R> {
+    pub fn new(builder: R) -> BuilderStack<R> {
+        BuilderStack {
+            builders: vec![builder],
+        }
+    }
+
+    /// Push a new builder onto the stack
+    pub fn push(&mut self, builder: R) {
+        self.builders.push(builder);
+    }
+
+    /// Pop off the top builder and return it.
+    /// Panics if empty
+    pub fn pop(&mut self) -> R {
+        self.builders.pop().unwrap()
+    }
+
+    /// Pop off the only builder and return it.
+    /// panics if there aren't exactly 1 available.
+    pub fn into_inner(mut self) -> R {
+        assert_eq!(self.builders.len(), 1);
+        self.builders.pop().unwrap()
+    }
+}
+
+impl<R:Renderer> Deref for BuilderStack<R> {
+    type Target = R;
+    fn deref(&self) -> &R {
+        self.builders.last().expect("Underflow in BuilderStack")
+    }
+}
+
+impl<R:Renderer> DerefMut for BuilderStack<R> {
+    fn deref_mut(&mut self) -> &mut R {
+        self.builders.last_mut().expect("Underflow in BuilderStack")
+    }
+}
+
+fn render_tree_to_string<T:Write, R:Renderer>(builder: R, tree: RenderNode,
+                          err_out: &mut T) -> R {
+    let mut bs = BuilderStack::new(builder);
+    tree_map_reduce(&mut bs, tree,
+        |builders, node| do_render_node(builders, node, err_out),
+    );
+    bs.into_inner()
+}
+
+fn pending2<R: Renderer, F: Fn(&mut BuilderStack<R>, Vec<Option<R>>) -> Option<Option<R>> + 'static>(children: Vec<RenderNode>, f: F) -> TreeMapResult<BuilderStack<R>, RenderNode, Option<R>> {
+    TreeMapResult::PendingChildren{
+        children: children,
+        cons: Box::new(f),
+        prefn: None,
+        postfn: None
+    }
+}
+
+
+fn do_render_node<'a, 'b, T: Write, R: Renderer>(builder: &mut BuilderStack<R>,
+                                                 tree: RenderNode,
+                                                 err_out: &'b mut T)
+  -> TreeMapResult<BuilderStack<R>, RenderNode, Option<R>>
+{
+    use TreeMapResult::*;
     use RenderNodeInfo::*;
     match tree.info {
         Text(ref tstr) => {
             builder.add_inline_text(tstr);
+            Finished(None)
         },
-        Container(ref mut children) => {
-            render_tree_children_to_string(builder, children, err_out);
+        Container(children) => {
+            pending2(children, |_, _| Some(None))
         },
-        Link(ref href, ref mut children) => {
-            builder.start_link(href);
-            render_tree_children_to_string(builder, children, err_out);
-            builder.end_link();
+        Link(href, children) => {
+            builder.start_link(&href);
+            pending2(children, |builder:&mut BuilderStack<R>, _| {
+                builder.end_link();
+                Some(None)
+            })
         },
-        Em(ref mut children) => {
+        Em(children) => {
             builder.start_emphasis();
-            render_tree_children_to_string(builder, children, err_out);
-            builder.end_emphasis();
+            pending2(children, |builder:&mut BuilderStack<R>, _| {
+                builder.end_emphasis();
+                Some(None)
+            })
         },
-        Strong(ref mut children) => {
+        Strong(children) => {
             builder.start_strong();
-            render_tree_children_to_string(builder, children, err_out);
-            builder.end_strong();
+            pending2(children, |builder:&mut BuilderStack<R>, _| {
+                builder.end_strong();
+                Some(None)
+            })
         },
-        Code(ref mut children) => {
+        Code(children) => {
             builder.start_code();
-            render_tree_children_to_string(builder, children, err_out);
-            builder.end_code();
+            pending2(children, |builder:&mut BuilderStack<R>, _| {
+                builder.end_code();
+                Some(None)
+            })
         },
-        Img(ref title) => {
-            builder.add_image(title);
+        Img(title) => {
+            builder.add_image(&title);
+            Finished(None)
         },
-        Block(ref mut children) => {
+        Block(children) => {
             builder.start_block();
-            render_tree_children_to_string(builder, children, err_out);
-            builder.end_block();
+            pending2(children, |builder:&mut BuilderStack<R>, _| {
+                builder.end_block();
+                Some(None)
+            })
         },
-        Header(level, ref mut children) => {
+        Header(level, children) => {
             let mut sub_builder = builder.new_sub_renderer(builder.width()-(1+level));
-            render_tree_children_to_string(&mut sub_builder, children, err_out);
+            builder.push(sub_builder);
+            pending2(children, move |builder: &mut BuilderStack<R>, _| {
+                let sub_builder = builder.pop();
 
-            let qs: String = "#".repeat(level) + " ";
+                let qs: String = "#".repeat(level) + " ";
 
-            builder.start_block();
-            builder.append_subrender(sub_builder, repeat(&qs[..]));
-            builder.end_block();
+                builder.start_block();
+                builder.append_subrender(sub_builder, repeat(&qs[..]));
+                builder.end_block();
+                Some(None)
+            })
         },
-        Div(ref mut children) => {
+        Div(children) => {
             builder.new_line();
-            render_tree_children_to_string(builder, children, err_out);
-            builder.new_line();
+            pending2(children, |builder:&mut BuilderStack<R>, _| {
+                builder.new_line();
+                Some(None)
+            })
         },
         Pre(ref formatted) => {
             builder.add_preformatted_block(formatted);
+            Finished(None)
         },
-        BlockQuote(ref mut children) => {
+        BlockQuote(children) => {
             let mut sub_builder = builder.new_sub_renderer(builder.width()-2);
-            render_tree_children_to_string(&mut sub_builder, children, err_out);
+            builder.push(sub_builder);
+            pending2(children, |builder: &mut BuilderStack<R>, _| {
+                let sub_builder = builder.pop();
 
-            builder.start_block();
-            builder.append_subrender(sub_builder, repeat("> "));
-            builder.end_block();
+                builder.start_block();
+                builder.append_subrender(sub_builder, repeat("> "));
+                builder.end_block();
+                Some(None)
+            })
         },
-        Ul(ref mut items) => {
+        Ul(items) => {
             builder.start_block();
-            for item in items {
-                let mut sub_builder = builder.new_sub_renderer(builder.width()-2);
-                render_tree_to_string(&mut sub_builder, item, err_out);
-                builder.append_subrender(sub_builder, once("* ").chain(repeat("  ")));
+
+            TreeMapResult::PendingChildren{
+                children: items,
+                cons: Box::new(|_, _| Some(None)),
+                prefn: Some(Box::new(|builder: &mut BuilderStack<R>, _| {
+                    let sub_builder = builder.new_sub_renderer(builder.width()-2);
+                    builder.push(sub_builder);
+                })),
+                postfn: Some(Box::new(|builder: &mut BuilderStack<R>, _| {
+                    let sub_builder = builder.pop();
+                    builder.append_subrender(sub_builder, once("* ").chain(repeat("  ")));
+                })),
             }
         },
-        Ol(ref mut items) => {
-            let num_items = items.len();
-
+        Ol(items) => {
             builder.start_block();
 
+            let num_items = items.len();
             let prefix_width = format!("{}", num_items).len() + 2;
-
-            let mut i = 1;
             let prefixn = format!("{: <width$}", "", width=prefix_width);
-            for item in items {
-                let mut sub_builder = builder.new_sub_renderer(builder.width()-prefix_width);
-                render_tree_to_string(&mut sub_builder, item, err_out);
-                let prefix1 = format!("{}.", i);
-                let prefix1 = format!("{: <width$}", prefix1, width=prefix_width);
-                builder.append_subrender(sub_builder, once(prefix1.as_str()).chain(repeat(prefixn.as_str())));
-                i += 1;
+            use std::cell::Cell;
+            let i: Cell<_> = Cell::new(1);
+
+            TreeMapResult::PendingChildren{
+                children: items,
+                cons: Box::new(|_, _| Some(None)),
+                prefn: Some(Box::new(move |builder: &mut BuilderStack<R>, _| {
+                    let sub_builder = builder.new_sub_renderer(builder.width()-prefix_width);
+                    builder.push(sub_builder);
+                })),
+                postfn: Some(Box::new(move |builder: &mut BuilderStack<R>, _| {
+                    let sub_builder = builder.pop();
+                    let prefix1 = format!("{}.", i.get());
+                    let prefix1 = format!("{: <width$}", prefix1, width=prefix_width);
+
+                    builder.append_subrender(sub_builder, once(prefix1.as_str()).chain(repeat(prefixn.as_str())));
+                    i.set(i.get() + 1);
+                })),
             }
         },
         Break => {
             builder.new_line();
+            Finished(None)
         },
-        Table(ref mut tab) => {
-            render_table_tree(builder, tab, err_out);
+        Table(tab) => {
+            render_table_tree(builder.deref_mut(), tab, err_out)
+        },
+        TableRow(row) => {
+            render_table_row(builder.deref_mut(), row, err_out)
+        },
+        TableBody(_) => {
+            unimplemented!("Unexpected TableBody while rendering")
+        },
+        TableCell(cell) => {
+            render_table_cell(builder.deref_mut(), cell, err_out)
         },
     }
 }
 
-fn render_table_tree<T:Write, R:Renderer>(builder: &mut R, table: &mut RenderTable, err_out: &mut T) {
+fn render_table_tree<T:Write, R:Renderer>(builder: &mut R, mut table: RenderTable, _err_out: &mut T) -> TreeMapResult<BuilderStack<R>, RenderNode, Option<R>>
+{
     /* Now lay out the table. */
     let num_columns = table.num_columns;
 
@@ -688,6 +965,7 @@ fn render_table_tree<T:Write, R:Renderer>(builder: &mut R, table: &mut RenderTab
     for row in table.rows() {
         let mut colno = 0;
         for cell in row.cells() {
+            // FIXME: get_size_estimate is still recursive.
             let mut estimate = cell.get_size_estimate();
             // If the cell has a colspan>1, then spread its size between the
             // columns.
@@ -730,24 +1008,44 @@ fn render_table_tree<T:Write, R:Renderer>(builder: &mut R, table: &mut RenderTab
 
     builder.add_horizontal_border();
 
-    for row in table.rows() {
-        let rendered_cells: Vec<R::Sub> = row.cell_columns()
-                                             .into_iter()
-                                             .flat_map(|(colno, cell)| {
-                                                  let col_width:usize = col_widths[colno..colno+cell.colspan]
-                                                                     .iter().sum();
-                                                  if col_width > 1 {
-                                                      let mut cellbuilder = builder.new_sub_renderer(col_width-1);
-                                                      cell.render(&mut cellbuilder, err_out);
-                                                      Some(cellbuilder)
-                                                  } else {
-                                                      None
-                                                  }
-                                              }).collect();
-        if rendered_cells.iter().any(|r| !r.empty()) {
-            builder.append_columns_with_borders(rendered_cells, true);
-        }
+    TreeMapResult::PendingChildren{
+        children: table.into_rows(col_widths),
+        cons: Box::new(|_, _| Some(None)),
+        prefn: Some(Box::new(|_, _| { })),
+        postfn: Some(Box::new(|_, _| { })),
     }
+}
+
+fn render_table_row<T:Write, R:Renderer>(_builder: &mut R, row: RenderTableRow, _err_out: &mut T) -> TreeMapResult<BuilderStack<R>, RenderNode, Option<R>>
+{
+    TreeMapResult::PendingChildren{
+        children: row.into_cells(),
+        cons: Box::new(|builders, children| {
+            let children: Vec<_> = children.into_iter().map(Option::unwrap).collect();
+            if children.iter().any(|c| !c.empty()) {
+                builders.append_columns_with_borders(children, true);
+            }
+            Some(None)
+        }),
+        prefn: Some(Box::new(|builder: &mut BuilderStack<R>, node| {
+            if let RenderNodeInfo::TableCell(ref cell) = node.info {
+                let sub_builder = builder.new_sub_renderer(cell.col_width.unwrap());
+                builder.push(sub_builder);
+            } else {
+                panic!()
+            }
+        })),
+        postfn: Some(Box::new(|_builder: &mut BuilderStack<R>, _| {
+        })),
+    }
+}
+
+fn render_table_cell<T:Write, R:Renderer>(_builder: &mut R, cell: RenderTableCell, _err_out: &mut T) -> TreeMapResult<BuilderStack<R>, RenderNode, Option<R>>
+{
+    pending2(cell.content, |builder: &mut BuilderStack<R>, _| {
+        let sub_builder = builder.pop();
+        Some(Some(sub_builder))
+    })
 }
 
 /// Reads HTML from `input`, and returns a `String` with text wrapped to
@@ -766,10 +1064,10 @@ pub fn from_read<R>(mut input: R, width: usize) -> String where R: io::Read {
                    .unwrap();
 
     let decorator = PlainDecorator::new();
-    let mut builder = TextRenderer::new(width, decorator);
+    let builder = TextRenderer::new(width, decorator);
 
-    let mut render_tree = dom_to_render_tree(dom.document, &mut Discard{}).unwrap();
-    render_tree_to_string(&mut builder, &mut render_tree, &mut Discard{});
+    let render_tree = dom_to_render_tree(dom.document, &mut Discard{}).unwrap();
+    let builder = render_tree_to_string(builder, render_tree, &mut Discard{});
     builder.into_string()
 }
 
@@ -792,9 +1090,9 @@ pub fn from_read_rich<R>(mut input: R, width: usize) -> Vec<TaggedLine<Vec<RichA
                    .unwrap();
 
     let decorator = RichDecorator::new();
-    let mut builder = TextRenderer::new(width, decorator);
-    let mut render_tree = dom_to_render_tree(dom.document, &mut Discard{}).unwrap();
-    render_tree_to_string(&mut builder, &mut render_tree, &mut Discard{});
+    let builder = TextRenderer::new(width, decorator);
+    let render_tree = dom_to_render_tree(dom.document, &mut Discard{}).unwrap();
+    let builder = render_tree_to_string(builder, render_tree, &mut Discard{});
     builder.into_lines().into_iter().map(RenderLine::into_tagged_line).collect()
 }
 
@@ -925,6 +1223,49 @@ foo
 * Item
   three
 "#, 10);
+     }
+
+     #[test]
+     fn test_ol1() {
+         test_html(br#"
+            <ol>
+              <li>Item one</li>
+              <li>Item two</li>
+              <li>Item three</li>
+            </ol>
+         "#, r#"1. Item one
+2. Item two
+3. Item
+   three
+"#, 11);
+     }
+
+     #[test]
+     fn test_ol2() {
+         test_html(br#"
+            <ol>
+              <li>Item one</li>
+              <li>Item two</li>
+              <li>Item three</li>
+              <li>Item four</li>
+              <li>Item five</li>
+              <li>Item six</li>
+              <li>Item seven</li>
+              <li>Item eight</li>
+              <li>Item nine</li>
+              <li>Item ten</li>
+            </ol>
+         "#, r#"1.  Item one
+2.  Item two
+3.  Item three
+4.  Item four
+5.  Item five
+6.  Item six
+7.  Item seven
+8.  Item eight
+9.  Item nine
+10. Item ten
+"#, 20);
      }
 
      #[test]
@@ -1305,7 +1646,6 @@ Hi foo, bar
     }
 
     #[test]
-    #[ignore]  // Not yet fixed!
     fn test_deeply_nested() {
         use ::std::iter::repeat;
         let html = repeat("<foo>")
@@ -1313,5 +1653,23 @@ Hi foo, bar
                          .collect::<Vec<_>>()
                          .concat();
         test_html(html.as_bytes(), "", 10);
+    }
+
+    #[test]
+    fn test_deeply_nested_table() {
+        use ::std::iter::repeat;
+        let html = repeat("<table><tr><td>hi</td><td>")
+                         .take(1000)
+                         .collect::<Vec<_>>()
+                         .concat()
+                 + &repeat("</td></tr></table>")
+                         .take(1000)
+                         .collect::<Vec<_>>()
+                         .concat();
+        test_html(html.as_bytes(), r#"────┬─┬───
+hi  │h│   
+    │i│   
+────┴─┴───
+"#, 10);
     }
 }
