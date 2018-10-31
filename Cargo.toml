@@ -24,6 +24,7 @@ backtrace = "0.3"
 [features]
 html_trace = []
 default = []
+bench = []
 
 [[example]]
 name = "html2term"
