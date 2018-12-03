@@ -14,6 +14,7 @@ mod top {
     use termion::event::Key;
     use termion::raw::IntoRawMode;
     use termion::cursor::Goto;
+    use termion::screen::AlternateScreen;
     use unicode_width::UnicodeWidthStr;
 
     fn to_style(tag: &Vec<RichAnnotation>) -> String {
@@ -107,31 +108,32 @@ mod top {
         let link_map = find_links(&annotated);
 
         let mut keys = io::stdin().keys();
-        let mut stdout = io::stdout().into_raw_mode().unwrap();
         let mut pos = 0;
         // 1-based screen co-ordinates
         let mut cursor_x = 1;
         let mut cursor_y = 1;
+        let mut screen = AlternateScreen::from(
+            io::stdout().into_raw_mode().unwrap());
         loop {
             let opt_url = link_map.link_at(cursor_x as usize - 1, cursor_y as usize +pos-1);
             let maxpos = std::cmp::min(pos+height, annotated.len());
-            write!(stdout, "{}", termion::clear::All).unwrap();
+            write!(screen, "{}", termion::clear::All).unwrap();
             for (i, line) in annotated[pos..maxpos].iter().enumerate() {
-                write!(stdout, "{}", Goto(1, i as u16 +1)).unwrap();
+                write!(screen, "{}", Goto(1, i as u16 +1)).unwrap();
                 for (s, tag) in line.iter() {
                     let style = to_style(tag);
                     let link = link_from_tag(tag);
                     match (opt_url, link) {
                         (Some(ref t1), Some(ref t2)) if t1 == t2 => {
-                            write!(stdout, "{}", termion::style::Invert).unwrap();
+                            write!(screen, "{}", termion::style::Invert).unwrap();
                         },
                         _ => (),
                     }
-                    write!(stdout, "{}{}{}", style, s, termion::style::Reset).unwrap();
+                    write!(screen, "{}{}{}", style, s, termion::style::Reset).unwrap();
                 }
             }
-            write!(stdout, "{}", Goto(cursor_x, cursor_y)).unwrap();
-            stdout.flush().unwrap();
+            write!(screen, "{}", Goto(cursor_x, cursor_y)).unwrap();
+            screen.flush().unwrap();
             if let Some(Ok(k)) = keys.next() {
                 match k {
                     Key::Char('q') => break,
