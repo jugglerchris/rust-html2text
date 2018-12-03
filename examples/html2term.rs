@@ -108,17 +108,40 @@ mod top {
         let link_map = find_links(&annotated);
 
         let mut keys = io::stdin().keys();
-        let mut pos = 0;
-        // 1-based screen co-ordinates
-        let mut cursor_x = 1;
-        let mut cursor_y = 1;
+
+        // max_y is the largest (0-based) index of a real document line.
+        let max_y = annotated.len() - 1;
+        // top_y is the (0-based) index of the document line shown at
+        // the top of the visible screen.
+        let mut top_y = 0;
+        // doc_x and doc_y are the logical (0-based) x and y of the
+        // cursor position within the document.
+        let mut doc_x = 0;
+        let mut doc_y = 0;
+
         let mut screen = AlternateScreen::from(
             io::stdout().into_raw_mode().unwrap());
+
         loop {
-            let opt_url = link_map.link_at(cursor_x as usize - 1, cursor_y as usize +pos-1);
-            let maxpos = std::cmp::min(pos+height, annotated.len());
+            // Sanity-check the current screen position. max_y should
+            // be small enough that no blank lines beyond the end of
+            // the document are visible on screen (except when the
+            // document is shorter than a screenful); large enough
+            // that the cursor isn't off the bottom of the visible
+            // screen; and small enough that the cursor isn't off the
+            // top.
+            if max_y >= height-1 {
+                top_y = std::cmp::min(top_y, max_y - (height-1));
+            }
+            if doc_y >= height-1 {
+                top_y = std::cmp::max(top_y, doc_y - (height-1));
+            }
+            top_y = std::cmp::min(top_y, doc_y);
+
+            let opt_url = link_map.link_at(doc_x, doc_y);
+            let vis_y_limit = std::cmp::min(top_y + height, max_y + 1);
             write!(screen, "{}", termion::clear::All).unwrap();
-            for (i, line) in annotated[pos..maxpos].iter().enumerate() {
+            for (i, line) in annotated[top_y..vis_y_limit].iter().enumerate() {
                 write!(screen, "{}", Goto(1, i as u16 +1)).unwrap();
                 for (s, tag) in line.iter() {
                     let style = to_style(tag);
@@ -132,40 +155,61 @@ mod top {
                     write!(screen, "{}{}{}", style, s, termion::style::Reset).unwrap();
                 }
             }
+
+            // 1-based screen coordinates
+            let cursor_x = (doc_x + 1) as u16;
+            let cursor_y = (doc_y - top_y + 1) as u16;
             write!(screen, "{}", Goto(cursor_x, cursor_y)).unwrap();
+
             screen.flush().unwrap();
             if let Some(Ok(k)) = keys.next() {
                 match k {
                     Key::Char('q') => break,
                     Key::Char('j') | Key::Down => {
-                        if cursor_y < height as u16 {
-                            cursor_y += 1;
+                        if doc_y < max_y {
+                            doc_y += 1;
                         }
                     },
                     Key::Char('k') | Key::Up => {
-                        if cursor_y > 1 {
-                            cursor_y -= 1;
+                        if doc_y > 0 {
+                            doc_y -= 1;
                         }
                     },
                     Key::Char('h') | Key::Left => {
-                        if cursor_x > 1 {
-                            cursor_x -= 1;
+                        if doc_x > 0 {
+                            doc_x -= 1;
                         }
                     },
                     Key::Char('l') | Key::Right => {
-                        if cursor_x < width as u16 {
-                            cursor_x += 1;
+                        if doc_x + 1 < width {
+                            doc_x += 1;
                         }
                     },
                     Key::Char(' ') | Key::PageDown => {
-                        if pos + height-1 < annotated.len() {
-                            pos += height-1;
-                        }
+                        // Ideally, move both the cursor and the top
+                        // visible line down by a whole page
+                        doc_y += height;
+                        top_y += height;
+
+                        // But bound the cursor within the document
+                        doc_y = std::cmp::min(doc_y, max_y);
+
+                        // And the standard bounds checking for top_y
+                        // will take care of the rest of the special
+                        // cases.
                     },
                     Key::PageUp => {
-                        if pos >= height-1 {
-                            pos -= height-1;
-                        }
+                        // Ideally, move both the cursor and the top
+                        // visible line up by a whole page. But bound
+                        // both at zero.
+                        doc_y = std::cmp::max(doc_y, height) - height;
+                        top_y = std::cmp::max(top_y, height) - height;
+                    },
+                    Key::Home => {
+                        doc_y = 0;
+                    },
+                    Key::End => {
+                        doc_y = max_y;
                     },
                     Key::Char('\t') => {
                     },
