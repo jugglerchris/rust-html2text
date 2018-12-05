@@ -8,7 +8,7 @@ mod top {
     use ::std;
     use ::html2text;
     use std::io::{self, Write};
-    use html2text::render::text_renderer::{RichAnnotation,TaggedLine};
+    use html2text::render::text_renderer::{RichAnnotation,TaggedLine,TaggedLineElement};
     use argparse::{ArgumentParser, Store};
     use termion::input::TermRead;
     use termion::event::Key;
@@ -72,14 +72,18 @@ mod top {
     }
 
     fn find_links(lines: &Vec<TaggedLine<Vec<RichAnnotation>>>) -> LinkMap {
+        use self::TaggedLineElement::Str;
+
         let mut map = Vec::new();
         for line in lines {
             let mut linevec = Vec::new();
 
-            for (s, tag) in line.iter() {
-                let link = link_from_tag(tag);
-                for _ in 0..UnicodeWidthStr::width(s) {
-                    linevec.push(link.clone());
+            for tli in line.iter() {
+                if let Str(ts) = tli {
+                    let link = link_from_tag(&ts.tag);
+                    for _ in 0..UnicodeWidthStr::width(ts.s.as_str()) {
+                        linevec.push(link.clone());
+                    }
                 }
             }
 
@@ -142,17 +146,21 @@ mod top {
             let vis_y_limit = std::cmp::min(top_y + height, max_y + 1);
             write!(screen, "{}", termion::clear::All).unwrap();
             for (i, line) in annotated[top_y..vis_y_limit].iter().enumerate() {
+                use self::TaggedLineElement::Str;
+
                 write!(screen, "{}", Goto(1, i as u16 +1)).unwrap();
-                for (s, tag) in line.iter() {
-                    let style = to_style(tag);
-                    let link = link_from_tag(tag);
-                    match (opt_url, link) {
-                        (Some(ref t1), Some(ref t2)) if t1 == t2 => {
-                            write!(screen, "{}", termion::style::Invert).unwrap();
-                        },
-                        _ => (),
+                for tli in line.iter() {
+                    if let Str(ts) = tli {
+                        let style = to_style(&ts.tag);
+                        let link = link_from_tag(&ts.tag);
+                        match (opt_url, link) {
+                            (Some(ref t1), Some(ref t2)) if t1 == t2 => {
+                                write!(screen, "{}", termion::style::Invert).unwrap();
+                            },
+                            _ => (),
+                        }
+                        write!(screen, "{}{}{}", style, ts.s, termion::style::Reset).unwrap();
                     }
-                    write!(screen, "{}{}{}", style, s, termion::style::Reset).unwrap();
                 }
             }
 

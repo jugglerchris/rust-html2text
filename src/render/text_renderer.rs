@@ -12,14 +12,28 @@ use std::fmt::Debug;
 /// A wrapper around a String with extra metadata.
 #[derive(Debug)]
 pub struct TaggedString<T:Debug> {
-    s: String,
-    tag: T,
+    /// The wrapped text.
+    pub s: String,
+
+    /// The metadata.
+    pub tag: T,
+}
+
+/// An element of a line of tagged text: either a TaggedString or a
+/// marker appearing in between document characters.
+#[derive(Debug)]
+pub enum TaggedLineElement<T:Debug+Eq+PartialEq+Clone> {
+    /// A string with tag information attached.
+    Str(TaggedString<T>),
+
+    /// A zero-width marker indicating the start of a named HTML fragment.
+    FragmentStart(String),
 }
 
 /// A line of tagged text (composed of a set of `TaggedString`s).
 #[derive(Debug)]
 pub struct TaggedLine<T:Debug+Eq+PartialEq+Clone> {
-    v: Vec<TaggedString<T>>,
+    v: Vec<TaggedLineElement<T>>,
 }
 
 impl<T:Debug+Eq+PartialEq+Clone+Default> TaggedLine<T> {
@@ -33,15 +47,18 @@ impl<T:Debug+Eq+PartialEq+Clone+Default> TaggedLine<T> {
     /// Create a new TaggedLine from a string and tag.
     pub fn from_string(s: String, tag: &T) -> TaggedLine<T> {
         TaggedLine {
-            v: vec![TaggedString{ s: s, tag: tag.clone() }],
+            v: vec![TaggedLineElement::Str(
+                TaggedString{ s: s, tag: tag.clone() })],
         }
     }
 
-    /// Join the line into a String ignoring the tags.
+    /// Join the line into a String, ignoring the tags and markers.
     pub fn into_string(self) -> String {
         let mut s = String::new();
-        for ts in self.v {
-            s.push_str(&ts.s);
+        for tle in self.v {
+            if let TaggedLineElement::Str(ts) = tle {
+                s.push_str(&ts.s);
+            }
         }
         s
     }
@@ -51,29 +68,54 @@ impl<T:Debug+Eq+PartialEq+Clone+Default> TaggedLine<T> {
         self.v.len() == 0
     }
 
-    /// Add a new fragment to the line
-    pub fn push(&mut self, ts: TaggedString<T>) {
-        if !self.v.is_empty() && self.v.last().unwrap().tag == ts.tag {
-            self.v.last_mut().unwrap().s.push_str(&ts.s);
+    /// Add a new tagged string fragment to the line
+    pub fn push_str(&mut self, ts: TaggedString<T>) {
+        use self::TaggedLineElement::Str;
+
+        if !self.v.is_empty() {
+            if let Str(ref mut ts_prev) = self.v.last_mut().unwrap() {
+                if ts_prev.tag == ts.tag {
+                    ts_prev.s.push_str(&ts.s);
+                    return;
+                }
+            }
+        }
+        self.v.push(Str(ts));
+    }
+
+    /// Add a new general TaggedLineElement to the line
+    pub fn push(&mut self, tle: TaggedLineElement<T>) {
+        use self::TaggedLineElement::Str;
+
+        if let Str(ts) = tle {
+            self.push_str(ts);
         } else {
-            self.v.push(ts);
+            self.v.push(tle);
         }
     }
 
     /// Add a new fragment to the start of the line
     pub fn insert_front(&mut self, ts: TaggedString<T>) {
-        self.v.insert(0, ts);
+        use self::TaggedLineElement::Str;
+
+        self.v.insert(0, Str(ts));
     }
 
     /// Add text with a particular tag to self
     pub fn push_char(&mut self, c: char, tag: &T) {
-        if !self.v.is_empty() && self.v.last().unwrap().tag == *tag {
-            self.v.last_mut().unwrap().s.push(c);
-        } else {
-            let mut s = String::new();
-            s.push(c);
-            self.v.push(TaggedString { s: s, tag: tag.clone() });
+        use self::TaggedLineElement::Str;
+
+        if !self.v.is_empty() {
+            if let Str(ref mut ts_prev) = self.v.last_mut().unwrap() {
+                if ts_prev.tag == *tag {
+                    ts_prev.s.push(c);
+                    return;
+                }
+            }
         }
+        let mut s = String::new();
+        s.push(c);
+        self.v.push(Str(TaggedString { s: s, tag: tag.clone() }));
     }
 
     /// Drain tl and use to extend self.
@@ -84,26 +126,34 @@ impl<T:Debug+Eq+PartialEq+Clone+Default> TaggedLine<T> {
     }
 
     /// Drain the contained items
-    pub fn drain_all(&mut self) -> vec::Drain<TaggedString<T>> {
+    pub fn drain_all(&mut self) -> vec::Drain<TaggedLineElement<T>> {
         self.v.drain(..)
     }
 
     /// Iterator over the chars in this line.
     #[cfg_attr(feature="clippy", allow(needless_lifetimes))]
     pub fn chars<'a>(&'a self) -> Box<Iterator<Item=char>+'a> {
-        Box::new(self.v.iter().flat_map(|ts| ts.s.chars()))
+        use self::TaggedLineElement::Str;
+
+        Box::new(self.v.iter().flat_map(|tle| {
+            if let Str(ts) = tle { ts.s.chars() } else { "".chars() }
+        }))
     }
 
-    /// Iterator over (string, tag) pairs
-    pub fn iter<'a>(&'a self) -> Box<Iterator<Item=(&str, &T)>+'a> {
-        Box::new(self.v.iter().map(|ts| (ts.s.as_str(), &ts.tag)))
+    /// Iterator over TaggedLineElements
+    pub fn iter<'a>(&'a self) -> Box<Iterator<Item=&TaggedLineElement<T>>+'a> {
+        Box::new(self.v.iter())
     }
 
     /// Return the width of the line in cells
     pub fn width(&self) -> usize {
+        use self::TaggedLineElement::Str;
+
         let mut result = 0;
-        for ts in &self.v {
-            result += UnicodeWidthStr::width(ts.s.as_str());
+        for tle in &self.v {
+            if let Str(ts) = tle {
+                result += UnicodeWidthStr::width(ts.s.as_str());
+            }
         }
         result
     }
@@ -111,12 +161,14 @@ impl<T:Debug+Eq+PartialEq+Clone+Default> TaggedLine<T> {
     /// Pad this line to width with spaces (or if already at least this wide, do
     /// nothing).
     pub fn pad_to(&mut self, width: usize) {
+        use self::TaggedLineElement::Str;
+
         let my_width = self.width();
         if width > my_width {
-            self.v.push(TaggedString{
+            self.v.push(Str(TaggedString{
                 s: format!("{: <width$}", "", width=width-my_width),
                 tag: T::default(),
-            });
+            }));
         }
     }
 }
@@ -151,6 +203,8 @@ impl<T:Clone+Eq+Debug+Default> WrappedBlock<T> {
     }
 
     fn flush_word(&mut self) {
+        use self::TaggedLineElement::Str;
+
         /* Finish the word. */
         html_trace_quiet!("flush_word: word={:?}, linelen={}", self.word, self.linelen);
         if !self.word.is_empty() {
@@ -159,7 +213,7 @@ impl<T:Clone+Eq+Debug+Default> WrappedBlock<T> {
                         if self.linelen > 0 { 1 } else { 0 }; // space
             if space_needed <= space_in_line {
                 if self.linelen > 0 {
-                    self.line.push(TaggedString{s: " ".into(), tag: self.spacetag.take().unwrap()});
+                    self.line.push(Str(TaggedString{s: " ".into(), tag: self.spacetag.take().unwrap()}));
                     self.linelen += 1;
                 }
                 self.line.consume(&mut self.word);
@@ -176,42 +230,46 @@ impl<T:Clone+Eq+Debug+Default> WrappedBlock<T> {
                     /* We need to split the word. */
                     let mut wordbits = self.word.drain_all();
                     /* Note: there's always at least one piece */
-                    let mut opt_piece = wordbits.next();
+                    let mut opt_elt = wordbits.next();
                     let mut lineleft = self.width;
-                    while let Some(piece) = opt_piece.take() {
-                        let w = UnicodeWidthStr::width(piece.s.as_str());
-                        if w <= lineleft {
-                            self.line.push(piece);
-                            lineleft -= w;
-                            self.linelen += w;
-                            opt_piece = wordbits.next();
-                        } else {
-                            /* Split into two */
-                            let mut split_idx = 0;
-                            for (idx,c) in piece.s.char_indices() {
-                                let c_w = UnicodeWidthChar::width(c).unwrap();
-                                if c_w <= lineleft {
-                                    lineleft -= c_w;
-                                } else {
-                                    split_idx = idx;
-                                    break;
+                    while let Some(elt) = opt_elt.take() {
+                        if let Str(piece) = elt {
+                            let w = UnicodeWidthStr::width(piece.s.as_str());
+                            if w <= lineleft {
+                                self.line.push(Str(piece));
+                                lineleft -= w;
+                                self.linelen += w;
+                                opt_elt = wordbits.next();
+                            } else {
+                                /* Split into two */
+                                let mut split_idx = 0;
+                                for (idx,c) in piece.s.char_indices() {
+                                    let c_w = UnicodeWidthChar::width(c).unwrap();
+                                    if c_w <= lineleft {
+                                        lineleft -= c_w;
+                                    } else {
+                                        split_idx = idx;
+                                        break;
+                                    }
                                 }
+                                self.line.push(Str(TaggedString{
+                                    s: piece.s[..split_idx].into(),
+                                    tag: piece.tag.clone(),
+                                }));
+                                {
+                                    let mut tmp_line = TaggedLine::new();
+                                    mem::swap(&mut tmp_line, &mut self.line);
+                                    self.text.push(tmp_line);
+                                }
+                                lineleft = self.width;
+                                self.linelen = 0;
+                                opt_elt = Some(Str(TaggedString{
+                                    s: piece.s[split_idx..].into(),
+                                    tag: piece.tag,
+                                }));
                             }
-                            self.line.push(TaggedString{
-                                s: piece.s[..split_idx].into(),
-                                tag: piece.tag.clone(),
-                            });
-                            {
-                                let mut tmp_line = TaggedLine::new();
-                                mem::swap(&mut tmp_line, &mut self.line);
-                                self.text.push(tmp_line);
-                            }
-                            lineleft = self.width;
-                            self.linelen = 0;
-                            opt_piece = Some(TaggedString{
-                                s: piece.s[split_idx..].into(),
-                                tag: piece.tag,
-                            });
+                        } else {
+                            self.line.push(elt);
                         }
                     }
                 }
@@ -272,6 +330,10 @@ impl<T:Clone+Eq+Debug+Default> WrappedBlock<T> {
             }
             html_trace_quiet!("  Added char {:?}, wordlen={}", c, self.wordlen);
         }
+    }
+
+    pub fn add_element(&mut self, elt: TaggedLineElement<T>) {
+        self.word.push(elt);
     }
 
     pub fn text_len(&self) -> usize {
@@ -454,14 +516,16 @@ impl<T:PartialEq+Eq+Clone+Debug+Default> RenderLine<T> {
     /// Convert into a `TaggedLine<T>`, if necessary squashing the
     /// BorderHoriz into one.
     pub fn into_tagged_line(self) -> TaggedLine<T> {
+        use self::TaggedLineElement::Str;
+
         match self {
             RenderLine::Text(tagged) => tagged,
             RenderLine::Line(border) => {
                 let mut tagged = TaggedLine::new();
-                tagged.push(TaggedString {
+                tagged.push(Str(TaggedString {
                     s: border.into_string(),
                     tag: T::default()
-                });
+                }));
                 tagged
             }
         }
@@ -495,22 +559,28 @@ impl<D:TextDecorator> TextRenderer<D> {
         }
     }
 
-    /// Get the current line wrapping context (and create if
-    /// needed).
-    fn current_text(&mut self) -> &mut WrappedBlock<Vec<D::Annotation>> {
+    fn ensure_wrapping_exists(&mut self) {
         if self.wrapping.is_none() {
             self.wrapping = Some(WrappedBlock::new(self.width));
         }
+    }
+
+    /// Get the current line wrapping context (and create if
+    /// needed).
+    fn current_text(&mut self) -> &mut WrappedBlock<Vec<D::Annotation>> {
+        self.ensure_wrapping_exists();
         self.wrapping.as_mut().unwrap()
     }
 
     /// Add a prerendered (multiline) string with the current annotations.
     pub fn add_subblock(&mut self, s: &str) {
+        use self::TaggedLineElement::Str;
+
         html_trace!("add_subblock({}, {})", self.width, s);
         let tag = self.ann_stack.clone();
         self.lines.extend(s.lines().map(|l| {
             let mut line = TaggedLine::new();
-            line.push(TaggedString{s: l.into(), tag: tag.clone()});
+            line.push(Str(TaggedString{s: l.into(), tag: tag.clone()}));
             RenderLine::Text(line)
         }));
     }
@@ -613,6 +683,8 @@ impl<D:TextDecorator> Renderer for TextRenderer<D> {
     }
 
     fn add_preformatted_block(&mut self, text: &str) {
+        use self::TaggedLineElement::Str;
+
         html_trace!("add_block({}, {})", self.width, text);
 
         // Get the tags ready for normal and continuation lines.
@@ -640,10 +712,10 @@ impl<D:TextDecorator> Renderer for TextRenderer<D> {
                     if cur_width + char_width > width {
                         let mut line = TaggedLine::new();
                         /* Push what we have */
-                        line.push(TaggedString {
+                        line.push(Str(TaggedString {
                             s: acc,
                             tag: if first { tag_first.clone() } else { tag_cont.clone() },
-                        });
+                        }));
                         self.lines.push(RenderLine::Text(line));
                         acc = String::new();
                         cur_width = 0;
@@ -671,10 +743,10 @@ impl<D:TextDecorator> Renderer for TextRenderer<D> {
             if acc.len() > 0 {
                 let mut line = TaggedLine::new();
                 /* Push what we have */
-                line.push(TaggedString {
+                line.push(Str(TaggedString {
                     s: acc,
                     tag: if first { tag_first.clone() } else { tag_cont.clone() },
-                });
+                }));
                 self.lines.push(RenderLine::Text(line));
             }
         }
@@ -714,6 +786,8 @@ impl<D:TextDecorator> Renderer for TextRenderer<D> {
                                prefixes: I)
                            where I:Iterator<Item=&'a str>
     {
+        use self::TaggedLineElement::Str;
+
         self.flush_wrapping();
         let tag = self.ann_stack.clone();
         self.lines.extend(other.into_lines()
@@ -730,14 +804,14 @@ impl<D:TextDecorator> Renderer for TextRenderer<D> {
                                        },
                                        RenderLine::Line(l) => {
                                            let mut tline = TaggedLine::new();
-                                           tline.push(TaggedString {
+                                           tline.push(Str(TaggedString {
                                                s: prefix.to_string(),
                                                tag: tag.clone()
-                                           });
-                                           tline.push(TaggedString {
+                                           }));
+                                           tline.push(Str(TaggedString {
                                                s: l.into_string(),
                                                tag: tag.clone()
-                                           });
+                                           }));
                                            RenderLine::Text(tline)
                                        }
                                    }
@@ -746,6 +820,8 @@ impl<D:TextDecorator> Renderer for TextRenderer<D> {
 
     fn append_columns_with_borders<I>(&mut self, cols: I, collapse: bool)
                            where I:IntoIterator<Item=Self> {
+        use self::TaggedLineElement::Str;
+
         self.flush_wrapping();
 
         let mut next_border = BorderHoriz::new(self.width);
@@ -851,19 +927,19 @@ impl<D:TextDecorator> Renderer for TextRenderer<D> {
                             line.consume(tline);
                         },
                         &mut RenderLine::Line(ref bord) => {
-                            line.push(TaggedString {
+                            line.push(Str(TaggedString {
                                 s: bord.to_string(),
                                 tag: self.ann_stack.clone(),
-                            });
+                            }));
                         },
                     };
                 } else {
-                    line.push(TaggedString {
+                    line.push(Str(TaggedString {
                         s: column_padding[cellno].as_ref().map(|s| s.clone())
                                                  .unwrap_or_else(||spaces[0..width].to_string()),
 
                         tag: self.ann_stack.clone(),
-                    });
+                    }));
                 }
                 if cellno != last_cellno {
                     line.push_char('│', &self.ann_stack);
@@ -956,8 +1032,13 @@ impl<D:TextDecorator> Renderer for TextRenderer<D> {
             self.ann_stack.pop();
         }
     }
-    fn record_frag_start(&mut self, _fragname: &str)
+    fn record_frag_start(&mut self, fragname: &str)
     {
+        use self::TaggedLineElement::FragmentStart;
+
+        self.ensure_wrapping_exists();
+        self.wrapping.as_mut().unwrap().add_element(
+            FragmentStart(fragname.to_string()));
     }
 }
 
