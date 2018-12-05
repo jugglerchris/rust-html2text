@@ -8,6 +8,7 @@ mod top {
     use ::std;
     use ::html2text;
     use std::io::{self, Write};
+    use std::collections::HashMap;
     use html2text::render::text_renderer::{RichAnnotation,TaggedLine,TaggedLineElement};
     use argparse::{ArgumentParser, Store};
     use termion::input::TermRead;
@@ -94,6 +95,34 @@ mod top {
         }
     }
 
+    struct FragMap {
+        start_xy: HashMap<String, (usize,usize)>,
+    }
+
+    fn find_frags(lines: &Vec<TaggedLine<Vec<RichAnnotation>>>) -> FragMap {
+        use self::TaggedLineElement::*;
+
+        let mut map = HashMap::new();
+        let mut y = 0;
+        for line in lines {
+            let mut x = 0;
+            for tli in line.iter() {
+                match tli {
+                    FragmentStart(fragname) => {
+                        map.insert(fragname.to_string(), (x, y));
+                    },
+                    Str(ts) => {
+                        x += UnicodeWidthStr::width(ts.s.as_str());
+                    },
+                }
+            }
+            y += 1;
+        }
+        FragMap {
+            start_xy: map,
+        }
+    }
+
     pub fn main() {
         let mut filename = String::new();
         {
@@ -110,6 +139,7 @@ mod top {
         let annotated = html2text::from_read_rich(&mut file, width as usize);
 
         let link_map = find_links(&annotated);
+        let frag_map = find_frags(&annotated);
 
         let mut keys = io::stdin().keys();
 
@@ -220,6 +250,17 @@ mod top {
                         doc_y = max_y;
                     },
                     Key::Char('\t') => {
+                    },
+                    Key::Char('\r') | Key::Char('\n') => {
+                        if let Some(url) = opt_url {
+                            if url.starts_with("#") {
+                                let start = frag_map.start_xy.get(&url[1..]);
+                                if let Some((x, y)) = start {
+                                    doc_x = *x;
+                                    doc_y = *y;
+                                }
+                            }
+                        }
                     },
                     _ => {},
                 }
