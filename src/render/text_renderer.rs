@@ -956,6 +956,9 @@ impl<D:TextDecorator> Renderer for TextRenderer<D> {
             self.ann_stack.pop();
         }
     }
+    fn record_frag_start(&mut self, _fragname: &str)
+    {
+    }
 }
 
 /// A decorator for use with `TextRenderer` which outputs plain UTF-8 text

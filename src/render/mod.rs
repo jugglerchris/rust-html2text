@@ -82,4 +82,7 @@ pub trait Renderer {
 
     /// Add an image
     fn add_image(&mut self, title: &str);
+
+    /// Record the start of a named HTML fragment
+    fn record_frag_start(&mut self, fragname: &str);
 }

@@ -313,6 +313,8 @@ pub enum RenderNodeInfo {
     TableRow(RenderTableRow),
     /// Table cell (must only appear within a table row)
     TableCell(RenderTableCell),
+    /// Start of a named HTML fragment
+    FragStart(String),
 }
 
 /// Common fields from a node.
@@ -374,6 +376,7 @@ impl RenderNode {
             TableRow(_)|TableBody(_)|TableCell(_) => {
                 unimplemented!()
             },
+            FragStart(_) => Default::default(),
         };
         self.size_estimate = Some(estimate);
         estimate
@@ -604,6 +607,38 @@ where //for<'a> F: Fn(&'a mut C, Vec<RenderNode>) -> Option<RenderNode>+'static
     }
 }
 
+/// Prepend a FragmentStart (or analogous) marker to an existing
+/// RenderNode.
+fn prepend_marker(prefix: RenderNode, mut orig: RenderNode) -> RenderNode {
+    use RenderNodeInfo::*;
+
+    match orig.info {
+        // For block elements such as Block and Div, we need to insert
+        // the node at the front of their children array, otherwise
+        // the renderer is liable to drop the fragment start marker
+        // _before_ the new line indicating the end of the previous
+        // paragraph.
+        //
+        // For Container, we do the same thing just to make the data
+        // less pointlessly nested.
+        Block(ref mut children) |
+        Div(ref mut children) |
+        BlockQuote(ref mut children) |
+        Container(ref mut children) => {
+            children.insert(0, prefix);
+            // Now return orig, but we do that outside the match so
+            // that we've given back the borrowed ref 'children'.
+        },
+
+        // For anything else, just make a new Container with the
+        // prefix node and the original one.
+        _ => {
+            return RenderNode::new(Container(vec![prefix, orig]));
+        },
+    }
+    orig
+}
+
 fn process_dom_node<T:Write>(handle: Handle, err_out: &mut T) -> TreeMapResult<(), Handle, RenderNode> {
     use TreeMapResult::*;
     use RenderNodeInfo::*;
@@ -612,7 +647,8 @@ fn process_dom_node<T:Write>(handle: Handle, err_out: &mut T) -> TreeMapResult<(
         Document => pending(handle, |&mut (), cs| Some(RenderNode::new(Container(cs)))),
         Comment { .. } => Nothing,
         Element { ref name, ref attrs, .. } => {
-            match name.expanded() {
+            let mut frag_from_name_attr = false;
+            let result = match name.expanded() {
                 expanded_name!(html "html") |
                 expanded_name!(html "span") |
                 expanded_name!(html "body") => {
@@ -631,6 +667,7 @@ fn process_dom_node<T:Write>(handle: Handle, err_out: &mut T) -> TreeMapResult<(
                 expanded_name!(html "a") => {
                     let borrowed = attrs.borrow();
                     let mut target = None;
+                    frag_from_name_attr = true;
                     for attr in borrowed.iter() {
                         if &attr.name.local == "href" {
                             target = Some(&*attr.value);
@@ -724,6 +761,41 @@ fn process_dom_node<T:Write>(handle: Handle, err_out: &mut T) -> TreeMapResult<(
                     pending(handle, |_, cs| Some(RenderNode::new(Container(cs))))
                     //None
                 },
+            };
+
+            let mut fragment = None;
+            let borrowed = attrs.borrow();
+            for attr in borrowed.iter() {
+                if &attr.name.local == "id" ||
+                    (frag_from_name_attr && &attr.name.local == "name")
+                {
+                    fragment = Some(attr.value.to_string());
+                    break;
+                }
+            }
+
+            if let Some(fragname) = fragment {
+                match result {
+                    Finished(node) => Finished(prepend_marker(RenderNode::new(FragStart(fragname)), node)),
+                    Nothing => Finished(RenderNode::new(FragStart(fragname))),
+                    PendingChildren{children, cons, prefn, postfn} => {
+                        let fragname: String = fragname.into();
+                        PendingChildren {
+                            children: children,
+                            prefn: prefn,
+                            postfn: postfn,
+                            cons: Box::new(move |ctx,ch| {
+                                let fragnode = RenderNode::new(FragStart(fragname.clone()));
+                                match cons(ctx,ch) {
+                                    None => Some(fragnode),
+                                    Some(node) => Some(prepend_marker(fragnode, node)),
+                                }
+                            }),
+                        }
+                    },
+                }
+            } else {
+                result
             }
           },
         rcdom::NodeData::Text { contents: ref tstr } => {
@@ -951,7 +1023,11 @@ fn do_render_node<'a, 'b, T: Write, R: Renderer>(builder: &mut BuilderStack<R>,
         TableCell(cell) => {
             render_table_cell(builder.deref_mut(), cell, err_out)
         },
-    }
+        FragStart(fragname) => {
+            builder.record_frag_start(&fragname);
+            Finished(None)
+        },
+     }
 }
 
 fn render_table_tree<T:Write, R:Renderer>(builder: &mut R, mut table: RenderTable, _err_out: &mut T) -> TreeMapResult<BuilderStack<R>, RenderNode, Option<R>>
