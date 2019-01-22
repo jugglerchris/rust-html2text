@@ -1035,7 +1035,7 @@ fn do_render_node<'a, 'b, T: Write, R: Renderer>(builder: &mut BuilderStack<R>,
             }
         },
         Break => {
-            builder.new_line();
+            builder.new_line_hard();
             Finished(None)
         },
         Table(tab) => {
@@ -1579,6 +1579,18 @@ Div2
      fn test_br() {
          test_html(br"<p>Hello<br/>World</p>",
                    "Hello\nWorld\n", 20);
+     }
+
+     #[test]
+     fn test_br2() {
+         test_html(br"<p>Hello<br/><br/>World</p>",
+                   "Hello\n\nWorld\n", 20);
+     }
+
+     #[test]
+     fn test_br3() {
+         test_html(br"<p>Hello<br/> <br/>World</p>",
+                   "Hello\n\nWorld\n", 20);
      }
 
      #[test]

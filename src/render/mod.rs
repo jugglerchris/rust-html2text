@@ -20,6 +20,9 @@ pub trait Renderer {
     /// Start a new line, if necessary (but don't add a new line).
     fn new_line(&mut self);
 
+    /// Start a new line.
+    fn new_line_hard(&mut self);
+
     /// Add a horizontal table border.
     fn add_horizontal_border(&mut self);
 
