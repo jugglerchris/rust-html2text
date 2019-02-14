@@ -624,16 +624,12 @@ fn prepend_marker(prefix: RenderNode, mut orig: RenderNode) -> RenderNode {
         Block(ref mut children) |
         Div(ref mut children) |
         BlockQuote(ref mut children) |
-        Container(ref mut children) => {
+        Container(ref mut children) |
+        TableCell(RenderTableCell { content: ref mut children, .. }) => {
             children.insert(0, prefix);
             // Now return orig, but we do that outside the match so
             // that we've given back the borrowed ref 'children'.
         },
-
-        // For pieces of table, push down to the contents.
-        TableCell(RenderTableCell { content: ref mut children, .. }) => {
-            children.insert(0, prefix);
-        }
 
         // For anything else, just make a new Container with the
         // prefix node and the original one.
