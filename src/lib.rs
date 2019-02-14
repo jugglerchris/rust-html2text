@@ -1748,4 +1748,31 @@ hi  │h│
 ────┴─┴───
 "#, 10);
     }
+
+    #[test]
+    fn test_table_no_id() {
+        let html = r#"<html><body><table>
+            <tr>
+                <td>hi, world</td>
+            </tr>
+        </table></body></html>"#;
+        test_html(html.as_bytes(), r#"──────────
+hi, world 
+──────────
+"#, 10);
+    }
+
+    #[test]
+    fn test_table_id() {
+        let html = r#"<html><body><table>
+            <tr>
+                <td id="bodyCell">hi, world</td>
+            </tr>
+        </table></body></html>"#;
+        test_html(html.as_bytes(), r#"──────────
+hi, world 
+──────────
+"#, 10);
+
+    }
 }
