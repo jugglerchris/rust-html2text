@@ -624,10 +624,31 @@ fn prepend_marker(prefix: RenderNode, mut orig: RenderNode) -> RenderNode {
         Block(ref mut children) |
         Div(ref mut children) |
         BlockQuote(ref mut children) |
-        Container(ref mut children) => {
+        Container(ref mut children) |
+        TableCell(RenderTableCell { content: ref mut children, .. }) => {
             children.insert(0, prefix);
             // Now return orig, but we do that outside the match so
             // that we've given back the borrowed ref 'children'.
+        },
+
+        // For table rows and tables, push down if there's any content.
+        TableRow(ref mut rrow) => {
+            // If the row is empty, then there isn't really anything
+            // to attach the fragment start to.
+            if rrow.cells.len() > 0 {
+                rrow.cells[0].content.insert(0, prefix);
+            }
+        },
+
+        Table(ref mut rtable) => {
+            // If the row is empty, then there isn't really anything
+            // to attach the fragment start to.
+            if rtable.rows.len() > 0 {
+                let mut rrow = &mut rtable.rows[0];
+                if rrow.cells.len() > 0 {
+                    rrow.cells[0].content.insert(0, prefix);
+                }
+            }
         },
 
         // For anything else, just make a new Container with the
@@ -1746,6 +1767,58 @@ Hi foo, bar
 hi  │h│   
     │i│   
 ────┴─┴───
+"#, 10);
+    }
+
+    #[test]
+    fn test_table_no_id() {
+        let html = r#"<html><body><table>
+            <tr>
+                <td>hi, world</td>
+            </tr>
+        </table></body></html>"#;
+        test_html(html.as_bytes(), r#"──────────
+hi, world 
+──────────
+"#, 10);
+    }
+
+    #[test]
+    fn test_table_cell_id() {
+        let html = r#"<html><body><table>
+            <tr>
+                <td id="bodyCell">hi, world</td>
+            </tr>
+        </table></body></html>"#;
+        test_html(html.as_bytes(), r#"──────────
+hi, world 
+──────────
+"#, 10);
+    }
+
+    #[test]
+    fn test_table_row_id() {
+        let html = r#"<html><body><table>
+            <tr id="bodyrow">
+                <td>hi, world</td>
+            </tr>
+        </table></body></html>"#;
+        test_html(html.as_bytes(), r#"──────────
+hi, world 
+──────────
+"#, 10);
+    }
+
+    #[test]
+    fn test_table_table_id() {
+        let html = r#"<html><body><table id="bodytable">
+            <tr>
+                <td>hi, world</td>
+            </tr>
+        </table></body></html>"#;
+        test_html(html.as_bytes(), r#"──────────
+hi, world 
+──────────
 "#, 10);
     }
 }
