@@ -360,7 +360,6 @@ impl RenderNode {
             Strong(ref mut v) |
             Code(ref mut v) |
             Block(ref mut v) |
-            Header(_, ref mut v) |
             Div(ref mut v) |
             BlockQuote(ref mut v) |
             Ul(ref mut v) |
@@ -368,6 +367,11 @@ impl RenderNode {
                 v.iter_mut()
                  .map(RenderNode::get_size_estimate)
                  .fold(Default::default(), SizeEstimate::add)
+            },
+            Header(level, ref mut v) => {
+                v.iter_mut()
+                 .map(RenderNode::get_size_estimate)
+                 .fold(Default::default(), SizeEstimate::add).add(SizeEstimate {size:0, min_width: MIN_WIDTH+level+2})
             },
             Break => SizeEstimate { size: 1, min_width: 1 },
             Table(ref mut t) => {
@@ -950,7 +954,8 @@ fn do_render_node<'a, 'b, T: Write, R: Renderer>(builder: &mut BuilderStack<R>,
             })
         },
         Header(level, children) => {
-            let mut sub_builder = builder.new_sub_renderer(builder.width()-(1+level));
+            let min_width = max(builder.width(), 1 + level + 1);
+            let mut sub_builder = builder.new_sub_renderer(min_width - (1 + level));
             builder.push(sub_builder);
             pending2(children, move |builder: &mut BuilderStack<R>, _| {
                 let sub_builder = builder.pop();
@@ -1820,5 +1825,53 @@ hi, world
 hi, world 
 ──────────
 "#, 10);
+    }
+
+    #[test]
+    fn test_header_width() {
+        //0 size
+        test_html(
+            br##"
+            <h2>
+                <table>
+                            <h3>Anything</h3>
+                </table>
+            </h2>
+"##,
+            r#"## ### A
+## ### n
+## ### y
+## ### t
+## ### h
+## ### i
+## ### n
+## ### g
+## 
+## ────
+"#,
+            7,
+        );
+        //Underflow
+        test_html(
+            br##"
+            <h2>
+                <table>
+                    <h3>Anything</h3>
+                </table>
+            </h2>
+"##,
+            r#"## ### A
+## ### n
+## ### y
+## ### t
+## ### h
+## ### i
+## ### n
+## ### g
+## 
+## ──
+"#,
+            5,
+        );
     }
 }
