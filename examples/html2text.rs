@@ -2,13 +2,27 @@ extern crate html2text;
 extern crate argparse;
 use std::io;
 use std::io::Write;
-use argparse::{ArgumentParser, Store, StoreOption};
+use argparse::{ArgumentParser, Store, StoreOption, StoreTrue};
+
+
+fn translate<R>(input: R, width: usize, literal: bool) -> String
+    where R: io::Read
+{
+    if literal {
+        let decorator =
+            html2text::render::text_renderer::TrivialDecorator::new();
+        html2text::from_read_with_decorator(input, width, decorator)
+    } else {
+        html2text::from_read(input, width)
+    }
+}
 
 
 fn main() {
     let mut infile : Option<String> = None;
     let mut outfile : Option<String> = None;
     let mut width : usize = 80;
+    let mut literal : bool = false;
 
     {
         let mut ap = ArgumentParser::new();
@@ -18,18 +32,20 @@ fn main() {
             .add_option(&["-w", "--width"], Store, "Column width to format to (default is 80)");
         ap.refer(&mut outfile)
             .add_option(&["-o", "--output"], StoreOption, "Output file (default is standard output)");
+        ap.refer(&mut literal)
+            .add_option(&["-L", "--literal"], StoreTrue, "Output only literal text (no decorations)");
         ap.parse_args_or_exit();
     }
 
     let data = match infile {
         None => {
             let stdin = io::stdin();
-            let data = html2text::from_read(&mut stdin.lock(), width);
+            let data = translate(&mut stdin.lock(), width, literal);
             data
         },
         Some(name) => {
             let mut file = std::fs::File::open(name).expect("Tried to open file");
-            html2text::from_read(&mut file, width)
+            translate(&mut file, width, literal)
         },
     };
 

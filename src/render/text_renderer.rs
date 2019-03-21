@@ -1121,6 +1121,80 @@ impl TextDecorator for PlainDecorator {
     }
 }
 
+/// A decorator for use with `TextRenderer` which outputs plain UTF-8 text
+/// with no annotations or markup, emitting only the literal text.
+#[derive(Clone)]
+pub struct TrivialDecorator {}
+
+impl TrivialDecorator {
+    /// Create a new `TrivialDecorator`.
+    #[cfg_attr(feature="clippy", allow(new_without_default_derive))]
+    pub fn new() -> TrivialDecorator {
+        TrivialDecorator {}
+    }
+}
+
+impl TextDecorator for TrivialDecorator {
+    type Annotation = ();
+
+    fn decorate_link_start(&mut self, _url: &str) -> (String, Self::Annotation)
+    {
+        ("".to_string(), ())
+    }
+
+    fn decorate_link_end(&mut self) -> String
+    {
+        "".to_string()
+    }
+
+    fn decorate_em_start(&mut self) -> (String, Self::Annotation)
+    {
+        ("".to_string(), ())
+    }
+
+    fn decorate_em_end(&mut self) -> String
+    {
+        "".to_string()
+    }
+
+    fn decorate_strong_start(&mut self) -> (String, Self::Annotation)
+    {
+        ("".to_string(), ())
+    }
+
+    fn decorate_strong_end(&mut self) -> String
+    {
+        "".to_string()
+    }
+
+    fn decorate_code_start(&mut self) -> (String, Self::Annotation)
+    {
+        ("".to_string(), ())
+    }
+
+    fn decorate_code_end(&mut self) -> String
+    {
+        "".to_string()
+    }
+
+    fn decorate_preformat_first(&mut self) -> Self::Annotation { () }
+    fn decorate_preformat_cont(&mut self) -> Self::Annotation { () }
+
+    fn decorate_image(&mut self, title: &str) -> (String, Self::Annotation)
+    {
+        // FIXME: this should surely be the alt text, not the title text
+        (title.to_string(), ())
+    }
+
+    fn finalise(self) -> Vec<TaggedLine<()>> {
+        Vec::new()
+    }
+
+    fn make_subblock_decorator(&self) -> Self {
+        TrivialDecorator::new()
+    }
+}
+
 /// A decorator to generate rich text (styled) rather than
 /// pure text output.
 #[derive(Clone)]
