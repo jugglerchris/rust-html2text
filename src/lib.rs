@@ -61,7 +61,8 @@ mod macros;
 pub mod render;
 
 use render::Renderer;
-use render::text_renderer::{TextRenderer,PlainDecorator,RichDecorator,
+use render::text_renderer::{TextRenderer,
+                            TextDecorator,PlainDecorator,RichDecorator,
                             RichAnnotation,TaggedLine,RenderLine};
 
 use std::io;
@@ -1150,9 +1151,12 @@ fn render_table_cell<T:Write, R:Renderer>(_builder: &mut R, cell: RenderTableCel
     })
 }
 
-/// Reads HTML from `input`, and returns a `String` with text wrapped to
-/// `width` columns.
-pub fn from_read<R>(mut input: R, width: usize) -> String where R: io::Read {
+/// Reads HTML from `input`, decorates it using `decorator`, and
+/// returns a `String` with text wrapped to `width` columns.
+pub fn from_read_with_decorator<R, D>
+    (mut input: R, width: usize, decorator: D) -> String
+    where R: io::Read, D: TextDecorator
+{
     let opts = ParseOpts {
         tree_builder: TreeBuilderOpts {
             drop_doctype: true,
@@ -1165,12 +1169,18 @@ pub fn from_read<R>(mut input: R, width: usize) -> String where R: io::Read {
                    .read_from(&mut input)
                    .unwrap();
 
-    let decorator = PlainDecorator::new();
     let builder = TextRenderer::new(width, decorator);
 
     let render_tree = dom_to_render_tree(dom.document, &mut Discard{}).unwrap();
     let builder = render_tree_to_string(builder, render_tree, &mut Discard{});
     builder.into_string()
+}
+
+/// Reads HTML from `input`, and returns a `String` with text wrapped to
+/// `width` columns.
+pub fn from_read<R>(input: R, width: usize) -> String where R: io::Read {
+    let decorator = PlainDecorator::new();
+    from_read_with_decorator(input, width, decorator)
 }
 
 /// Reads HTML from `input`, and returns text wrapped to `width` columns.
@@ -1200,7 +1210,8 @@ pub fn from_read_rich<R>(mut input: R, width: usize) -> Vec<TaggedLine<Vec<RichA
 
 #[cfg(test)]
 mod tests {
-    use super::{from_read};
+    use super::{from_read, from_read_with_decorator, TextDecorator};
+    use render::text_renderer::TrivialDecorator;
 
     /// Like assert_eq!(), but prints out the results normally as well
     macro_rules! assert_eq_str {
@@ -1213,6 +1224,13 @@ mod tests {
     }
     fn test_html(input: &[u8], expected: &str, width: usize) {
         assert_eq_str!(from_read(input, width), expected);
+    }
+
+    fn test_html_decorator<D>(input: &[u8], expected: &str, width: usize, decorator: D)
+    where D: TextDecorator
+    {
+        let output = from_read_with_decorator(input, width, decorator);
+        assert_eq_str!(output, expected);
     }
 
     #[test]
@@ -1874,4 +1892,23 @@ hi, world
             5,
         );
     }
+
+    #[test]
+    fn test_trivial_decorator() {
+         test_html_decorator(br#"<div>
+         <div>Here's a <a href="https://example.com/">link</a>.</div>
+         <div><ul>
+         <li>Bullet</li>
+         <li>Bullet</li>
+         <li>Bullet</li>
+         </ul></div>
+         </div>"#,
+r"Here's a link.
+
+* Bullet
+* Bullet
+* Bullet
+", 80, TrivialDecorator::new());
+     }
+
 }
