@@ -1210,7 +1210,8 @@ pub fn from_read_rich<R>(mut input: R, width: usize) -> Vec<TaggedLine<Vec<RichA
 
 #[cfg(test)]
 mod tests {
-    use super::{from_read};
+    use super::{from_read, from_read_with_decorator, TextDecorator};
+    use render::text_renderer::TrivialDecorator;
 
     /// Like assert_eq!(), but prints out the results normally as well
     macro_rules! assert_eq_str {
@@ -1223,6 +1224,13 @@ mod tests {
     }
     fn test_html(input: &[u8], expected: &str, width: usize) {
         assert_eq_str!(from_read(input, width), expected);
+    }
+
+    fn test_html_decorator<D>(input: &[u8], expected: &str, width: usize, decorator: D)
+    where D: TextDecorator
+    {
+        let output = from_read_with_decorator(input, width, decorator);
+        assert_eq_str!(output, expected);
     }
 
     #[test]
@@ -1884,4 +1892,23 @@ hi, world
             5,
         );
     }
+
+    #[test]
+    fn test_trivial_decorator() {
+         test_html_decorator(br#"<div>
+         <div>Here's a <a href="https://example.com/">link</a>.</div>
+         <div><ul>
+         <li>Bullet</li>
+         <li>Bullet</li>
+         <li>Bullet</li>
+         </ul></div>
+         </div>"#,
+r"Here's a link.
+
+* Bullet
+* Bullet
+* Bullet
+", 80, TrivialDecorator::new());
+     }
+
 }
