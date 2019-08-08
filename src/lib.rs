@@ -1171,7 +1171,7 @@ pub fn from_read_with_decorator<R, D>
 
     let builder = TextRenderer::new(width, decorator);
 
-    let render_tree = dom_to_render_tree(dom.document, &mut Discard{}).unwrap();
+    let render_tree = dom_to_render_tree(dom.document.clone(), &mut Discard{}).unwrap();
     let builder = render_tree_to_string(builder, render_tree, &mut Discard{});
     builder.into_string()
 }
@@ -1203,7 +1203,7 @@ pub fn from_read_rich<R>(mut input: R, width: usize) -> Vec<TaggedLine<Vec<RichA
 
     let decorator = RichDecorator::new();
     let builder = TextRenderer::new(width, decorator);
-    let render_tree = dom_to_render_tree(dom.document, &mut Discard{}).unwrap();
+    let render_tree = dom_to_render_tree(dom.document.clone(), &mut Discard{}).unwrap();
     let builder = render_tree_to_string(builder, render_tree, &mut Discard{});
     builder.into_lines().into_iter().map(RenderLine::into_tagged_line).collect()
 }
