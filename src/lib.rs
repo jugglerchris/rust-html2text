@@ -574,7 +574,7 @@ fn tree_map_reduce<C, N, R, M>(context: &mut C,
             };
         } else {
             // No more children, so finally construct the parent.
-            let mut completed = pending_stack.pop().unwrap();
+            let completed = pending_stack.pop().unwrap();
             let reduced = (completed.construct)(context, completed.children);
             if let Some(node) = reduced {
                 if let Some(parent) = pending_stack.last_mut() {
@@ -604,7 +604,7 @@ fn pending<F>(handle: Handle, f: F) -> TreeMapResult<(), Handle, RenderNode>
 where //for<'a> F: Fn(&'a mut C, Vec<RenderNode>) -> Option<RenderNode>+'static
       for<'r> F: Fn(&'r mut (), std::vec::Vec<RenderNode>) -> Option<RenderNode>+'static
 {
-    TreeMapResult::PendingChildren{
+    TreeMapResult::PendingChildren {
         children: handle.children.borrow().clone(),
         cons: Box::new(f),
         prefn: None,
@@ -649,7 +649,7 @@ fn prepend_marker(prefix: RenderNode, mut orig: RenderNode) -> RenderNode {
             // If the row is empty, then there isn't really anything
             // to attach the fragment start to.
             if rtable.rows.len() > 0 {
-                let mut rrow = &mut rtable.rows[0];
+                let rrow = &mut rtable.rows[0];
                 if rrow.cells.len() > 0 {
                     rrow.cells[0].content.insert(0, prefix);
                 }
@@ -956,7 +956,7 @@ fn do_render_node<'a, 'b, T: Write, R: Renderer>(builder: &mut BuilderStack<R>,
         },
         Header(level, children) => {
             let min_width = max(builder.width(), 1 + level + 1);
-            let mut sub_builder = builder.new_sub_renderer(min_width - (1 + level));
+            let sub_builder = builder.new_sub_renderer(min_width - (1 + level));
             builder.push(sub_builder);
             pending2(children, move |builder: &mut BuilderStack<R>, _| {
                 let sub_builder = builder.pop();
@@ -981,7 +981,7 @@ fn do_render_node<'a, 'b, T: Write, R: Renderer>(builder: &mut BuilderStack<R>,
             Finished(None)
         },
         BlockQuote(children) => {
-            let mut sub_builder = builder.new_sub_renderer(builder.width()-2);
+            let sub_builder = builder.new_sub_renderer(builder.width()-2);
             builder.push(sub_builder);
             pending2(children, |builder: &mut BuilderStack<R>, _| {
                 let sub_builder = builder.pop();
@@ -1171,7 +1171,7 @@ pub fn from_read_with_decorator<R, D>
 
     let builder = TextRenderer::new(width, decorator);
 
-    let render_tree = dom_to_render_tree(dom.document, &mut Discard{}).unwrap();
+    let render_tree = dom_to_render_tree(dom.document.clone(), &mut Discard{}).unwrap();
     let builder = render_tree_to_string(builder, render_tree, &mut Discard{});
     builder.into_string()
 }
@@ -1203,7 +1203,7 @@ pub fn from_read_rich<R>(mut input: R, width: usize) -> Vec<TaggedLine<Vec<RichA
 
     let decorator = RichDecorator::new();
     let builder = TextRenderer::new(width, decorator);
-    let render_tree = dom_to_render_tree(dom.document, &mut Discard{}).unwrap();
+    let render_tree = dom_to_render_tree(dom.document.clone(), &mut Discard{}).unwrap();
     let builder = render_tree_to_string(builder, render_tree, &mut Discard{});
     builder.into_lines().into_iter().map(RenderLine::into_tagged_line).collect()
 }
@@ -1211,7 +1211,7 @@ pub fn from_read_rich<R>(mut input: R, width: usize) -> Vec<TaggedLine<Vec<RichA
 #[cfg(test)]
 mod tests {
     use super::{from_read, from_read_with_decorator, TextDecorator};
-    use render::text_renderer::TrivialDecorator;
+    use super::render::text_renderer::TrivialDecorator;
 
     /// Like assert_eq!(), but prints out the results normally as well
     macro_rules! assert_eq_str {

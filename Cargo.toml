@@ -6,6 +6,7 @@ description = "Render HTML as plain text."
 repository = "https://github.com/jugglerchris/rust-html2text/"
 readme = "README.md"
 documentation = "https://docs.rs/html2text/"
+edition = "2018"
 
 keywords = ["html", "text"]
 license = "MIT"
@@ -15,8 +16,8 @@ travis-ci = { repository = "jugglerchris/rust-html2text" }
 appveyor = { repository = "jugglerchris/rust-html2text", service = "github" }
 
 [dependencies]
-clippy = { version = "0.0.212", optional=true }
-html5ever = "0.22"
+clippy = { version = "0.0.302", optional=true }
+html5ever = "0.24.0"
 html5ever-atoms = "0.3.0"
 unicode-width = "0.1.5"
 backtrace = "0.3"
@@ -34,7 +35,7 @@ name = "html2text"
 path = "examples/html2text.rs"
 
 [dev-dependencies]
-argparse = "0.2.1"
+argparse = "0.2.2"
 
 [target.'cfg(unix)'.dev-dependencies]
 termion = "1.5"
