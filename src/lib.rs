@@ -429,7 +429,7 @@ fn table_to_render_tree<T:Write>(handle: Handle, _err_out: &mut T) ->  TreeMapRe
             if let RenderNodeInfo::TableBody(body) = bodynode.info {
                 rows.extend(body);
             } else {
-                html_trace!("Found in table: {:?}", body);
+                html_trace!("Found in table: {:?}", bodynode.info);
             }
         }
         Some(RenderNode::new(RenderNodeInfo::Table(RenderTable::new(rows))))
@@ -591,11 +591,11 @@ fn tree_map_reduce<C, N, R, M>(context: &mut C,
 
 /// Convert a DOM tree or subtree into a render tree.
 pub fn dom_to_render_tree<T:Write>(handle: Handle, err_out: &mut T) -> Option<RenderNode> {
+    html_trace!("### dom_to_render_tree: HTML: {:?}", handle);
     let result = tree_map_reduce(&mut (), handle,
                     |_, handle| process_dom_node(handle, err_out),
                 );
 
-    html_trace!("### dom_to_render_tree: HTML: {:?}", handle);
     html_trace!("### dom_to_render_tree: out= {:#?}", result);
     result
 }
