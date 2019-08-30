@@ -132,7 +132,7 @@ impl<T:Debug+Eq+PartialEq+Clone+Default> TaggedLine<T> {
 
     /// Iterator over the chars in this line.
     #[cfg_attr(feature="clippy", allow(needless_lifetimes))]
-    pub fn chars<'a>(&'a self) -> Box<Iterator<Item=char>+'a> {
+    pub fn chars<'a>(&'a self) -> Box<dyn Iterator<Item=char>+'a> {
         use self::TaggedLineElement::Str;
 
         Box::new(self.v.iter().flat_map(|tle| {
@@ -141,7 +141,7 @@ impl<T:Debug+Eq+PartialEq+Clone+Default> TaggedLine<T> {
     }
 
     /// Iterator over TaggedLineElements
-    pub fn iter<'a>(&'a self) -> Box<Iterator<Item=&TaggedLineElement<T>>+'a> {
+    pub fn iter<'a>(&'a self) -> Box<dyn Iterator<Item=&TaggedLineElement<T>>+'a> {
         Box::new(self.v.iter())
     }
 

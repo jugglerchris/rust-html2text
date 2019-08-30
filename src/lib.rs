@@ -492,15 +492,15 @@ fn td_to_render_tree<T:Write>(handle: Handle, _err_out: &mut T) ->  TreeMapResul
 /// A reducer which combines results from mapping children into
 /// the result for the current node.  Takes a context and a
 /// vector of results and returns a new result (or nothing).
-type ResultReducer<C, R> = Fn(&mut C, Vec<R>) -> Option<R>;
+type ResultReducer<C, R> = dyn Fn(&mut C, Vec<R>) -> Option<R>;
 
 /// A closure to call before processing a child node.
-type ChildPreFn<C, N> = Fn(&mut C, &N);
+type ChildPreFn<C, N> = dyn Fn(&mut C, &N);
 
 /// A closure to call after processing a child node,
 /// before adding the result to the processed results
 /// vector.
-type ChildPostFn<C, R> = Fn(&mut C, &R);
+type ChildPostFn<C, R> = dyn Fn(&mut C, &R);
 
 /// The result of trying to render one node.
 enum TreeMapResult<C, N, R> {
