@@ -677,6 +677,14 @@ impl<D:TextDecorator> Renderer for TextRenderer<D> {
         self.flush_all();
     }
 
+    fn new_line_hard(&mut self) {
+        match self.wrapping {
+            None => self.add_empty_line(),
+            Some(WrappedBlock { wordlen: 0, .. }) => self.add_empty_line(),
+            Some(_) => self.flush_all(),
+        }
+    }
+
     fn add_horizontal_border(&mut self) {
         self.flush_wrapping();
         self.lines.push(RenderLine::Line(BorderHoriz::new(self.width)));
