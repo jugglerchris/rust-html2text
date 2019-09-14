@@ -1021,7 +1021,14 @@ fn do_render_node<'a, 'b, T: Write, R: Renderer>(builder: &mut BuilderStack<R>,
             builder.start_block();
 
             let num_items = items.len();
-            let prefix_width = format!("{}", num_items).len() + 2;
+
+            // The prefix width could be at either end if the start is negative.
+            let min_number = start;
+            // Assumption: num_items can't overflow isize.
+            let max_number = start + (num_items as i64) - 1;
+            let prefix_width_min = format!("{}", min_number).len() + 2;
+            let prefix_width_max = format!("{}", max_number).len() + 2;
+            let prefix_width = max(prefix_width_min, prefix_width_max);
             let prefixn = format!("{: <width$}", "", width=prefix_width);
             use std::cell::Cell;
             let i: Cell<_> = Cell::new(start);
@@ -1406,6 +1413,32 @@ foo
             </ol>
          "#, r#"3. Item three
 4. Item four
+"#, 20);
+     }
+
+     #[test]
+     fn test_ol_start_9() {
+         test_html(br#"
+            <ol start="9">
+              <li>Item nine</li>
+              <li>Item ten</li>
+            </ol>
+         "#, r#"9.  Item nine
+10. Item ten
+"#, 20);
+     }
+
+     #[test]
+     fn test_ol_start_neg() {
+         test_html(br#"
+            <ol start="-1">
+              <li>Item minus one</li>
+              <li>Item zero</li>
+              <li>Item one</li>
+            </ol>
+         "#, r#"-1. Item minus one
+0.  Item zero
+1.  Item one
 "#, 20);
      }
 
