@@ -303,7 +303,7 @@ pub enum RenderNodeInfo {
     /// An unordered list
     Ul(Vec<RenderNode>),
     /// An ordered list
-    Ol(Vec<RenderNode>),
+    Ol(i64, Vec<RenderNode>),
     /// A line break
     Break,
     /// A table
@@ -364,7 +364,7 @@ impl RenderNode {
             Div(ref mut v) |
             BlockQuote(ref mut v) |
             Ul(ref mut v) |
-            Ol(ref mut v) => {
+            Ol(_, ref mut v) => {
                 v.iter_mut()
                  .map(RenderNode::get_size_estimate)
                  .fold(Default::default(), SizeEstimate::add)
@@ -780,7 +780,16 @@ fn process_dom_node<T:Write>(handle: Handle, err_out: &mut T) -> TreeMapResult<(
                     Finished(RenderNode::new(Ul(list_children_to_render_nodes(handle.clone(), err_out))))
                 },
                 expanded_name!(html "ol") => {
-                    Finished(RenderNode::new(Ol(list_children_to_render_nodes(handle.clone(), err_out))))
+                    let borrowed = attrs.borrow();
+                    let mut start = 1;
+                    for attr in borrowed.iter() {
+                        if &attr.name.local == "start" {
+                            start = attr.value.parse().ok().unwrap_or(1);
+                            break;
+                        }
+                    }
+
+                    Finished(RenderNode::new(Ol(start, list_children_to_render_nodes(handle.clone(), err_out))))
                 },
                 _ => {
                     html_trace!("Unhandled element: {:?}\n", name.local);
@@ -1008,14 +1017,21 @@ fn do_render_node<'a, 'b, T: Write, R: Renderer>(builder: &mut BuilderStack<R>,
                 })),
             }
         },
-        Ol(items) => {
+        Ol(start, items) => {
             builder.start_block();
 
             let num_items = items.len();
-            let prefix_width = format!("{}", num_items).len() + 2;
+
+            // The prefix width could be at either end if the start is negative.
+            let min_number = start;
+            // Assumption: num_items can't overflow isize.
+            let max_number = start + (num_items as i64) - 1;
+            let prefix_width_min = format!("{}", min_number).len() + 2;
+            let prefix_width_max = format!("{}", max_number).len() + 2;
+            let prefix_width = max(prefix_width_min, prefix_width_max);
             let prefixn = format!("{: <width$}", "", width=prefix_width);
             use std::cell::Cell;
-            let i: Cell<_> = Cell::new(1);
+            let i: Cell<_> = Cell::new(start);
 
             TreeMapResult::PendingChildren{
                 children: items,
@@ -1385,6 +1401,44 @@ foo
 8.  Item eight
 9.  Item nine
 10. Item ten
+"#, 20);
+     }
+
+     #[test]
+     fn test_ol_start() {
+         test_html(br#"
+            <ol start="3">
+              <li>Item three</li>
+              <li>Item four</li>
+            </ol>
+         "#, r#"3. Item three
+4. Item four
+"#, 20);
+     }
+
+     #[test]
+     fn test_ol_start_9() {
+         test_html(br#"
+            <ol start="9">
+              <li>Item nine</li>
+              <li>Item ten</li>
+            </ol>
+         "#, r#"9.  Item nine
+10. Item ten
+"#, 20);
+     }
+
+     #[test]
+     fn test_ol_start_neg() {
+         test_html(br#"
+            <ol start="-1">
+              <li>Item minus one</li>
+              <li>Item zero</li>
+              <li>Item one</li>
+            </ol>
+         "#, r#"-1. Item minus one
+0.  Item zero
+1.  Item one
 "#, 20);
      }
 
