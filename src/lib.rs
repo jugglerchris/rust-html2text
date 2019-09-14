@@ -303,7 +303,7 @@ pub enum RenderNodeInfo {
     /// An unordered list
     Ul(Vec<RenderNode>),
     /// An ordered list
-    Ol(Option<u64>, Vec<RenderNode>),
+    Ol(i64, Vec<RenderNode>),
     /// A line break
     Break,
     /// A table
@@ -781,10 +781,10 @@ fn process_dom_node<T:Write>(handle: Handle, err_out: &mut T) -> TreeMapResult<(
                 },
                 expanded_name!(html "ol") => {
                     let borrowed = attrs.borrow();
-                    let mut start = None;
+                    let mut start = 1;
                     for attr in borrowed.iter() {
                         if &attr.name.local == "start" {
-                            start = attr.value.parse().ok();
+                            start = attr.value.parse().ok().unwrap_or(1);
                             break;
                         }
                     }
@@ -1024,7 +1024,7 @@ fn do_render_node<'a, 'b, T: Write, R: Renderer>(builder: &mut BuilderStack<R>,
             let prefix_width = format!("{}", num_items).len() + 2;
             let prefixn = format!("{: <width$}", "", width=prefix_width);
             use std::cell::Cell;
-            let i: Cell<_> = Cell::new(start.unwrap_or(1));
+            let i: Cell<_> = Cell::new(start);
 
             TreeMapResult::PendingChildren{
                 children: items,
