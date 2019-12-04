@@ -584,6 +584,11 @@ fn tree_map_reduce<C, N, R, M>(context: &mut C,
                     // Finished the whole stack!
                     break Some(node);
                 }
+            } else {
+                /* Finished the stack, and have nothing */
+                if pending_stack.is_empty() {
+                    break None;
+                }
             }
         }
     }
@@ -1975,6 +1980,11 @@ r"Here's a link.
 * Bullet
 * Bullet
 ", 80, TrivialDecorator::new());
-     }
+    }
 
+    #[test]
+    fn test_issue_16()
+    {
+        test_html(b"<ul><li><!----></li></ul>", "", 10);
+    }
 }
