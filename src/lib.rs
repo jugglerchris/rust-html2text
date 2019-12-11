@@ -968,10 +968,8 @@ impl<R:Renderer> DerefMut for BuilderStack<R> {
 fn render_tree_to_string<T:Write, R:Renderer>(builder: R, tree: RenderNode,
                           err_out: &mut T) -> R {
     /* Phase 1: get size estimates. */
-    /*
-    tree_map_reduce(&mut (), tree,
-        |_, ref node| precalc_size_estimate(node));
-        */
+    tree_map_reduce(&mut (), &tree,
+        |_, node| precalc_size_estimate(&node));
 
     /* Phase 2: actually render. */
     let mut bs = BuilderStack::new(builder);
