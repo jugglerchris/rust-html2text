@@ -1914,7 +1914,7 @@ Hi foo, bar
     fn test_deeply_nested() {
         use ::std::iter::repeat;
         let html = repeat("<foo>")
-                         .take(10000)
+                         .take(1000)
                          .collect::<Vec<_>>()
                          .concat();
         test_html(html.as_bytes(), "", 10);
@@ -1924,7 +1924,7 @@ Hi foo, bar
     fn test_deeply_nested_table() {
         use ::std::iter::repeat;
         let html = repeat("<table><tr><td>hi</td><td>")
-                         .take(10000)
+                         .take(1000)
                          .collect::<Vec<_>>()
                          .concat()
                  + &repeat("</td></tr></table>")
