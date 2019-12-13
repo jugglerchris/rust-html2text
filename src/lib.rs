@@ -70,6 +70,7 @@ use std::io::Write;
 use std::cmp::max;
 use std::iter::{once,repeat};
 use std::ops::{Deref,DerefMut};
+use std::cell::Cell;
 use html5ever::{parse_document};
 use html5ever::driver::ParseOpts;
 use html5ever::tree_builder::TreeBuilderOpts;
@@ -129,7 +130,7 @@ impl SizeEstimate {
 pub struct RenderTableCell {
     colspan: usize,
     content: Vec<RenderNode>,
-    size_estimate: Option<SizeEstimate>,
+    size_estimate: Cell<Option<SizeEstimate>>,
     col_width: Option<usize>,  // Actual width to use
 }
 
@@ -142,15 +143,15 @@ impl RenderTableCell {
     }
 
     /// Calculate or return the estimate size of the cell
-    pub fn get_size_estimate(&mut self) -> SizeEstimate {
-        if self.size_estimate.is_none() {
+    pub fn get_size_estimate(&self) -> SizeEstimate {
+        if self.size_estimate.get().is_none() {
             let size = self.content
-                           .iter_mut()
+                           .iter()
                            .map(|node| node.get_size_estimate())
                            .fold(Default::default(), SizeEstimate::add);
-            self.size_estimate = Some(size);
+            self.size_estimate.set(Some(size));
         }
-        self.size_estimate.unwrap()
+        self.size_estimate.get().unwrap()
     }
 }
 
@@ -163,7 +164,11 @@ pub struct RenderTableRow {
 
 impl RenderTableRow {
     /// Return a mutable iterator over the cells.
-    pub fn cells(&mut self) -> std::slice::IterMut<RenderTableCell> {
+    pub fn cells(&self) -> std::slice::Iter<RenderTableCell> {
+        self.cells.iter()
+    }
+    /// Return a mutable iterator over the cells.
+    pub fn cells_mut(&mut self) -> std::slice::IterMut<RenderTableCell> {
         self.cells.iter_mut()
     }
     /// Count the number of cells in the row.
@@ -208,7 +213,7 @@ impl RenderTableRow {
 pub struct RenderTable {
     rows: Vec<RenderTableRow>,
     num_columns: usize,
-    size_estimate: Option<SizeEstimate>,
+    size_estimate: Cell<Option<SizeEstimate>>,
 }
 
 impl RenderTable {
@@ -219,15 +224,19 @@ impl RenderTable {
         RenderTable {
             rows: rows,
             num_columns: num_columns,
-            size_estimate: None,
+            size_estimate: Cell::new(None),
         }
     }
 
     /// Return an iterator over the rows.
-    pub fn rows(&mut self) -> std::slice::IterMut<RenderTableRow> {
-        self.rows.iter_mut()
+    pub fn rows(&self) -> std::slice::Iter<RenderTableRow> {
+        self.rows.iter()
     }
 
+    /// Return an iterator over the rows.
+    pub fn rows_mut(&mut self) -> std::slice::IterMut<RenderTableRow> {
+        self.rows.iter_mut()
+    }
     /// Consume this and return a Vec<RenderNode> containing the children;
     /// the children know the column sizes required.
     pub fn into_rows(self, col_sizes: Vec<usize>) -> Vec<RenderNode> {
@@ -240,9 +249,9 @@ impl RenderTable {
             .collect()
     }
 
-    fn calc_size_estimate(&mut self) {
+    fn calc_size_estimate(&self) {
         if self.num_columns == 0 {
-            self.size_estimate = Some(SizeEstimate { size: 0, min_width: 0 });
+            self.size_estimate.set(Some(SizeEstimate { size: 0, min_width: 0 }));
             return;
         }
         let mut sizes: Vec<SizeEstimate> = vec![Default::default(); self.num_columns];
@@ -261,15 +270,15 @@ impl RenderTable {
         }
         let size = sizes.iter().map(|s| s.size).sum();  // Include borders?
         let min_width = sizes.iter().map(|s| s.min_width).sum::<usize>() + self.num_columns-1;
-        self.size_estimate = Some(SizeEstimate { size: size, min_width: min_width });
+        self.size_estimate.set(Some(SizeEstimate { size: size, min_width: min_width }));
     }
 
     /// Calculate and store (or return stored value) of estimated size
-    pub fn get_size_estimate(&mut self) -> SizeEstimate {
-        if self.size_estimate.is_none() {
+    pub fn get_size_estimate(&self) -> SizeEstimate {
+        if self.size_estimate.get().is_none() {
             self.calc_size_estimate();
         }
-        self.size_estimate.unwrap()
+        self.size_estimate.get().unwrap()
     }
 }
 
@@ -321,7 +330,7 @@ pub enum RenderNodeInfo {
 /// Common fields from a node.
 #[derive(Debug)]
 pub struct RenderNode {
-    size_estimate: Option<SizeEstimate>,
+    size_estimate: Cell<Option<SizeEstimate>>,
     info: RenderNodeInfo,
 }
 
@@ -329,15 +338,15 @@ impl RenderNode {
     /// Create a node from the RenderNodeInfo.
     pub fn new(info: RenderNodeInfo) -> RenderNode {
         RenderNode {
-            size_estimate: None,
+            size_estimate: Cell::new(None),
             info: info,
         }
     }
 
     /// Get a size estimate (~characters)
-    pub fn get_size_estimate(&mut self) -> SizeEstimate {
+    pub fn get_size_estimate(&self) -> SizeEstimate {
         // If it's already calculated, then just return the answer.
-        if let Some(s) = self.size_estimate {
+        if let Some(s) = self.size_estimate.get() {
             return s;
         };
 
@@ -355,27 +364,27 @@ impl RenderNode {
                 }
             },
 
-            Container(ref mut v) |
-            Link(_, ref mut v) |
-            Em(ref mut v) |
-            Strong(ref mut v) |
-            Code(ref mut v) |
-            Block(ref mut v) |
-            Div(ref mut v) |
-            BlockQuote(ref mut v) |
-            Ul(ref mut v) |
-            Ol(_, ref mut v) => {
-                v.iter_mut()
+            Container(ref v) |
+            Link(_, ref v) |
+            Em(ref v) |
+            Strong(ref v) |
+            Code(ref v) |
+            Block(ref v) |
+            Div(ref v) |
+            BlockQuote(ref v) |
+            Ul(ref v) |
+            Ol(_, ref v) => {
+                v.iter()
                  .map(RenderNode::get_size_estimate)
                  .fold(Default::default(), SizeEstimate::add)
             },
-            Header(level, ref mut v) => {
-                v.iter_mut()
+            Header(level, ref v) => {
+                v.iter()
                  .map(RenderNode::get_size_estimate)
                  .fold(Default::default(), SizeEstimate::add).add(SizeEstimate {size:0, min_width: MIN_WIDTH+level+2})
             },
             Break => SizeEstimate { size: 1, min_width: 1 },
-            Table(ref mut t) => {
+            Table(ref t) => {
                 t.get_size_estimate()
             },
             TableRow(_)|TableBody(_)|TableCell(_) => {
@@ -383,8 +392,69 @@ impl RenderNode {
             },
             FragStart(_) => Default::default(),
         };
-        self.size_estimate = Some(estimate);
+        self.size_estimate.set(Some(estimate));
         estimate
+    }
+
+}
+
+fn precalc_size_estimate<'a>(node: &'a RenderNode) -> TreeMapResult<(), &'a RenderNode, ()> {
+    use RenderNodeInfo::*;
+    if node.size_estimate.get().is_some() {
+        return TreeMapResult::Nothing;
+    }
+    match node.info {
+        Text(_) |
+        Img(_) |
+        Pre(_) |
+        Break |
+        FragStart(_) => {
+            let _ = node.get_size_estimate();
+            TreeMapResult::Nothing
+        },
+
+        Container(ref v) |
+        Link(_, ref v) |
+        Em(ref v) |
+        Strong(ref v) |
+        Code(ref v) |
+        Block(ref v) |
+        Div(ref v) |
+        BlockQuote(ref v) |
+        Ul(ref v) |
+        Ol(_, ref v) |
+        Header(_, ref v) => {
+            TreeMapResult::PendingChildren {
+                children: v.iter().collect(),
+                cons: Box::new(move |_, _cs| {
+                                    node.get_size_estimate();
+                                    None
+                               }),
+                prefn: None,
+                postfn: None,
+            }
+        },
+        Table(ref t) => {
+            /* Return all the indirect children which are RenderNodes. */
+            let mut children = Vec::new();
+            for row in &t.rows {
+                for cell in &row.cells {
+                    children.extend(cell.content.iter());
+                }
+            }
+            TreeMapResult::PendingChildren {
+                children: children,
+                cons: Box::new(move |_, _cs| {
+                                    node.get_size_estimate();
+                                    None
+                               }),
+                prefn: None,
+                postfn: None,
+            }
+        },
+        TableRow(_)|TableBody(_)|TableCell(_) => {
+            unimplemented!()
+        },
     }
 }
 
@@ -422,7 +492,7 @@ fn list_children_to_render_nodes<T:Write>(handle: Handle, err_out: &mut T) -> Ve
 }
 
 /// Convert a table into a RenderNode
-fn table_to_render_tree<T:Write>(handle: Handle, _err_out: &mut T) ->  TreeMapResult<(), Handle, RenderNode> {
+fn table_to_render_tree<'a, 'b, T:Write>(handle: Handle, _err_out: &'b mut T) ->  TreeMapResult<'a, (), Handle, RenderNode> {
     pending(handle, |_,rowset| {
         let mut rows = vec![];
         for bodynode in rowset {
@@ -437,7 +507,7 @@ fn table_to_render_tree<T:Write>(handle: Handle, _err_out: &mut T) ->  TreeMapRe
 }
 
 /// Add rows from a thead or tbody.
-fn tbody_to_render_tree<T:Write>(handle: Handle, _err_out: &mut T) ->  TreeMapResult<(), Handle, RenderNode> {
+fn tbody_to_render_tree<'a, 'b, T:Write>(handle: Handle, _err_out: &'b mut T) ->  TreeMapResult<'a, (), Handle, RenderNode> {
     pending(handle, |_,rowchildren| {
         let rows = rowchildren.into_iter()
                               .flat_map(|rownode| {
@@ -453,7 +523,7 @@ fn tbody_to_render_tree<T:Write>(handle: Handle, _err_out: &mut T) ->  TreeMapRe
 }
 
 /// Convert a table row to a RenderTableRow
-fn tr_to_render_tree<T:Write>(handle: Handle, _err_out: &mut T) ->  TreeMapResult<(), Handle, RenderNode> {
+fn tr_to_render_tree<'a, 'b, T:Write>(handle: Handle, _err_out: &'b mut T) ->  TreeMapResult<'a, (), Handle, RenderNode> {
     pending(handle, |_, cellnodes| {
         let cells = cellnodes.into_iter()
                              .flat_map(|cellnode| {
@@ -469,7 +539,7 @@ fn tr_to_render_tree<T:Write>(handle: Handle, _err_out: &mut T) ->  TreeMapResul
 }
 
 /// Convert a single table cell to a render node.
-fn td_to_render_tree<T:Write>(handle: Handle, _err_out: &mut T) ->  TreeMapResult<(), Handle, RenderNode> {
+fn td_to_render_tree<'a, 'b, T:Write>(handle: Handle, _err_out: &'b mut T) ->  TreeMapResult<'a, (), Handle, RenderNode> {
     let mut colspan = 1;
     if let Element { ref attrs, .. } = handle.data {
         for attr in attrs.borrow().iter() {
@@ -483,7 +553,7 @@ fn td_to_render_tree<T:Write>(handle: Handle, _err_out: &mut T) ->  TreeMapResul
         Some(RenderNode::new(RenderNodeInfo::TableCell(RenderTableCell {
             colspan: colspan,
             content: children,
-            size_estimate: None,
+            size_estimate: Cell::new(None),
             col_width: None,
         })))
     })
@@ -492,7 +562,7 @@ fn td_to_render_tree<T:Write>(handle: Handle, _err_out: &mut T) ->  TreeMapResul
 /// A reducer which combines results from mapping children into
 /// the result for the current node.  Takes a context and a
 /// vector of results and returns a new result (or nothing).
-type ResultReducer<C, R> = dyn Fn(&mut C, Vec<R>) -> Option<R>;
+type ResultReducer<'a, C, R> = dyn Fn(&mut C, Vec<R>) -> Option<R>+'a;
 
 /// A closure to call before processing a child node.
 type ChildPreFn<C, N> = dyn Fn(&mut C, &N);
@@ -503,14 +573,14 @@ type ChildPreFn<C, N> = dyn Fn(&mut C, &N);
 type ChildPostFn<C, R> = dyn Fn(&mut C, &R);
 
 /// The result of trying to render one node.
-enum TreeMapResult<C, N, R> {
+enum TreeMapResult<'a, C, N, R> {
     /// A completed result.
     Finished(R),
     /// Deferred completion - can be turned into a result
     /// once the vector of children are processed.
     PendingChildren {
         children: Vec<N>,
-        cons: Box<ResultReducer<C, R>>,
+        cons: Box<ResultReducer<'a, C, R>>,
         prefn: Option<Box<ChildPreFn<C, N>>>,
         postfn: Option<Box<ChildPostFn<C, R>>>,
     },
@@ -518,16 +588,16 @@ enum TreeMapResult<C, N, R> {
     Nothing
 }
 
-fn tree_map_reduce<C, N, R, M>(context: &mut C,
+fn tree_map_reduce<'a, C, N, R, M>(context: &mut C,
                                top: N,
                                mut process_node: M) -> Option<R>
-    where M: FnMut(&mut C, N) -> TreeMapResult<C, N, R>,
+    where M: for<'c> FnMut(&'c mut C, N) -> TreeMapResult<'a, C, N, R>,
 {
     /// A node partially decoded, waiting for its children to
     /// be processed.
-    struct PendingNode<C, R, N> {
+    struct PendingNode<'a, C, R, N> {
         /// How to make the node once finished
-        construct: Box<ResultReducer<C, R>>,
+        construct: Box<ResultReducer<'a, C, R>>,
         /// Called before processing each child
         prefn: Option<Box<ChildPreFn<C, N>>>,
         /// Called after processing each child
@@ -605,7 +675,7 @@ pub fn dom_to_render_tree<T:Write>(handle: Handle, err_out: &mut T) -> Option<Re
     result
 }
 
-fn pending<F>(handle: Handle, f: F) -> TreeMapResult<(), Handle, RenderNode>
+fn pending<'a, F>(handle: Handle, f: F) -> TreeMapResult<'a, (), Handle, RenderNode>
 where //for<'a> F: Fn(&'a mut C, Vec<RenderNode>) -> Option<RenderNode>+'static
       for<'r> F: Fn(&'r mut (), std::vec::Vec<RenderNode>) -> Option<RenderNode>+'static
 {
@@ -670,7 +740,7 @@ fn prepend_marker(prefix: RenderNode, mut orig: RenderNode) -> RenderNode {
     orig
 }
 
-fn process_dom_node<T:Write>(handle: Handle, err_out: &mut T) -> TreeMapResult<(), Handle, RenderNode> {
+fn process_dom_node<'a, 'b, T:Write>(handle: Handle, err_out: &'b mut T) -> TreeMapResult<'a, (), Handle, RenderNode> {
     use TreeMapResult::*;
     use RenderNodeInfo::*;
 
@@ -897,6 +967,11 @@ impl<R:Renderer> DerefMut for BuilderStack<R> {
 
 fn render_tree_to_string<T:Write, R:Renderer>(builder: R, tree: RenderNode,
                           err_out: &mut T) -> R {
+    /* Phase 1: get size estimates. */
+    tree_map_reduce(&mut (), &tree,
+        |_, node| precalc_size_estimate(&node));
+
+    /* Phase 2: actually render. */
     let mut bs = BuilderStack::new(builder);
     tree_map_reduce(&mut bs, tree,
         |builders, node| do_render_node(builders, node, err_out),
@@ -904,7 +979,7 @@ fn render_tree_to_string<T:Write, R:Renderer>(builder: R, tree: RenderNode,
     bs.into_inner()
 }
 
-fn pending2<R: Renderer, F: Fn(&mut BuilderStack<R>, Vec<Option<R>>) -> Option<Option<R>> + 'static>(children: Vec<RenderNode>, f: F) -> TreeMapResult<BuilderStack<R>, RenderNode, Option<R>> {
+fn pending2<'a, R: Renderer, F: Fn(&mut BuilderStack<R>, Vec<Option<R>>) -> Option<Option<R>> + 'static>(children: Vec<RenderNode>, f: F) -> TreeMapResult<'a, BuilderStack<R>, RenderNode, Option<R>> {
     TreeMapResult::PendingChildren{
         children: children,
         cons: Box::new(f),
@@ -917,7 +992,7 @@ fn pending2<R: Renderer, F: Fn(&mut BuilderStack<R>, Vec<Option<R>>) -> Option<O
 fn do_render_node<'a, 'b, T: Write, R: Renderer>(builder: &mut BuilderStack<R>,
                                                  tree: RenderNode,
                                                  err_out: &'b mut T)
-  -> TreeMapResult<BuilderStack<R>, RenderNode, Option<R>>
+  -> TreeMapResult<'static, BuilderStack<R>, RenderNode, Option<R>>
 {
     use TreeMapResult::*;
     use RenderNodeInfo::*;
@@ -1035,7 +1110,6 @@ fn do_render_node<'a, 'b, T: Write, R: Renderer>(builder: &mut BuilderStack<R>,
             let prefix_width_max = format!("{}", max_number).len() + 2;
             let prefix_width = max(prefix_width_min, prefix_width_max);
             let prefixn = format!("{: <width$}", "", width=prefix_width);
-            use std::cell::Cell;
             let i: Cell<_> = Cell::new(start);
 
             TreeMapResult::PendingChildren{
@@ -1078,7 +1152,7 @@ fn do_render_node<'a, 'b, T: Write, R: Renderer>(builder: &mut BuilderStack<R>,
      }
 }
 
-fn render_table_tree<T:Write, R:Renderer>(builder: &mut R, mut table: RenderTable, _err_out: &mut T) -> TreeMapResult<BuilderStack<R>, RenderNode, Option<R>>
+fn render_table_tree<T:Write, R:Renderer>(builder: &mut R, table: RenderTable, _err_out: &mut T) -> TreeMapResult<'static, BuilderStack<R>, RenderNode, Option<R>>
 {
     /* Now lay out the table. */
     let num_columns = table.num_columns;
@@ -1140,7 +1214,7 @@ fn render_table_tree<T:Write, R:Renderer>(builder: &mut R, mut table: RenderTabl
     }
 }
 
-fn render_table_row<T:Write, R:Renderer>(_builder: &mut R, row: RenderTableRow, _err_out: &mut T) -> TreeMapResult<BuilderStack<R>, RenderNode, Option<R>>
+fn render_table_row<T:Write, R:Renderer>(_builder: &mut R, row: RenderTableRow, _err_out: &mut T) -> TreeMapResult<'static, BuilderStack<R>, RenderNode, Option<R>>
 {
     TreeMapResult::PendingChildren{
         children: row.into_cells(),
@@ -1164,7 +1238,7 @@ fn render_table_row<T:Write, R:Renderer>(_builder: &mut R, row: RenderTableRow, 
     }
 }
 
-fn render_table_cell<T:Write, R:Renderer>(_builder: &mut R, cell: RenderTableCell, _err_out: &mut T) -> TreeMapResult<BuilderStack<R>, RenderNode, Option<R>>
+fn render_table_cell<T:Write, R:Renderer>(_builder: &mut R, cell: RenderTableCell, _err_out: &mut T) -> TreeMapResult<'static, BuilderStack<R>, RenderNode, Option<R>>
 {
     pending2(cell.content, |builder: &mut BuilderStack<R>, _| {
         let sub_builder = builder.pop();
