@@ -754,3 +754,11 @@ fn test_issue_16()
 {
     test_html(b"<ul><li><!----></li></ul>", "", 10);
 }
+
+#[test]
+fn test_pre_br()
+{
+    test_html(b"<pre>Foo<br>Bar</pre>", r#"Foo
+Bar
+"#, 10);
+}
