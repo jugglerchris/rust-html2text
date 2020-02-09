@@ -74,7 +74,7 @@ use std::cell::Cell;
 use html5ever::{parse_document};
 use html5ever::driver::ParseOpts;
 use html5ever::tree_builder::TreeBuilderOpts;
-use html5ever::rcdom::{self,RcDom,Handle,NodeData::{Text,Element,Document,Comment}};
+use html5ever::rcdom::{self,RcDom,Handle,NodeData::{Element,Document,Comment}};
 use html5ever::tendril::TendrilSink;
 
 /// A dummy writer which does nothing
@@ -82,19 +82,6 @@ struct Discard {}
 impl Write for Discard {
     fn write(&mut self, bytes: &[u8]) -> std::result::Result<usize, io::Error> { Ok(bytes.len()) }
     fn flush(&mut self) -> std::result::Result<(), io::Error> { Ok(()) }
-}
-
-fn get_text(handle: Handle) -> String {
-    let node = &*handle;
-    let mut result = String::new();
-    if let Text { contents: ref tstr } = node.data {
-        result.push_str(&tstr.borrow());
-    } else {
-        for child in &*node.children.borrow() {
-            result.push_str(&get_text(child.clone()));
-        }
-    }
-    result
 }
 
 const MIN_WIDTH: usize = 5;
@@ -306,7 +293,7 @@ pub enum RenderNodeInfo {
     /// A Div element with children
     Div(Vec<RenderNode>),
     /// A preformatted region.
-    Pre(String),
+    Pre(Vec<RenderNode>),
     /// A blockquote
     BlockQuote(Vec<RenderNode>),
     /// An unordered list
@@ -355,8 +342,7 @@ impl RenderNode {
         // Otherwise, make an estimate.
         let estimate = match self.info {
             Text(ref t) |
-            Img(ref t) |
-            Pre(ref t) => {
+            Img(ref t) => {
                 let len = t.trim().len();
                 SizeEstimate {
                     size: len,
@@ -371,6 +357,7 @@ impl RenderNode {
             Code(ref v) |
             Block(ref v) |
             Div(ref v) |
+            Pre(ref v) |
             BlockQuote(ref v) |
             Ul(ref v) |
             Ol(_, ref v) => {
@@ -406,7 +393,6 @@ fn precalc_size_estimate<'a>(node: &'a RenderNode) -> TreeMapResult<(), &'a Rend
     match node.info {
         Text(_) |
         Img(_) |
-        Pre(_) |
         Break |
         FragStart(_) => {
             let _ = node.get_size_estimate();
@@ -420,6 +406,7 @@ fn precalc_size_estimate<'a>(node: &'a RenderNode) -> TreeMapResult<(), &'a Rend
         Code(ref v) |
         Block(ref v) |
         Div(ref v) |
+        Pre(ref v) |
         BlockQuote(ref v) |
         Ul(ref v) |
         Ol(_, ref v) |
@@ -703,6 +690,7 @@ fn prepend_marker(prefix: RenderNode, mut orig: RenderNode) -> RenderNode {
         // less pointlessly nested.
         Block(ref mut children) |
         Div(ref mut children) |
+        Pre(ref mut children) |
         BlockQuote(ref mut children) |
         Container(ref mut children) |
         TableCell(RenderTableCell { content: ref mut children, .. }) => {
@@ -829,7 +817,7 @@ fn process_dom_node<'a, 'b, T:Write>(handle: Handle, err_out: &'b mut T) -> Tree
                     pending(handle, |_, cs| Some(RenderNode::new(Div(cs))))
                 },
                 expanded_name!(html "pre") => {
-                    Finished(RenderNode::new(Pre(get_text(handle))))
+                    pending(handle, |_, cs| Some(RenderNode::new(Pre(cs))))
                 },
                 expanded_name!(html "br") => {
                     Finished(RenderNode::new(Break))
@@ -1065,9 +1053,14 @@ fn do_render_node<'a, 'b, T: Write, R: Renderer>(builder: &mut BuilderStack<R>,
                 Some(None)
             })
         },
-        Pre(ref formatted) => {
-            builder.add_preformatted_block(formatted);
-            Finished(None)
+        Pre(children) => {
+            builder.new_line();
+            builder.start_pre();
+            pending2(children, |builder:&mut BuilderStack<R>, _| {
+                builder.new_line();
+                builder.end_pre();
+                Some(None)
+            })
         },
         BlockQuote(children) => {
             let sub_builder = builder.new_sub_renderer(builder.width()-2);
