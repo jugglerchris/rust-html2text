@@ -759,7 +759,6 @@ fn test_issue_16()
 fn test_pre_br()
 {
     test_html(b"<pre>Foo<br>Bar</pre>", r#"Foo
-
 Bar
 "#, 10);
 }

@@ -723,7 +723,7 @@ impl<D:TextDecorator> Renderer for TextRenderer<D> {
     fn new_line_hard(&mut self) {
         match self.wrapping {
             None => self.add_empty_line(),
-            Some(WrappedBlock { wordlen: 0, .. }) => self.add_empty_line(),
+            Some(WrappedBlock { linelen: 0, wordlen: 0, .. }) => self.add_empty_line(),
             Some(_) => self.flush_all(),
         }
     }
