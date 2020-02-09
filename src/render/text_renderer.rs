@@ -332,6 +332,46 @@ impl<T:Clone+Eq+Debug+Default> WrappedBlock<T> {
         }
     }
 
+    pub fn add_preformatted_text(&mut self, text: &str, tag: &T) {
+        html_trace!("WrappedBlock::add_preformatted_text({}), {:?}", text, tag);
+        // Make sure that any previous word has been sent to the line, as we
+        // bypass the word buffer.
+        self.flush_word();
+
+        for c in text.chars() {
+            if let Some(charwidth) = UnicodeWidthChar::width(c) {
+                if self.linelen + charwidth > self.width {
+                    self.flush_line();
+                }
+                self.line.push_char(c, tag);
+                self.linelen += charwidth;
+            } else {
+                match c {
+                    '\n' => {
+                        self.flush_line();
+                    }
+                    '\t' => {
+                        let tab_stop = 8;
+                        let mut at_least_one_space = false;
+                        while self.linelen % tab_stop != 0 || !at_least_one_space {
+                            if self.linelen >= self.width {
+                                self.flush_line();
+                            } else {
+                                self.line.push_char(' ', tag);
+                                self.linelen += 1;
+                                at_least_one_space = true;
+                            }
+                        }
+                    }
+                    _ => {
+                        eprintln!("Got character: {:?}", c);
+                    }
+                }
+            }
+            html_trace_quiet!("  Added char {:?}", c);
+        }
+    }
+
     pub fn add_element(&mut self, elt: TaggedLineElement<T>) {
         self.word.push(elt);
     }
@@ -543,6 +583,8 @@ pub struct TextRenderer<D:TextDecorator> {
     wrapping: Option<WrappedBlock<Vec<D::Annotation>>>,
     decorator: Option<D>,
     ann_stack: Vec<D::Annotation>,
+    /// The depth of <pre> block stacking.
+    pre_depth: usize,
 }
 
 impl<D:TextDecorator> TextRenderer<D> {
@@ -556,6 +598,7 @@ impl<D:TextDecorator> TextRenderer<D> {
             wrapping: None,
             decorator: Some(decorator),
             ann_stack: Vec::new(),
+            pre_depth: 0,
         }
     }
 
@@ -690,6 +733,18 @@ impl<D:TextDecorator> Renderer for TextRenderer<D> {
         self.lines.push(RenderLine::Line(BorderHoriz::new(self.width)));
     }
 
+    fn start_pre(&mut self) {
+        self.pre_depth += 1;
+    }
+
+    fn end_pre(&mut self) {
+        if self.pre_depth > 0 {
+            self.pre_depth -= 1;
+        } else {
+            panic!("Attempt to end a preformatted block which wasn't opened.");
+        }
+    }
+
     fn add_preformatted_block(&mut self, text: &str) {
         use self::TaggedLineElement::Str;
 
@@ -769,7 +824,7 @@ impl<D:TextDecorator> Renderer for TextRenderer<D> {
 
     fn add_inline_text(&mut self, text: &str) {
         html_trace!("add_inline_text({}, {})", self.width, text);
-        if self.at_block_end && text.chars().all(char::is_whitespace) {
+        if self.pre_depth == 0 && self.at_block_end && text.chars().all(char::is_whitespace) {
             // Ignore whitespace between blocks.
             return;
         }
@@ -778,7 +833,11 @@ impl<D:TextDecorator> Renderer for TextRenderer<D> {
         }
         // ensure wrapping is set
         let _ = self.current_text();
-        self.wrapping.as_mut().unwrap().add_text(text, &self.ann_stack);
+        if self.pre_depth == 0 {
+            self.wrapping.as_mut().unwrap().add_text(text, &self.ann_stack);
+        } else {
+            self.wrapping.as_mut().unwrap().add_preformatted_text(text, &self.ann_stack);
+        }
     }
 
     fn width(&self) -> usize {

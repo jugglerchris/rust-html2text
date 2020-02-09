@@ -26,6 +26,13 @@ pub trait Renderer {
     /// Add a horizontal table border.
     fn add_horizontal_border(&mut self);
 
+    /// Begin a preformatted block.  Until the corresponding end,
+    /// whitespace will used verbatim.  Pre regions can nest.
+    fn start_pre(&mut self);
+
+    /// Finish a preformatted block started with `start_pre`.
+    fn end_pre(&mut self);
+
     /// Add a new block of preformatted text.
     fn add_preformatted_block(&mut self, text: &str);
 
