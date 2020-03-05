@@ -762,3 +762,9 @@ fn test_pre_br()
 Bar
 "#, 10);
 }
+
+#[test]
+fn test_pre_emptyline()
+{
+    test_html(br#"<pre>X<span id="i"> </span></pre>"#, "X  \n", 10);
+}

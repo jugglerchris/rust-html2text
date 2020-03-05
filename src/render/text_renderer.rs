@@ -213,7 +213,7 @@ impl<T:Clone+Eq+Debug+Default> WrappedBlock<T> {
                         if self.linelen > 0 { 1 } else { 0 }; // space
             if space_needed <= space_in_line {
                 if self.linelen > 0 {
-                    self.line.push(Str(TaggedString{s: " ".into(), tag: self.spacetag.take().unwrap()}));
+                    self.line.push(Str(TaggedString{s: " ".into(), tag: self.spacetag.take().unwrap_or_else(|| Default::default())}));
                     self.linelen += 1;
                 }
                 self.line.consume(&mut self.word);
