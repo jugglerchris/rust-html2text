@@ -74,7 +74,7 @@ use std::cell::Cell;
 use html5ever::{parse_document};
 use html5ever::driver::ParseOpts;
 use html5ever::tree_builder::TreeBuilderOpts;
-use html5ever::rcdom::{self,RcDom,Handle,NodeData::{Element,Document,Comment}};
+use markup5ever_rcdom::{self,RcDom,Handle,NodeData::{Element,Document,Comment}};
 use html5ever::tendril::TendrilSink;
 
 /// A dummy writer which does nothing
@@ -896,7 +896,7 @@ fn process_dom_node<'a, 'b, T:Write>(handle: Handle, err_out: &'b mut T) -> Tree
                 result
             }
           },
-        rcdom::NodeData::Text { contents: ref tstr } => {
+        markup5ever_rcdom::NodeData::Text { contents: ref tstr } => {
             Finished(RenderNode::new(Text((&*tstr.borrow()).into())))
         }
         _ => {

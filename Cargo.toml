@@ -17,10 +17,11 @@ appveyor = { repository = "jugglerchris/rust-html2text", service = "github" }
 
 [dependencies]
 clippy = { version = "0.0.302", optional=true }
-html5ever = "0.24.0"
+html5ever = "0.25.0"
 html5ever-atoms = "0.3.0"
 unicode-width = "0.1.5"
 backtrace = "0.3"
+markup5ever_rcdom = "0.1.0"
 
 [features]
 html_trace = []
