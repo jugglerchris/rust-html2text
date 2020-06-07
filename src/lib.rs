@@ -51,7 +51,6 @@
 #![cfg_attr(feature="clippy", plugin(clippy))]
 #![deny(missing_docs)]
 
-extern crate html5ever_atoms;
 #[macro_use] extern crate html5ever;
 extern crate unicode_width;
 
