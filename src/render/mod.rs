@@ -49,14 +49,17 @@ pub trait Renderer {
     /// Add a new block from a sub renderer, and prefix every line by the
     /// corresponding text from each iteration of prefixes.
     fn append_subrender<'a, I>(&mut self, other: Self, prefixes: I)
-                           where I:Iterator<Item=&'a str>;
+    where
+        I: Iterator<Item = &'a str>;
 
     /// Append a set of sub renderers joined left-to-right with a vertical line,
     /// and add a horizontal line below.
     /// If collapse is true, then merge top/bottom borders of the subrenderer
     /// with the surrounding one.
     fn append_columns_with_borders<I>(&mut self, cols: I, collapse: bool)
-                           where I:IntoIterator<Item=Self>, Self: Sized;
+    where
+        I: IntoIterator<Item = Self>,
+        Self: Sized;
 
     /// Returns true if this renderer has no content.
     fn empty(&self) -> bool;

@@ -1,20 +1,23 @@
+#[cfg(unix)]
+extern crate argparse;
 extern crate html2text;
-#[cfg(unix)] extern crate termion;
-#[cfg(unix)] extern crate argparse;
-#[cfg(unix)] extern crate unicode_width;
+#[cfg(unix)]
+extern crate termion;
+#[cfg(unix)]
+extern crate unicode_width;
 #[cfg(unix)]
 mod top {
-    use ::termion;
-    use ::std;
     use ::html2text;
-    use std::io::{self, Write};
-    use std::collections::HashMap;
-    use html2text::render::text_renderer::{RichAnnotation,TaggedLine,TaggedLineElement};
+    use ::std;
+    use ::termion;
     use argparse::{ArgumentParser, Store};
-    use termion::input::TermRead;
-    use termion::event::Key;
-    use termion::raw::IntoRawMode;
+    use html2text::render::text_renderer::{RichAnnotation, TaggedLine, TaggedLineElement};
+    use std::collections::HashMap;
+    use std::io::{self, Write};
     use termion::cursor::Goto;
+    use termion::event::Key;
+    use termion::input::TermRead;
+    use termion::raw::IntoRawMode;
     use termion::screen::AlternateScreen;
     use unicode_width::UnicodeWidthStr;
 
@@ -26,36 +29,51 @@ mod top {
                 RichAnnotation::Default => (),
                 RichAnnotation::Link(_) => {
                     style.push_str(&format!("{}", termion::style::Underline));
-                },
+                }
                 RichAnnotation::Image => {
-                    style.push_str(&format!("{}", termion::color::Fg(termion::color::LightBlue)));
-                },
+                    style.push_str(&format!(
+                        "{}",
+                        termion::color::Fg(termion::color::LightBlue)
+                    ));
+                }
                 RichAnnotation::Emphasis => {
-                    style.push_str(&format!("{}", termion::color::Fg(termion::color::LightGreen)));
-                },
+                    style.push_str(&format!(
+                        "{}",
+                        termion::color::Fg(termion::color::LightGreen)
+                    ));
+                }
                 RichAnnotation::Strong => {
-                    style.push_str(&format!("{}", termion::color::Fg(termion::color::LightGreen)));
-                },
+                    style.push_str(&format!(
+                        "{}",
+                        termion::color::Fg(termion::color::LightGreen)
+                    ));
+                }
                 RichAnnotation::Code => {
-                    style.push_str(&format!("{}", termion::color::Fg(termion::color::LightYellow)));
-                },
+                    style.push_str(&format!(
+                        "{}",
+                        termion::color::Fg(termion::color::LightYellow)
+                    ));
+                }
                 RichAnnotation::Preformat(_is_cont) => {
-                    style.push_str(&format!("{}", termion::color::Fg(termion::color::LightBlack)));
-                },
+                    style.push_str(&format!(
+                        "{}",
+                        termion::color::Fg(termion::color::LightBlack)
+                    ));
+                }
             }
         }
         style
     }
 
     struct LinkMap {
-        lines: Vec<Vec<Option<String>>>,  // lines[y][x] => Some(URL) or None
+        lines: Vec<Vec<Option<String>>>, // lines[y][x] => Some(URL) or None
     }
 
     impl LinkMap {
         pub fn link_at(&self, x: usize, y: usize) -> Option<&str> {
             if let Some(ref linevec) = self.lines.get(y) {
                 if let Some(&Some(ref text)) = linevec.get(x) {
-                    return Some(&text)
+                    return Some(&text);
                 }
             }
             None
@@ -90,13 +108,11 @@ mod top {
 
             map.push(linevec);
         }
-        LinkMap {
-            lines: map,
-        }
+        LinkMap { lines: map }
     }
 
     struct FragMap {
-        start_xy: HashMap<String, (usize,usize)>,
+        start_xy: HashMap<String, (usize, usize)>,
     }
 
     fn find_frags(lines: &Vec<TaggedLine<Vec<RichAnnotation>>>) -> FragMap {
@@ -110,17 +126,15 @@ mod top {
                 match tli {
                     FragmentStart(fragname) => {
                         map.insert(fragname.to_string(), (x, y));
-                    },
+                    }
                     Str(ts) => {
                         x += UnicodeWidthStr::width(ts.s.as_str());
-                    },
+                    }
                 }
             }
             y += 1;
         }
-        FragMap {
-            start_xy: map,
-        }
+        FragMap { start_xy: map }
     }
 
     pub fn main() {
@@ -128,7 +142,7 @@ mod top {
         {
             let mut ap = ArgumentParser::new();
             ap.refer(&mut filename)
-              .add_argument("filename", Store, "Set HTML filename");
+                .add_argument("filename", Store, "Set HTML filename");
             ap.parse_args_or_exit();
         }
 
@@ -153,8 +167,7 @@ mod top {
         let mut doc_x = 0;
         let mut doc_y = 0;
 
-        let mut screen = AlternateScreen::from(
-            io::stdout().into_raw_mode().unwrap());
+        let mut screen = AlternateScreen::from(io::stdout().into_raw_mode().unwrap());
 
         loop {
             // Sanity-check the current screen position. max_y should
@@ -164,11 +177,11 @@ mod top {
             // that the cursor isn't off the bottom of the visible
             // screen; and small enough that the cursor isn't off the
             // top.
-            if max_y >= height-1 {
-                top_y = std::cmp::min(top_y, max_y - (height-1));
+            if max_y >= height - 1 {
+                top_y = std::cmp::min(top_y, max_y - (height - 1));
             }
-            if doc_y >= height-1 {
-                top_y = std::cmp::max(top_y, doc_y - (height-1));
+            if doc_y >= height - 1 {
+                top_y = std::cmp::max(top_y, doc_y - (height - 1));
             }
             top_y = std::cmp::min(top_y, doc_y);
 
@@ -178,7 +191,7 @@ mod top {
             for (i, line) in annotated[top_y..vis_y_limit].iter().enumerate() {
                 use self::TaggedLineElement::Str;
 
-                write!(screen, "{}", Goto(1, i as u16 +1)).unwrap();
+                write!(screen, "{}", Goto(1, i as u16 + 1)).unwrap();
                 for tli in line.iter() {
                     if let Str(ts) = tli {
                         let style = to_style(&ts.tag);
@@ -186,7 +199,7 @@ mod top {
                         match (opt_url, link) {
                             (Some(ref t1), Some(ref t2)) if t1 == t2 => {
                                 write!(screen, "{}", termion::style::Invert).unwrap();
-                            },
+                            }
                             _ => (),
                         }
                         write!(screen, "{}{}{}", style, ts.s, termion::style::Reset).unwrap();
@@ -207,22 +220,22 @@ mod top {
                         if doc_y < max_y {
                             doc_y += 1;
                         }
-                    },
+                    }
                     Key::Char('k') | Key::Up => {
                         if doc_y > 0 {
                             doc_y -= 1;
                         }
-                    },
+                    }
                     Key::Char('h') | Key::Left => {
                         if doc_x > 0 {
                             doc_x -= 1;
                         }
-                    },
+                    }
                     Key::Char('l') | Key::Right => {
                         if doc_x + 1 < width {
                             doc_x += 1;
                         }
-                    },
+                    }
                     Key::Char(' ') | Key::PageDown => {
                         // Ideally, move both the cursor and the top
                         // visible line down by a whole page
@@ -235,22 +248,21 @@ mod top {
                         // And the standard bounds checking for top_y
                         // will take care of the rest of the special
                         // cases.
-                    },
+                    }
                     Key::PageUp => {
                         // Ideally, move both the cursor and the top
                         // visible line up by a whole page. But bound
                         // both at zero.
                         doc_y = std::cmp::max(doc_y, height) - height;
                         top_y = std::cmp::max(top_y, height) - height;
-                    },
+                    }
                     Key::Home => {
                         doc_y = 0;
-                    },
+                    }
                     Key::End => {
                         doc_y = max_y;
-                    },
-                    Key::Char('\t') => {
-                    },
+                    }
+                    Key::Char('\t') => {}
                     Key::Char('\r') | Key::Char('\n') => {
                         if let Some(url) = opt_url {
                             if url.starts_with("#") {
@@ -261,8 +273,8 @@ mod top {
                                 }
                             }
                         }
-                    },
-                    _ => {},
+                    }
+                    _ => {}
                 }
             }
         }
