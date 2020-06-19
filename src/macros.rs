@@ -26,8 +26,12 @@ macro_rules! html_trace {
 #[macro_export]
 #[doc(hidden)]
 macro_rules! html_trace {
-    ($fmt:expr) => { $crate::macros::nop(); };
-    ($fmt:expr, $( $args:expr ),*) => { $crate::macros::nop(); };
+    ($fmt:expr) => {
+        $crate::macros::nop();
+    };
+    ($fmt:expr, $( $args:expr ),*) => {
+        $crate::macros::nop();
+    };
 }
 
 #[cfg(feature = "html_trace")]
@@ -46,6 +50,10 @@ macro_rules! html_trace_quiet {
 #[macro_export]
 #[doc(hidden)]
 macro_rules! html_trace_quiet {
-    ($fmt:expr) => { $crate::macros::nop(); };
-    ($fmt:expr, $( $args:expr ),*) => { $crate::macros::nop(); };
+    ($fmt:expr) => {
+        $crate::macros::nop();
+    };
+    ($fmt:expr, $( $args:expr ),*) => {
+        $crate::macros::nop();
+    };
 }
