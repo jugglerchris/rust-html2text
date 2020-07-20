@@ -721,6 +721,7 @@ where
 /// RenderNode.
 fn prepend_marker(prefix: RenderNode, mut orig: RenderNode) -> RenderNode {
     use RenderNodeInfo::*;
+    html_trace!("prepend_marker({:?}, {:?})", prefix, orig);
 
     match orig.info {
         // For block elements such as Block and Div, we need to insert
@@ -768,9 +769,12 @@ fn prepend_marker(prefix: RenderNode, mut orig: RenderNode) -> RenderNode {
         // For anything else, just make a new Container with the
         // prefix node and the original one.
         _ => {
-            return RenderNode::new(Container(vec![prefix, orig]));
+            let result = RenderNode::new(Container(vec![prefix, orig]));
+            html_trace!("prepend_marker() -> {:?}", result);
+            return result;
         }
     }
+    html_trace!("prepend_marker() -> {:?}", &orig);
     orig
 }
 
@@ -1044,6 +1048,7 @@ fn do_render_node<'a, 'b, T: Write, R: Renderer>(
     tree: RenderNode,
     err_out: &'b mut T,
 ) -> TreeMapResult<'static, BuilderStack<R>, RenderNode, Option<R>> {
+    html_trace!("do_render_node({:?}", tree);
     use RenderNodeInfo::*;
     use TreeMapResult::*;
     match tree.info {

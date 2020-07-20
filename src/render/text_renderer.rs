@@ -218,36 +218,45 @@ impl<T: Clone + Eq + Debug + Default> WrappedBlock<T> {
             let space_in_line = self.width - self.linelen;
             let space_needed = self.wordlen + if self.linelen > 0 { 1 } else { 0 }; // space
             if space_needed <= space_in_line {
+                html_trace!("Got enough space");
                 if self.linelen > 0 {
                     self.line.push(Str(TaggedString {
                         s: " ".into(),
                         tag: self.spacetag.take().unwrap_or_else(|| Default::default()),
                     }));
                     self.linelen += 1;
+                    html_trace!("linelen incremented to {}", self.linelen);
                 }
                 self.line.consume(&mut self.word);
                 self.linelen += self.wordlen;
+                html_trace!("linelen increased by wordlen to {}", self.linelen);
             } else {
+                html_trace!("Not enough space");
                 /* Start a new line */
                 self.flush_line();
                 if self.wordlen <= self.width {
+                    html_trace!("wordlen <= width");
                     let mut new_word = TaggedLine::new();
                     mem::swap(&mut new_word, &mut self.word);
                     mem::swap(&mut self.line, &mut new_word);
                     self.linelen = self.wordlen;
+                    html_trace!("linelen set to wordlen {}", self.linelen);
                 } else {
+                    html_trace!("Splitting the word");
                     /* We need to split the word. */
                     let mut wordbits = self.word.drain_all();
                     /* Note: there's always at least one piece */
                     let mut opt_elt = wordbits.next();
                     let mut lineleft = self.width;
                     while let Some(elt) = opt_elt.take() {
+                        html_trace!("Take element {:?}", elt);
                         if let Str(piece) = elt {
                             let w = UnicodeWidthStr::width(piece.s.as_str());
                             if w <= lineleft {
                                 self.line.push(Str(piece));
                                 lineleft -= w;
                                 self.linelen += w;
+                                html_trace!("linelen had w={} added to {}", w, self.linelen);
                                 opt_elt = wordbits.next();
                             } else {
                                 /* Split into two */
@@ -272,6 +281,7 @@ impl<T: Clone + Eq + Debug + Default> WrappedBlock<T> {
                                 }
                                 lineleft = self.width;
                                 self.linelen = 0;
+                                html_trace!("linelen set to zero here");
                                 opt_elt = Some(Str(TaggedString {
                                     s: piece.s[split_idx..].into(),
                                     tag: piece.tag,
@@ -279,6 +289,7 @@ impl<T: Clone + Eq + Debug + Default> WrappedBlock<T> {
                             }
                         } else {
                             self.line.push(elt);
+                            opt_elt = wordbits.next();
                         }
                     }
                 }
