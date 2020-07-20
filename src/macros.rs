@@ -1,4 +1,4 @@
-#[cfg(feature = "html_trace")]
+#[cfg(feature = "html_trace_bt")]
 extern crate backtrace;
 
 /* This is to work around a false positive for the clippy warning
@@ -14,12 +14,26 @@ pub fn nop() {}
 #[doc(hidden)]
 macro_rules! html_trace {
     ($fmt:expr) => {
-         let bt = ::backtrace::Backtrace::new();
-         println!( concat!($fmt, " at {:?}"), bt );
+         #[cfg(feature = "html_trace_bt")]
+         {
+             let bt = ::backtrace::Backtrace::new();
+             eprintln!( concat!($fmt, " at {:?}"), bt );
+         }
+         #[cfg(not(feature = "html_trace_bt"))]
+         {
+             eprintln!($fmt);
+         }
     };
     ($fmt:expr, $( $args:expr ),*) => {
-         let bt = ::backtrace::Backtrace::new();
-         println!( concat!($fmt, " at {:?}"), $( $args ),* , bt );
+         #[cfg(feature = "html_trace_bt")]
+         {
+             let bt = ::backtrace::Backtrace::new();
+             eprintln!( concat!($fmt, " at {:?}"), $( $args ),* , bt );
+         }
+         #[cfg(not(feature = "html_trace_bt"))]
+         {
+             eprintln!($fmt, $( $args ),*);
+         }
     };
 }
 #[cfg(not(feature = "html_trace"))]
@@ -39,10 +53,10 @@ macro_rules! html_trace {
 #[doc(hidden)]
 macro_rules! html_trace_quiet {
     ($fmt:expr) => {
-         println!( $fmt );
+         eprintln!( $fmt );
     };
     ($fmt:expr, $( $args:expr ),*) => {
-         println!( $fmt, $( $args ),* );
+         eprintln!( $fmt, $( $args ),* );
     };
 }
 
