@@ -924,3 +924,13 @@ Bar
 fn test_pre_emptyline() {
     test_html(br#"<pre>X<span id="i"> </span></pre>"#, "X  \n", 10);
 }
+
+#[test]
+fn test_link_id_longline() {
+    test_html(br#"<a href="foo" id="i">quitelongline</a>"#,
+         r#"[quitelong
+line][1]
+
+[1] foo
+"#, 10);
+}
