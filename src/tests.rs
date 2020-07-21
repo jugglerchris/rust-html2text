@@ -927,10 +927,13 @@ fn test_pre_emptyline() {
 
 #[test]
 fn test_link_id_longline() {
-    test_html(br#"<a href="foo" id="i">quitelongline</a>"#,
-         r#"[quitelong
+    test_html(
+        br#"<a href="foo" id="i">quitelongline</a>"#,
+        r#"[quitelong
 line][1]
 
 [1] foo
-"#, 10);
+"#,
+        10,
+    );
 }
