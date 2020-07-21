@@ -17,3 +17,4 @@ Possible log types:
 - [added] CHANGELOG.md
 - [fixed] Some text near a fragment start (`id="foo"` attribute) could be
   lost if it needed breaking across lines.
+- [added] Experimentally add dependabot configuration.
