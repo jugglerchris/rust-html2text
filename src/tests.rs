@@ -937,3 +937,11 @@ line][1]
         10,
     );
 }
+
+#[test]
+fn test_dl() {
+    test_html(br#"<dl><dt>Foo</dt><dd>Definition of foo</dd></dl>"#,
+r#"*Foo*
+  Definition of foo
+"#, 40);
+}
