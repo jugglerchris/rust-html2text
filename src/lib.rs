@@ -317,6 +317,12 @@ pub enum RenderNodeInfo {
     Ul(Vec<RenderNode>),
     /// An ordered list
     Ol(i64, Vec<RenderNode>),
+    /// A description list (containing Dt or Dd)
+    Dl(Vec<RenderNode>),
+    /// A term (from a <dl>)
+    Dt(Vec<RenderNode>),
+    /// A definition (from a <dl>)
+    Dd(Vec<RenderNode>),
     /// A line break
     Break,
     /// A table
@@ -375,6 +381,9 @@ impl RenderNode {
             | Div(ref v)
             | Pre(ref v)
             | BlockQuote(ref v)
+            | Dl(ref v)
+            | Dt(ref v)
+            | Dd(ref v)
             | Ul(ref v)
             | Ol(_, ref v) => v
                 .iter()
@@ -423,6 +432,9 @@ fn precalc_size_estimate<'a>(node: &'a RenderNode) -> TreeMapResult<(), &'a Rend
         | BlockQuote(ref v)
         | Ul(ref v)
         | Ol(_, ref v)
+        | Dl(ref v)
+        | Dt(ref v)
+        | Dd(ref v)
         | Header(_, ref v) => TreeMapResult::PendingChildren {
             children: v.iter().collect(),
             cons: Box::new(move |_, _cs| {
@@ -466,7 +478,7 @@ fn children_to_render_nodes<T: Write>(handle: Handle, err_out: &mut T) -> Vec<Re
     children
 }
 
-/// Make a Vec of RenderNodes from the <li>children of a node.
+/// Make a Vec of RenderNodes from the <li> children of a node.
 fn list_children_to_render_nodes<T: Write>(handle: Handle, err_out: &mut T) -> Vec<RenderNode> {
     let mut children = Vec::new();
 
@@ -476,6 +488,32 @@ fn list_children_to_render_nodes<T: Write>(handle: Handle, err_out: &mut T) -> V
                 expanded_name!(html "li") => {
                     let li_children = children_to_render_nodes(child.clone(), err_out);
                     children.push(RenderNode::new(RenderNodeInfo::Block(li_children)));
+                }
+                _ => {}
+            },
+            Comment { .. } => {}
+            _ => {
+                html_trace!("Unhandled in list: {:?}\n", child);
+            }
+        }
+    }
+    children
+}
+
+/// Make a Vec of DtElements from the <dt> and <dd> children of a node.
+fn desc_list_children_to_render_nodes<T: Write>(handle: Handle, err_out: &mut T) -> Vec<RenderNode> {
+    let mut children = Vec::new();
+
+    for child in handle.children.borrow().iter() {
+        match child.data {
+            Element { ref name, .. } => match name.expanded() {
+                expanded_name!(html "dt") => {
+                    let dt_children = children_to_render_nodes(child.clone(), err_out);
+                    children.push(RenderNode::new(RenderNodeInfo::Dt(dt_children)));
+                }
+                expanded_name!(html "dd") => {
+                    let dd_children = children_to_render_nodes(child.clone(), err_out);
+                    children.push(RenderNode::new(RenderNodeInfo::Dd(dd_children)));
                 }
                 _ => {}
             },
@@ -907,6 +945,9 @@ fn process_dom_node<'a, 'b, T: Write>(
                         list_children_to_render_nodes(handle.clone(), err_out),
                     )))
                 }
+                expanded_name!(html "dl") => Finished(RenderNode::new(Dl(
+                    desc_list_children_to_render_nodes(handle.clone(), err_out),
+                ))),
                 _ => {
                     html_trace!("Unhandled element: {:?}\n", name.local);
                     pending(handle, |_, cs| Some(RenderNode::new(Container(cs))))
@@ -1189,6 +1230,34 @@ fn do_render_node<'a, 'b, T: Write, R: Renderer>(
                     i.set(i.get() + 1);
                 })),
             }
+        }
+        Dl(items) => {
+            builder.start_block();
+
+            TreeMapResult::PendingChildren {
+                children: items,
+                cons: Box::new(|_, _| Some(None)),
+                prefn: None,
+                postfn: None,
+            }
+        }
+        Dt(children) => {
+            builder.start_block();
+            builder.start_emphasis();
+            pending2(children, |builder: &mut BuilderStack<R>, _| {
+                builder.end_emphasis();
+                builder.end_block();
+                Some(None)
+            })
+        }
+        Dd(children) => {
+            let sub_builder = builder.new_sub_renderer(builder.width() - 2);
+            builder.push(sub_builder);
+            pending2(children, |builder: &mut BuilderStack<R>, _| {
+                let sub_builder = builder.pop();
+                builder.append_subrender(sub_builder, repeat("  "));
+                Some(None)
+            })
         }
         Break => {
             builder.new_line_hard();
