@@ -1242,11 +1242,10 @@ fn do_render_node<'a, 'b, T: Write, R: Renderer>(
             }
         }
         Dt(children) => {
-            builder.start_block();
+            builder.new_line();
             builder.start_emphasis();
             pending2(children, |builder: &mut BuilderStack<R>, _| {
                 builder.end_emphasis();
-                builder.end_block();
                 Some(None)
             })
         }
