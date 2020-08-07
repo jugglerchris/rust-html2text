@@ -796,11 +796,11 @@ fn prepend_marker(prefix: RenderNode, mut orig: RenderNode) -> RenderNode {
             }
         }
 
-        Table(ref mut rtable) => {
+        TableBody(ref mut rows) | Table(RenderTable { ref mut rows, .. }) => {
             // If the row is empty, then there isn't really anything
             // to attach the fragment start to.
-            if rtable.rows.len() > 0 {
-                let rrow = &mut rtable.rows[0];
+            if rows.len() > 0 {
+                let rrow = &mut rows[0];
                 if rrow.cells.len() > 0 {
                     rrow.cells[0].content.insert(0, prefix);
                 }

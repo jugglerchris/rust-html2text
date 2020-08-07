@@ -835,6 +835,25 @@ hi, world
 }
 
 #[test]
+fn test_table_tbody_id() {
+    let html = r#"<html><body><table>
+      <tbody id="tb">
+        <tr>
+            <td>hi, world</td>
+        </tr>
+      </tbody>
+    </table></body></html>"#;
+    test_html(
+        html.as_bytes(),
+        r#"──────────
+hi, world 
+──────────
+"#,
+        10,
+    );
+}
+
+#[test]
 fn test_header_width() {
     //0 size
     test_html(
