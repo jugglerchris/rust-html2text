@@ -11,6 +11,10 @@ Possible log types:
 
 ### Unreleased
 
+### 0.1.14 (2020-08-07)
+
+- [fixed] A table with an `id` attribute on `<tbody>` would be hidden.
+
 ### 0.1.13 (2020-07-21)
 
 - [changed] Run cargo fmt (thanks crunchyjesus)
