@@ -611,7 +611,7 @@ pub struct TextRenderer<D: TextDecorator> {
     wrapping: Option<WrappedBlock<Vec<D::Annotation>>>,
     decorator: Option<D>,
     ann_stack: Vec<D::Annotation>,
-    text_filter_stack: Vec<fn (&str) -> Option<String>>,
+    text_filter_stack: Vec<fn(&str) -> Option<String>>,
     /// The depth of <pre> block stacking.
     pre_depth: usize,
 }
@@ -1170,7 +1170,11 @@ impl<D: TextDecorator> Renderer for TextRenderer<D> {
         }
     }
     fn start_strikeout(&mut self) {
-        if let Some((s, annotation)) = self.decorator.as_mut().map(|d| d.decorate_strikeout_start()) {
+        if let Some((s, annotation)) = self
+            .decorator
+            .as_mut()
+            .map(|d| d.decorate_strikeout_start())
+        {
             self.ann_stack.push(annotation);
             self.add_inline_text(&s);
         }
