@@ -7,6 +7,7 @@ use super::Renderer;
 use std::fmt::Debug;
 use std::mem;
 use std::vec;
+use std::ops::Deref;
 use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
 
 /// A wrapper around a String with extra metadata.
@@ -419,11 +420,17 @@ pub trait TextDecorator {
     /// Return a suffix for after an em.
     fn decorate_em_end(&mut self) -> String;
 
-    /// Return an annotation and rendering prefix for strongm
+    /// Return an annotation and rendering prefix for strong
     fn decorate_strong_start(&mut self) -> (String, Self::Annotation);
 
     /// Return a suffix for after an strong.
     fn decorate_strong_end(&mut self) -> String;
+
+    /// Return an annotation and rendering prefix for strikeout
+    fn decorate_strikeout_start(&mut self) -> (String, Self::Annotation);
+
+    /// Return a suffix for after an strikeout.
+    fn decorate_strikeout_end(&mut self) -> String;
 
     /// Return an annotation and rendering prefix for code
     fn decorate_code_start(&mut self) -> (String, Self::Annotation);
@@ -605,6 +612,7 @@ pub struct TextRenderer<D: TextDecorator> {
     wrapping: Option<WrappedBlock<Vec<D::Annotation>>>,
     decorator: Option<D>,
     ann_stack: Vec<D::Annotation>,
+    text_filter_stack: Vec<fn(&str) -> Option<String>>,
     /// The depth of <pre> block stacking.
     pre_depth: usize,
 }
@@ -621,6 +629,7 @@ impl<D: TextDecorator> TextRenderer<D> {
             decorator: Some(decorator),
             ann_stack: Vec::new(),
             pre_depth: 0,
+            text_filter_stack: Vec::new(),
         }
     }
 
@@ -717,6 +726,19 @@ impl<D: TextDecorator> TextRenderer<D> {
         }
         self.lines
     }
+}
+
+fn filter_text_strikeout(s: &str) -> Option<String> {
+    let mut result = String::new();
+    for c in s.chars() {
+        result.push(c);
+        if UnicodeWidthChar::width(c).unwrap_or(0) > 0 {
+            // This is a character with width (not a combining or other character)
+            // so add a strikethrough combiner.
+            result.push('\u{336}');
+        }
+    }
+    Some(result)
 }
 
 impl<D: TextDecorator> Renderer for TextRenderer<D> {
@@ -877,16 +899,29 @@ impl<D: TextDecorator> Renderer for TextRenderer<D> {
         }
         // ensure wrapping is set
         let _ = self.current_text();
+        let mut s = None;
+        // Do any filtering of the text
+        for filter in &self.text_filter_stack {
+            // When we stop supporting Rust < 1.40, this can become:
+            //let srctext = s.as_deref().unwrap_or(text);
+            let srctext = s.as_ref().map(Deref::deref).unwrap_or(text);
+            if let Some(filtered) = filter(srctext) {
+                s = Some(filtered);
+            }
+        }
+        // When we stop supporting Rust < 1.40, this can become:
+        //let filtered_text = s.as_deref().unwrap_or(text);
+        let filtered_text = s.as_ref().map(Deref::deref).unwrap_or(text);
         if self.pre_depth == 0 {
             self.wrapping
                 .as_mut()
                 .unwrap()
-                .add_text(text, &self.ann_stack);
+                .add_text(filtered_text, &self.ann_stack);
         } else {
             self.wrapping
                 .as_mut()
                 .unwrap()
-                .add_preformatted_text(text, &self.ann_stack);
+                .add_preformatted_text(filtered_text, &self.ann_stack);
         }
     }
 
@@ -1139,6 +1174,24 @@ impl<D: TextDecorator> Renderer for TextRenderer<D> {
             self.ann_stack.pop();
         }
     }
+    fn start_strikeout(&mut self) {
+        if let Some((s, annotation)) = self
+            .decorator
+            .as_mut()
+            .map(|d| d.decorate_strikeout_start())
+        {
+            self.ann_stack.push(annotation);
+            self.add_inline_text(&s);
+        }
+        self.text_filter_stack.push(filter_text_strikeout);
+    }
+    fn end_strikeout(&mut self) {
+        self.text_filter_stack.pop().unwrap();
+        if let Some(s) = self.decorator.as_mut().map(|d| d.decorate_strikeout_end()) {
+            self.add_inline_text(&s);
+            self.ann_stack.pop();
+        }
+    }
     fn start_code(&mut self) {
         if let Some((s, annotation)) = self.decorator.as_mut().map(|d| d.decorate_code_start()) {
             self.ann_stack.push(annotation);
@@ -1210,6 +1263,14 @@ impl TextDecorator for PlainDecorator {
 
     fn decorate_strong_end(&mut self) -> String {
         "**".to_string()
+    }
+
+    fn decorate_strikeout_start(&mut self) -> (String, Self::Annotation) {
+        ("".to_string(), ())
+    }
+
+    fn decorate_strikeout_end(&mut self) -> String {
+        "".to_string()
     }
 
     fn decorate_code_start(&mut self) -> (String, Self::Annotation) {
@@ -1284,6 +1345,14 @@ impl TextDecorator for TrivialDecorator {
         "".to_string()
     }
 
+    fn decorate_strikeout_start(&mut self) -> (String, Self::Annotation) {
+        ("".to_string(), ())
+    }
+
+    fn decorate_strikeout_end(&mut self) -> String {
+        "".to_string()
+    }
+
     fn decorate_code_start(&mut self) -> (String, Self::Annotation) {
         ("".to_string(), ())
     }
@@ -1332,6 +1401,8 @@ pub enum RichAnnotation {
     Emphasis,
     /// Strong text, which might be rendered in bold or another colour.
     Strong,
+    /// Stikeout text
+    Strikeout,
     /// Code
     Code,
     /// Preformatted; true if a continuation line for an overly-long line.
@@ -1377,6 +1448,14 @@ impl TextDecorator for RichDecorator {
 
     fn decorate_strong_end(&mut self) -> String {
         "*".to_string()
+    }
+
+    fn decorate_strikeout_start(&mut self) -> (String, Self::Annotation) {
+        ("".to_string(), RichAnnotation::Strikeout)
+    }
+
+    fn decorate_strikeout_end(&mut self) -> String {
+        "".to_string()
     }
 
     fn decorate_code_start(&mut self) -> (String, Self::Annotation) {

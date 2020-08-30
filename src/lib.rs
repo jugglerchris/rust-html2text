@@ -299,6 +299,8 @@ pub enum RenderNodeInfo {
     Em(Vec<RenderNode>),
     /// A strong region
     Strong(Vec<RenderNode>),
+    /// A struck out region
+    Strikeout(Vec<RenderNode>),
     /// A code region
     Code(Vec<RenderNode>),
     /// An image (title)
@@ -376,6 +378,7 @@ impl RenderNode {
             | Link(_, ref v)
             | Em(ref v)
             | Strong(ref v)
+            | Strikeout(ref v)
             | Code(ref v)
             | Block(ref v)
             | Div(ref v)
@@ -425,6 +428,7 @@ fn precalc_size_estimate<'a>(node: &'a RenderNode) -> TreeMapResult<(), &'a Rend
         | Link(_, ref v)
         | Em(ref v)
         | Strong(ref v)
+        | Strikeout(ref v)
         | Code(ref v)
         | Block(ref v)
         | Div(ref v)
@@ -882,6 +886,9 @@ fn process_dom_node<'a, 'b, T: Write>(
                 expanded_name!(html "strong") => {
                     pending(handle, |_, cs| Some(RenderNode::new(Strong(cs))))
                 }
+                expanded_name!(html "s") => {
+                    pending(handle, |_, cs| Some(RenderNode::new(Strikeout(cs))))
+                }
                 expanded_name!(html "code") => {
                     pending(handle, |_, cs| Some(RenderNode::new(Code(cs))))
                 }
@@ -1119,6 +1126,13 @@ fn do_render_node<'a, 'b, T: Write, R: Renderer>(
             builder.start_strong();
             pending2(children, |builder: &mut BuilderStack<R>, _| {
                 builder.end_strong();
+                Some(None)
+            })
+        }
+        Strikeout(children) => {
+            builder.start_strikeout();
+            pending2(children, |builder: &mut BuilderStack<R>, _| {
+                builder.end_strikeout();
                 Some(None)
             })
         }

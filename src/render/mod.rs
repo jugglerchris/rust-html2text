@@ -81,11 +81,17 @@ pub trait Renderer {
     /// Finish emphasised text started earlier.
     fn end_emphasis(&mut self);
 
-    /// Start an strong region
+    /// Start a strong region
     fn start_strong(&mut self);
 
     /// Finish strong text started earlier.
     fn end_strong(&mut self);
+
+    /// Start a strikeout region
+    fn start_strikeout(&mut self);
+
+    /// Finish strikeout text started earlier.
+    fn end_strikeout(&mut self);
 
     /// Start a code region
     fn start_code(&mut self);
