@@ -7,6 +7,7 @@ use super::Renderer;
 use std::fmt::Debug;
 use std::mem;
 use std::vec;
+use std::ops::Deref;
 use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
 
 /// A wrapper around a String with extra metadata.
@@ -901,12 +902,16 @@ impl<D: TextDecorator> Renderer for TextRenderer<D> {
         let mut s = None;
         // Do any filtering of the text
         for filter in &self.text_filter_stack {
-            let srctext = s.as_deref().unwrap_or(text);
+            // When we stop supporting Rust < 1.40, this can become:
+            //let srctext = s.as_deref().unwrap_or(text);
+            let srctext = s.as_ref().map(Deref::deref).unwrap_or(text);
             if let Some(filtered) = filter(srctext) {
                 s = Some(filtered);
             }
         }
-        let filtered_text = s.as_deref().unwrap_or(text);
+        // When we stop supporting Rust < 1.40, this can become:
+        //let filtered_text = s.as_deref().unwrap_or(text);
+        let filtered_text = s.as_ref().map(Deref::deref).unwrap_or(text);
         if self.pre_depth == 0 {
             self.wrapping
                 .as_mut()
