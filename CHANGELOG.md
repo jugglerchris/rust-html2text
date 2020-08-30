@@ -11,6 +11,8 @@ Possible log types:
 
 ### Unreleased
 
+- [added] Support <s> strikeout text.
+
 ### 0.1.14 (2020-08-07)
 
 - [fixed] A table with an `id` attribute on `<tbody>` would be hidden.

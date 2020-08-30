@@ -48,6 +48,7 @@ mod top {
                         termion::color::Fg(termion::color::LightGreen)
                     ));
                 }
+                RichAnnotation::Strikeout => (),
                 RichAnnotation::Code => {
                     style.push_str(&format!(
                         "{}",

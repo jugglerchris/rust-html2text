@@ -967,3 +967,12 @@ fn test_dl() {
         40,
     );
 }
+
+#[test]
+fn test_s() {
+    test_html(
+        br#"Hi <s>you</s>thee!"#,
+        "Hi y\u{336}o\u{336}u\u{336}thee!\n",
+        40,
+    );
+}
