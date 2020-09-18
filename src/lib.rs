@@ -1401,13 +1401,70 @@ fn render_table_cell<T: Write, R: Renderer>(
     })
 }
 
-/// Reads HTML from `input`, decorates it using `decorator`, and
-/// returns a `String` with text wrapped to `width` columns.
-pub fn from_read_with_decorator<R, D>(mut input: R, width: usize, decorator: D) -> String
-where
-    R: io::Read,
-    D: TextDecorator,
-{
+/// The structure of an HTML document that can be rendered using a [`TextDecorator`][].
+///
+/// [`TextDecorator`]: render/text_renderer/trait.TextDecorator.html
+pub struct RenderTree(RenderNode);
+
+impl RenderTree {
+    /// Render this document using the given `decorator` and wrap it to `width` columns.
+    pub fn render<D: TextDecorator>(self, width: usize, decorator: D) -> RenderedText<D> {
+        let builder = TextRenderer::new(width, decorator);
+        let builder = render_tree_to_string(builder, self.0, &mut Discard {});
+        RenderedText(builder)
+    }
+
+    /// Render this document as plain text using the [`PlainDecorator`][] and wrap it to `width`
+    /// columns.
+    ///
+    /// [`PlainDecorator`]: render/text_renderer/struct.PlainDecorator.html
+    pub fn render_plain(self, width: usize) -> RenderedText<PlainDecorator> {
+        self.render(width, PlainDecorator::new())
+    }
+
+    /// Render this document as rich text using the [`RichDecorator`][] and wrap it to `width`
+    /// columns.
+    ///
+    /// [`RichDecorator`]: render/text_renderer/struct.RichDecorator.html
+    pub fn render_rich(self, width: usize) -> RenderedText<RichDecorator> {
+        self.render(width, RichDecorator::new())
+    }
+}
+
+/// A rendered HTML document.
+pub struct RenderedText<D: TextDecorator>(TextRenderer<D>);
+
+impl<D: TextDecorator> RenderedText<D> {
+    /// Convert the rendered HTML document to a string.
+    pub fn into_string(self) -> String {
+        self.into()
+    }
+
+    /// Convert the rendered HTML document to a vector of lines with the annotations created by the
+    /// decorator.
+    pub fn into_lines(self) -> Vec<TaggedLine<Vec<D::Annotation>>> {
+        self.into()
+    }
+}
+
+impl<D: TextDecorator> From<RenderedText<D>> for String {
+    fn from(text: RenderedText<D>) -> String {
+        text.0.into_string()
+    }
+}
+
+impl<D: TextDecorator> From<RenderedText<D>> for Vec<TaggedLine<Vec<D::Annotation>>> {
+    fn from(text: RenderedText<D>) -> Vec<TaggedLine<Vec<D::Annotation>>> {
+        text.0
+            .into_lines()
+            .into_iter()
+            .map(RenderLine::into_tagged_line)
+            .collect()
+    }
+}
+
+/// Reads and parses HTML from `input` and prepares a render tree.
+pub fn parse(mut input: impl io::Read) -> RenderTree {
     let opts = ParseOpts {
         tree_builder: TreeBuilderOpts {
             drop_doctype: true,
@@ -1419,12 +1476,18 @@ where
         .from_utf8()
         .read_from(&mut input)
         .unwrap();
+    let render_tree = dom_to_render_tree(dom.document, &mut Discard {}).unwrap();
+    RenderTree(render_tree)
+}
 
-    let builder = TextRenderer::new(width, decorator);
-
-    let render_tree = dom_to_render_tree(dom.document.clone(), &mut Discard {}).unwrap();
-    let builder = render_tree_to_string(builder, render_tree, &mut Discard {});
-    builder.into_string()
+/// Reads HTML from `input`, decorates it using `decorator`, and
+/// returns a `String` with text wrapped to `width` columns.
+pub fn from_read_with_decorator<R, D>(input: R, width: usize, decorator: D) -> String
+where
+    R: io::Read,
+    D: TextDecorator,
+{
+    parse(input).render(width, decorator).into_string()
 }
 
 /// Reads HTML from `input`, and returns a `String` with text wrapped to
@@ -1440,31 +1503,13 @@ where
 /// Reads HTML from `input`, and returns text wrapped to `width` columns.
 /// The text is returned as a `Vec<TaggedLine<_>>`; the annotations are vectors
 /// of `RichAnnotation`.  The "outer" annotation comes first in the `Vec`.
-pub fn from_read_rich<R>(mut input: R, width: usize) -> Vec<TaggedLine<Vec<RichAnnotation>>>
+pub fn from_read_rich<R>(input: R, width: usize) -> Vec<TaggedLine<Vec<RichAnnotation>>>
 where
     R: io::Read,
 {
-    let opts = ParseOpts {
-        tree_builder: TreeBuilderOpts {
-            drop_doctype: true,
-            ..Default::default()
-        },
-        ..Default::default()
-    };
-    let dom = parse_document(RcDom::default(), opts)
-        .from_utf8()
-        .read_from(&mut input)
-        .unwrap();
-
-    let decorator = RichDecorator::new();
-    let builder = TextRenderer::new(width, decorator);
-    let render_tree = dom_to_render_tree(dom.document.clone(), &mut Discard {}).unwrap();
-    let builder = render_tree_to_string(builder, render_tree, &mut Discard {});
-    builder
+    parse(input)
+        .render(width, RichDecorator::new())
         .into_lines()
-        .into_iter()
-        .map(RenderLine::into_tagged_line)
-        .collect()
 }
 
 #[cfg(test)]
