@@ -6,13 +6,13 @@
 use super::Renderer;
 use std::fmt::Debug;
 use std::mem;
-use std::vec;
 use std::ops::Deref;
+use std::vec;
 use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
 
 /// A wrapper around a String with extra metadata.
-#[derive(Debug)]
-pub struct TaggedString<T: Debug> {
+#[derive(Debug, PartialEq)]
+pub struct TaggedString<T: Debug + PartialEq> {
     /// The wrapped text.
     pub s: String,
 
@@ -22,7 +22,7 @@ pub struct TaggedString<T: Debug> {
 
 /// An element of a line of tagged text: either a TaggedString or a
 /// marker appearing in between document characters.
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum TaggedLineElement<T: Debug + Eq + PartialEq + Clone> {
     /// A string with tag information attached.
     Str(TaggedString<T>),
@@ -32,7 +32,7 @@ pub enum TaggedLineElement<T: Debug + Eq + PartialEq + Clone> {
 }
 
 /// A line of tagged text (composed of a set of `TaggedString`s).
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub struct TaggedLine<T: Debug + Eq + PartialEq + Clone> {
     v: Vec<TaggedLineElement<T>>,
 }

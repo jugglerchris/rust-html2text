@@ -121,7 +121,7 @@ impl SizeEstimate {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 /// Render tree table cell
 pub struct RenderTableCell {
     colspan: usize,
@@ -151,7 +151,7 @@ impl RenderTableCell {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 /// Render tree table row
 pub struct RenderTableRow {
     cells: Vec<RenderTableCell>,
@@ -204,7 +204,7 @@ impl RenderTableRow {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 /// A representation of a table render tree with metadata.
 pub struct RenderTable {
     rows: Vec<RenderTableRow>,
@@ -287,7 +287,7 @@ impl RenderTable {
 }
 
 /// The node-specific information distilled from the DOM.
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub enum RenderNodeInfo {
     /// Some text.
     Text(String),
@@ -340,7 +340,7 @@ pub enum RenderNodeInfo {
 }
 
 /// Common fields from a node.
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct RenderNode {
     size_estimate: Cell<Option<SizeEstimate>>,
     info: RenderNodeInfo,
@@ -1404,6 +1404,8 @@ fn render_table_cell<T: Write, R: Renderer>(
 /// The structure of an HTML document that can be rendered using a [`TextDecorator`][].
 ///
 /// [`TextDecorator`]: render/text_renderer/trait.TextDecorator.html
+
+#[derive(Clone, Debug)]
 pub struct RenderTree(RenderNode);
 
 impl RenderTree {

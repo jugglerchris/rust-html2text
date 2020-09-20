@@ -1,5 +1,5 @@
-use super::render::text_renderer::TrivialDecorator;
-use super::{from_read, from_read_with_decorator, TextDecorator};
+use super::render::text_renderer::{RichAnnotation, TaggedLine, TrivialDecorator};
+use super::{from_read, from_read_with_decorator, parse, TextDecorator};
 
 /// Like assert_eq!(), but prints out the results normally as well
 macro_rules! assert_eq_str {
@@ -975,4 +975,45 @@ fn test_s() {
         "Hi y\u{336}o\u{336}u\u{336}thee!\n",
         40,
     );
+}
+
+#[test]
+fn test_multi_parse() {
+    let html: &[u8] = b"one two three four five six seven eight nine ten eleven twelve thirteen \
+                        fourteen fifteen sixteen seventeen";
+    let tree = parse(html);
+    assert_eq!(
+        "one two three four five six seven eight nine ten eleven twelve thirteen fourteen\n\
+         fifteen sixteen seventeen\n",
+        tree.clone().render_plain(80).into_string()
+    );
+    assert_eq!(
+        "one two three four five six seven eight nine ten eleven twelve\n\
+         thirteen fourteen fifteen sixteen seventeen\n",
+        tree.clone().render_plain(70).into_string()
+    );
+    assert_eq!(
+        "one two three four five six seven eight nine ten\n\
+         eleven twelve thirteen fourteen fifteen sixteen\n\
+         seventeen\n",
+        tree.clone().render_plain(50).into_string()
+    );
+}
+
+#[test]
+fn test_read_rich() {
+    let html: &[u8] = b"<strong>bold</strong>";
+    let lines = parse(html).render_rich(80).into_lines();
+    let tag = vec![RichAnnotation::Strong];
+    let line = TaggedLine::from_string("*bold*".to_owned(), &tag);
+    assert_eq!(vec![line], lines);
+}
+
+#[test]
+fn test_read_custom() {
+    let html: &[u8] = b"<strong>bold</strong>";
+    let lines = parse(html).render(80, TrivialDecorator::new()).into_lines();
+    let tag = vec![()];
+    let line = TaggedLine::from_string("bold".to_owned(), &tag);
+    assert_eq!(vec![line], lines);
 }
