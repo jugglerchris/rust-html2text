@@ -1437,25 +1437,13 @@ pub struct RenderedText<D: TextDecorator>(TextRenderer<D>);
 impl<D: TextDecorator> RenderedText<D> {
     /// Convert the rendered HTML document to a string.
     pub fn into_string(self) -> String {
-        self.into()
+        self.0.into_string()
     }
 
     /// Convert the rendered HTML document to a vector of lines with the annotations created by the
     /// decorator.
     pub fn into_lines(self) -> Vec<TaggedLine<Vec<D::Annotation>>> {
-        self.into()
-    }
-}
-
-impl<D: TextDecorator> From<RenderedText<D>> for String {
-    fn from(text: RenderedText<D>) -> String {
-        text.0.into_string()
-    }
-}
-
-impl<D: TextDecorator> From<RenderedText<D>> for Vec<TaggedLine<Vec<D::Annotation>>> {
-    fn from(text: RenderedText<D>) -> Vec<TaggedLine<Vec<D::Annotation>>> {
-        text.0
+        self.0
             .into_lines()
             .into_iter()
             .map(RenderLine::into_tagged_line)
