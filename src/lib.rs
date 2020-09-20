@@ -1476,7 +1476,7 @@ pub fn parse(mut input: impl io::Read) -> RenderTree {
         .from_utf8()
         .read_from(&mut input)
         .unwrap();
-    let render_tree = dom_to_render_tree(dom.document, &mut Discard {}).unwrap();
+    let render_tree = dom_to_render_tree(dom.document.clone(), &mut Discard {}).unwrap();
     RenderTree(render_tree)
 }
 
