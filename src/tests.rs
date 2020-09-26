@@ -1,4 +1,4 @@
-use super::render::text_renderer::{RichAnnotation, TaggedLine, TaggedString, TrivialDecorator};
+use super::render::text_renderer::{RichAnnotation, TaggedLine, TrivialDecorator};
 use super::{from_read, from_read_with_decorator, parse, TextDecorator};
 
 /// Like assert_eq!(), but prints out the results normally as well
@@ -1020,9 +1020,7 @@ fn test_read_custom() {
 
 #[test]
 fn test_pre_rich() {
-    use super::render::text_renderer::TaggedLineElement;
     use RichAnnotation::*;
-    use TaggedLineElement::*;
     assert_eq!(
         crate::parse("<pre>test</pre>".as_bytes())
             .render_rich(100)
