@@ -1,4 +1,4 @@
-use super::render::text_renderer::{RichAnnotation, TaggedLine, TrivialDecorator};
+use super::render::text_renderer::{RichAnnotation, TaggedLine, TaggedString, TrivialDecorator};
 use super::{from_read, from_read_with_decorator, parse, TextDecorator};
 
 /// Like assert_eq!(), but prints out the results normally as well
@@ -1016,4 +1016,19 @@ fn test_read_custom() {
     let tag = vec![()];
     let line = TaggedLine::from_string("bold".to_owned(), &tag);
     assert_eq!(vec![line], lines);
+}
+
+#[test]
+fn test_pre_rich() {
+    use RichAnnotation::*;
+    use super::render::text_renderer::TaggedLineElement;
+    use TaggedLineElement::*;
+    assert_eq!(crate::parse("<pre>test</pre>".as_bytes()).render_rich(100).into_lines(),
+        [TaggedLine::from_string("test".into(), &vec![Preformat(false)] )]);
+
+    assert_eq!(crate::parse("<pre>testlong</pre>".as_bytes()).render_rich(4).into_lines(),
+        [
+            TaggedLine::from_string("test".into(), &vec![Preformat(false)] ),
+            TaggedLine::from_string("long".into(), &vec![Preformat(true)] )
+        ]);
 }

@@ -193,6 +193,7 @@ struct WrappedBlock<T: Clone + Eq + Debug + Default> {
     spacetag: Option<T>, // Tag for the whitespace before the current word
     word: TaggedLine<T>, // The current word (with no whitespace).
     wordlen: usize,
+    pre_wrapped: bool,   // If true, we've been forced to wrap a <pre> line.
 }
 
 impl<T: Clone + Eq + Debug + Default> WrappedBlock<T> {
@@ -207,6 +208,7 @@ impl<T: Clone + Eq + Debug + Default> WrappedBlock<T> {
             spacetag: None,
             word: TaggedLine::new(),
             wordlen: 0,
+            pre_wrapped: false,
         }
     }
 
@@ -216,6 +218,7 @@ impl<T: Clone + Eq + Debug + Default> WrappedBlock<T> {
         /* Finish the word. */
         html_trace_quiet!("flush_word: word={:?}, linelen={}", self.word, self.linelen);
         if !self.word.is_empty() {
+            self.pre_wrapped = false;
             let space_in_line = self.width - self.linelen;
             let space_needed = self.wordlen + if self.linelen > 0 { 1 } else { 0 }; // space
             if space_needed <= space_in_line {
@@ -353,8 +356,8 @@ impl<T: Clone + Eq + Debug + Default> WrappedBlock<T> {
         }
     }
 
-    pub fn add_preformatted_text(&mut self, text: &str, tag: &T) {
-        html_trace!("WrappedBlock::add_preformatted_text({}), {:?}", text, tag);
+    pub fn add_preformatted_text(&mut self, text: &str, tag_main: &T, tag_wrapped: &T) {
+        html_trace!("WrappedBlock::add_preformatted_text({}), {:?}/{:?}", text, tag_main, tag_wrapped);
         // Make sure that any previous word has been sent to the line, as we
         // bypass the word buffer.
         self.flush_word();
@@ -363,13 +366,15 @@ impl<T: Clone + Eq + Debug + Default> WrappedBlock<T> {
             if let Some(charwidth) = UnicodeWidthChar::width(c) {
                 if self.linelen + charwidth > self.width {
                     self.flush_line();
+                    self.pre_wrapped = true;
                 }
-                self.line.push_char(c, tag);
+                self.line.push_char(c, if self.pre_wrapped { tag_wrapped } else { tag_main });
                 self.linelen += charwidth;
             } else {
                 match c {
                     '\n' => {
                         self.flush_line();
+                        self.pre_wrapped = false;
                     }
                     '\t' => {
                         let tab_stop = 8;
@@ -378,7 +383,7 @@ impl<T: Clone + Eq + Debug + Default> WrappedBlock<T> {
                             if self.linelen >= self.width {
                                 self.flush_line();
                             } else {
-                                self.line.push_char(' ', tag);
+                                self.line.push_char(' ', if self.pre_wrapped { tag_wrapped } else { tag_main });
                                 self.linelen += 1;
                                 at_least_one_space = true;
                             }
@@ -918,10 +923,14 @@ impl<D: TextDecorator> Renderer for TextRenderer<D> {
                 .unwrap()
                 .add_text(filtered_text, &self.ann_stack);
         } else {
+            let mut tag_first = self.ann_stack.clone();
+            let mut tag_cont = self.ann_stack.clone();
+            tag_first.push(self.decorator.as_mut().unwrap().decorate_preformat_first());
+            tag_cont.push(self.decorator.as_mut().unwrap().decorate_preformat_cont());
             self.wrapping
                 .as_mut()
                 .unwrap()
-                .add_preformatted_text(filtered_text, &self.ann_stack);
+                .add_preformatted_text(filtered_text, &tag_first, &tag_cont);
         }
     }
 
