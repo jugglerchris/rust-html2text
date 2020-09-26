@@ -59,11 +59,10 @@ mod top {
                     if is_cont {
                         style.push_str(&format!(
                             "{}",
-                            termion::color::Fg(termion::color::LightMagenta)));
+                            termion::color::Fg(termion::color::LightMagenta)
+                        ));
                     } else {
-                        style.push_str(&format!(
-                            "{}",
-                            termion::color::Fg(termion::color::Magenta)));
+                        style.push_str(&format!("{}", termion::color::Fg(termion::color::Magenta)));
                     }
                 }
             }

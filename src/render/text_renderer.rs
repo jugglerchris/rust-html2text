@@ -193,7 +193,7 @@ struct WrappedBlock<T: Clone + Eq + Debug + Default> {
     spacetag: Option<T>, // Tag for the whitespace before the current word
     word: TaggedLine<T>, // The current word (with no whitespace).
     wordlen: usize,
-    pre_wrapped: bool,   // If true, we've been forced to wrap a <pre> line.
+    pre_wrapped: bool, // If true, we've been forced to wrap a <pre> line.
 }
 
 impl<T: Clone + Eq + Debug + Default> WrappedBlock<T> {
@@ -357,7 +357,12 @@ impl<T: Clone + Eq + Debug + Default> WrappedBlock<T> {
     }
 
     pub fn add_preformatted_text(&mut self, text: &str, tag_main: &T, tag_wrapped: &T) {
-        html_trace!("WrappedBlock::add_preformatted_text({}), {:?}/{:?}", text, tag_main, tag_wrapped);
+        html_trace!(
+            "WrappedBlock::add_preformatted_text({}), {:?}/{:?}",
+            text,
+            tag_main,
+            tag_wrapped
+        );
         // Make sure that any previous word has been sent to the line, as we
         // bypass the word buffer.
         self.flush_word();
@@ -368,7 +373,14 @@ impl<T: Clone + Eq + Debug + Default> WrappedBlock<T> {
                     self.flush_line();
                     self.pre_wrapped = true;
                 }
-                self.line.push_char(c, if self.pre_wrapped { tag_wrapped } else { tag_main });
+                self.line.push_char(
+                    c,
+                    if self.pre_wrapped {
+                        tag_wrapped
+                    } else {
+                        tag_main
+                    },
+                );
                 self.linelen += charwidth;
             } else {
                 match c {
@@ -383,7 +395,14 @@ impl<T: Clone + Eq + Debug + Default> WrappedBlock<T> {
                             if self.linelen >= self.width {
                                 self.flush_line();
                             } else {
-                                self.line.push_char(' ', if self.pre_wrapped { tag_wrapped } else { tag_main });
+                                self.line.push_char(
+                                    ' ',
+                                    if self.pre_wrapped {
+                                        tag_wrapped
+                                    } else {
+                                        tag_main
+                                    },
+                                );
                                 self.linelen += 1;
                                 at_least_one_space = true;
                             }
@@ -927,10 +946,11 @@ impl<D: TextDecorator> Renderer for TextRenderer<D> {
             let mut tag_cont = self.ann_stack.clone();
             tag_first.push(self.decorator.as_mut().unwrap().decorate_preformat_first());
             tag_cont.push(self.decorator.as_mut().unwrap().decorate_preformat_cont());
-            self.wrapping
-                .as_mut()
-                .unwrap()
-                .add_preformatted_text(filtered_text, &tag_first, &tag_cont);
+            self.wrapping.as_mut().unwrap().add_preformatted_text(
+                filtered_text,
+                &tag_first,
+                &tag_cont,
+            );
         }
     }
 

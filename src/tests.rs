@@ -1020,15 +1020,26 @@ fn test_read_custom() {
 
 #[test]
 fn test_pre_rich() {
-    use RichAnnotation::*;
     use super::render::text_renderer::TaggedLineElement;
+    use RichAnnotation::*;
     use TaggedLineElement::*;
-    assert_eq!(crate::parse("<pre>test</pre>".as_bytes()).render_rich(100).into_lines(),
-        [TaggedLine::from_string("test".into(), &vec![Preformat(false)] )]);
+    assert_eq!(
+        crate::parse("<pre>test</pre>".as_bytes())
+            .render_rich(100)
+            .into_lines(),
+        [TaggedLine::from_string(
+            "test".into(),
+            &vec![Preformat(false)]
+        )]
+    );
 
-    assert_eq!(crate::parse("<pre>testlong</pre>".as_bytes()).render_rich(4).into_lines(),
+    assert_eq!(
+        crate::parse("<pre>testlong</pre>".as_bytes())
+            .render_rich(4)
+            .into_lines(),
         [
-            TaggedLine::from_string("test".into(), &vec![Preformat(false)] ),
-            TaggedLine::from_string("long".into(), &vec![Preformat(true)] )
-        ]);
+            TaggedLine::from_string("test".into(), &vec![Preformat(false)]),
+            TaggedLine::from_string("long".into(), &vec![Preformat(true)])
+        ]
+    );
 }
