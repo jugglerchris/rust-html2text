@@ -1017,3 +1017,27 @@ fn test_read_custom() {
     let line = TaggedLine::from_string("bold".to_owned(), &tag);
     assert_eq!(vec![line], lines);
 }
+
+#[test]
+fn test_pre_rich() {
+    use RichAnnotation::*;
+    assert_eq!(
+        crate::parse("<pre>test</pre>".as_bytes())
+            .render_rich(100)
+            .into_lines(),
+        [TaggedLine::from_string(
+            "test".into(),
+            &vec![Preformat(false)]
+        )]
+    );
+
+    assert_eq!(
+        crate::parse("<pre>testlong</pre>".as_bytes())
+            .render_rich(4)
+            .into_lines(),
+        [
+            TaggedLine::from_string("test".into(), &vec![Preformat(false)]),
+            TaggedLine::from_string("long".into(), &vec![Preformat(true)])
+        ]
+    );
+}

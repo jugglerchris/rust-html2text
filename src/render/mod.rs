@@ -33,9 +33,6 @@ pub trait Renderer {
     /// Finish a preformatted block started with `start_pre`.
     fn end_pre(&mut self);
 
-    /// Add a new block of preformatted text.
-    fn add_preformatted_block(&mut self, text: &str);
-
     /// Add some inline text (which should be wrapped at the
     /// appropriate width) to the current block.
     fn add_inline_text(&mut self, text: &str);

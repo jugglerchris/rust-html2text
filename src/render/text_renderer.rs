@@ -193,6 +193,7 @@ struct WrappedBlock<T: Clone + Eq + Debug + Default> {
     spacetag: Option<T>, // Tag for the whitespace before the current word
     word: TaggedLine<T>, // The current word (with no whitespace).
     wordlen: usize,
+    pre_wrapped: bool, // If true, we've been forced to wrap a <pre> line.
 }
 
 impl<T: Clone + Eq + Debug + Default> WrappedBlock<T> {
@@ -207,6 +208,7 @@ impl<T: Clone + Eq + Debug + Default> WrappedBlock<T> {
             spacetag: None,
             word: TaggedLine::new(),
             wordlen: 0,
+            pre_wrapped: false,
         }
     }
 
@@ -216,6 +218,7 @@ impl<T: Clone + Eq + Debug + Default> WrappedBlock<T> {
         /* Finish the word. */
         html_trace_quiet!("flush_word: word={:?}, linelen={}", self.word, self.linelen);
         if !self.word.is_empty() {
+            self.pre_wrapped = false;
             let space_in_line = self.width - self.linelen;
             let space_needed = self.wordlen + if self.linelen > 0 { 1 } else { 0 }; // space
             if space_needed <= space_in_line {
@@ -353,8 +356,13 @@ impl<T: Clone + Eq + Debug + Default> WrappedBlock<T> {
         }
     }
 
-    pub fn add_preformatted_text(&mut self, text: &str, tag: &T) {
-        html_trace!("WrappedBlock::add_preformatted_text({}), {:?}", text, tag);
+    pub fn add_preformatted_text(&mut self, text: &str, tag_main: &T, tag_wrapped: &T) {
+        html_trace!(
+            "WrappedBlock::add_preformatted_text({}), {:?}/{:?}",
+            text,
+            tag_main,
+            tag_wrapped
+        );
         // Make sure that any previous word has been sent to the line, as we
         // bypass the word buffer.
         self.flush_word();
@@ -363,13 +371,22 @@ impl<T: Clone + Eq + Debug + Default> WrappedBlock<T> {
             if let Some(charwidth) = UnicodeWidthChar::width(c) {
                 if self.linelen + charwidth > self.width {
                     self.flush_line();
+                    self.pre_wrapped = true;
                 }
-                self.line.push_char(c, tag);
+                self.line.push_char(
+                    c,
+                    if self.pre_wrapped {
+                        tag_wrapped
+                    } else {
+                        tag_main
+                    },
+                );
                 self.linelen += charwidth;
             } else {
                 match c {
                     '\n' => {
                         self.flush_line();
+                        self.pre_wrapped = false;
                     }
                     '\t' => {
                         let tab_stop = 8;
@@ -378,7 +395,14 @@ impl<T: Clone + Eq + Debug + Default> WrappedBlock<T> {
                             if self.linelen >= self.width {
                                 self.flush_line();
                             } else {
-                                self.line.push_char(' ', tag);
+                                self.line.push_char(
+                                    ' ',
+                                    if self.pre_wrapped {
+                                        tag_wrapped
+                                    } else {
+                                        tag_main
+                                    },
+                                );
                                 self.linelen += 1;
                                 at_least_one_space = true;
                             }
@@ -803,87 +827,6 @@ impl<D: TextDecorator> Renderer for TextRenderer<D> {
         }
     }
 
-    fn add_preformatted_block(&mut self, text: &str) {
-        use self::TaggedLineElement::Str;
-
-        html_trace!("add_block({}, {})", self.width, text);
-
-        // Get the tags ready for normal and continuation lines.
-        let mut tag_first = self.ann_stack.clone();
-        let mut tag_cont = self.ann_stack.clone();
-        tag_first.push(self.decorator.as_mut().unwrap().decorate_preformat_first());
-        tag_cont.push(self.decorator.as_mut().unwrap().decorate_preformat_cont());
-        // Drop mutability
-        let tag_first = tag_first;
-        let tag_cont = tag_cont;
-
-        let width = self.width;
-        self.start_block();
-
-        /* We do actually want to wrap, but just a hard wrapping
-         * at the end, and add a "continuation line" tag so that the
-         * UI can show them differently.
-         */
-        for formatted_line in text.lines() {
-            let mut acc = String::new();
-            let mut cur_width = 0;
-            let mut first = true;
-            for c in formatted_line.chars() {
-                if let Some(char_width) = UnicodeWidthChar::width(c) {
-                    if cur_width + char_width > width {
-                        let mut line = TaggedLine::new();
-                        /* Push what we have */
-                        line.push(Str(TaggedString {
-                            s: acc,
-                            tag: if first {
-                                tag_first.clone()
-                            } else {
-                                tag_cont.clone()
-                            },
-                        }));
-                        self.lines.push(RenderLine::Text(line));
-                        acc = String::new();
-                        cur_width = 0;
-                        first = false;
-                    }
-                    acc.push(c);
-                    cur_width += char_width;
-                } else {
-                    match c {
-                        '\t' => {
-                            let tab_stop = 8;
-                            let wanted_pos = cur_width + tab_stop - (cur_width % tab_stop);
-                            let spaces = if wanted_pos > width {
-                                width - cur_width
-                            } else {
-                                wanted_pos - cur_width
-                            };
-                            acc.extend((0..spaces).map(|_| ' '));
-                            cur_width += spaces;
-                        }
-                        _ => (),
-                    }
-                }
-            }
-            if acc.len() > 0 {
-                let mut line = TaggedLine::new();
-                /* Push what we have */
-                line.push(Str(TaggedString {
-                    s: acc,
-                    tag: if first {
-                        tag_first.clone()
-                    } else {
-                        tag_cont.clone()
-                    },
-                }));
-                self.lines.push(RenderLine::Text(line));
-            }
-        }
-
-        html_trace_quiet!("add_block: at_block_end <- true");
-        self.at_block_end = true;
-    }
-
     fn end_block(&mut self) {
         self.at_block_end = true;
     }
@@ -918,10 +861,15 @@ impl<D: TextDecorator> Renderer for TextRenderer<D> {
                 .unwrap()
                 .add_text(filtered_text, &self.ann_stack);
         } else {
-            self.wrapping
-                .as_mut()
-                .unwrap()
-                .add_preformatted_text(filtered_text, &self.ann_stack);
+            let mut tag_first = self.ann_stack.clone();
+            let mut tag_cont = self.ann_stack.clone();
+            tag_first.push(self.decorator.as_mut().unwrap().decorate_preformat_first());
+            tag_cont.push(self.decorator.as_mut().unwrap().decorate_preformat_cont());
+            self.wrapping.as_mut().unwrap().add_preformatted_text(
+                filtered_text,
+                &tag_first,
+                &tag_cont,
+            );
         }
     }
 

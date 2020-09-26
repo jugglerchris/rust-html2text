@@ -55,11 +55,15 @@ mod top {
                         termion::color::Fg(termion::color::LightYellow)
                     ));
                 }
-                RichAnnotation::Preformat(_is_cont) => {
-                    style.push_str(&format!(
-                        "{}",
-                        termion::color::Fg(termion::color::LightBlack)
-                    ));
+                RichAnnotation::Preformat(is_cont) => {
+                    if is_cont {
+                        style.push_str(&format!(
+                            "{}",
+                            termion::color::Fg(termion::color::LightMagenta)
+                        ));
+                    } else {
+                        style.push_str(&format!("{}", termion::color::Fg(termion::color::Magenta)));
+                    }
                 }
             }
         }
