@@ -9,7 +9,13 @@ Possible log types:
 - `[fixed]` for any bug fixes.
 - `[security]` to invite users to upgrade in case of vulnerabilities.
 
-### Unreleased
+### 0.2.1
+
+- [added] New entry points - split HTML parsing from rendering the output,
+  thanks Robin Krahl.
+- [fixed] Decorators weren't being used for preformatted text.
+
+### 0.2.0
 
 - [added] Support <s> strikeout text.
 
