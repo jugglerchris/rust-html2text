@@ -153,17 +153,17 @@ impl<T: Debug + Eq + PartialEq + Clone + Default> TaggedLine<T> {
         Box::new(self.v.iter())
     }
 
+    /// Iterator over the tagged strings in this line, ignoring any fragments.
+    pub fn tagged_strings(&self) -> impl Iterator<Item = &TaggedString<T>> {
+        self.v.iter().filter_map(|tle| match tle {
+            TaggedLineElement::Str(ts) => Some(ts),
+            _ => None,
+        })
+    }
+
     /// Return the width of the line in cells
     pub fn width(&self) -> usize {
-        use self::TaggedLineElement::Str;
-
-        let mut result = 0;
-        for tle in &self.v {
-            if let Str(ts) = tle {
-                result += UnicodeWidthStr::width(ts.s.as_str());
-            }
-        }
-        result
+        self.tagged_strings().map(|ts| UnicodeWidthStr::width(ts.s.as_str())).sum()
     }
 
     /// Pad this line to width with spaces (or if already at least this wide, do
