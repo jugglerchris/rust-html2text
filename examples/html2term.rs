@@ -96,18 +96,14 @@ mod top {
     }
 
     fn find_links(lines: &Vec<TaggedLine<Vec<RichAnnotation>>>) -> LinkMap {
-        use self::TaggedLineElement::Str;
-
         let mut map = Vec::new();
         for line in lines {
             let mut linevec = Vec::new();
 
-            for tli in line.iter() {
-                if let Str(ts) = tli {
-                    let link = link_from_tag(&ts.tag);
-                    for _ in 0..UnicodeWidthStr::width(ts.s.as_str()) {
-                        linevec.push(link.clone());
-                    }
+            for ts in line.tagged_strings() {
+                let link = link_from_tag(&ts.tag);
+                for _ in 0..UnicodeWidthStr::width(ts.s.as_str()) {
+                    linevec.push(link.clone());
                 }
             }
 
@@ -194,21 +190,17 @@ mod top {
             let vis_y_limit = std::cmp::min(top_y + height, max_y + 1);
             write!(screen, "{}", termion::clear::All).unwrap();
             for (i, line) in annotated[top_y..vis_y_limit].iter().enumerate() {
-                use self::TaggedLineElement::Str;
-
                 write!(screen, "{}", Goto(1, i as u16 + 1)).unwrap();
-                for tli in line.iter() {
-                    if let Str(ts) = tli {
-                        let style = to_style(&ts.tag);
-                        let link = link_from_tag(&ts.tag);
-                        match (opt_url, link) {
-                            (Some(ref t1), Some(ref t2)) if t1 == t2 => {
-                                write!(screen, "{}", termion::style::Invert).unwrap();
-                            }
-                            _ => (),
+                for ts in line.tagged_strings() {
+                    let style = to_style(&ts.tag);
+                    let link = link_from_tag(&ts.tag);
+                    match (opt_url, link) {
+                        (Some(ref t1), Some(ref t2)) if t1 == t2 => {
+                            write!(screen, "{}", termion::style::Invert).unwrap();
                         }
-                        write!(screen, "{}{}{}", style, ts.s, termion::style::Reset).unwrap();
+                        _ => (),
                     }
+                    write!(screen, "{}{}{}", style, ts.s, termion::style::Reset).unwrap();
                 }
             }
 
