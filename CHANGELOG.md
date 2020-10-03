@@ -17,7 +17,7 @@ Possible log types:
 
 ### 0.2.0
 
-- [added] Support <s> strikeout text.
+- [added] Support `<s>` strikeout text.
 
 ### 0.1.14 (2020-08-07)
 
