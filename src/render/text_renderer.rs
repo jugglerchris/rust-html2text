@@ -20,6 +20,17 @@ pub struct TaggedString<T: Debug + PartialEq> {
     pub tag: T,
 }
 
+impl<T: Debug + PartialEq> TaggedString<T> {
+    /// Returns the tagged string’s display width in columns.
+    ///
+    /// See [`unicode_width::UnicodeWidthStr::width`][] for more information.
+    ///
+    /// [`unicode_width::UnicodeWidthStr::width`]: https://docs.rs/unicode-width/latest/unicode_width/trait.UnicodeWidthStr.html
+    pub fn width(&self) -> usize {
+        self.s.width()
+    }
+}
+
 /// An element of a line of tagged text: either a TaggedString or a
 /// marker appearing in between document characters.
 #[derive(Debug, PartialEq)]
@@ -163,7 +174,7 @@ impl<T: Debug + Eq + PartialEq + Clone + Default> TaggedLine<T> {
 
     /// Return the width of the line in cells
     pub fn width(&self) -> usize {
-        self.tagged_strings().map(|ts| UnicodeWidthStr::width(ts.s.as_str())).sum()
+        self.tagged_strings().map(TaggedString::width).sum()
     }
 
     /// Pad this line to width with spaces (or if already at least this wide, do
@@ -255,7 +266,7 @@ impl<T: Clone + Eq + Debug + Default> WrappedBlock<T> {
                     while let Some(elt) = opt_elt.take() {
                         html_trace!("Take element {:?}", elt);
                         if let Str(piece) = elt {
-                            let w = UnicodeWidthStr::width(piece.s.as_str());
+                            let w = piece.width();
                             if w <= lineleft {
                                 self.line.push(Str(piece));
                                 lineleft -= w;
