@@ -1041,3 +1041,85 @@ fn test_pre_rich() {
         ]
     );
 }
+
+#[test]
+fn test_finalise() {
+    use crate::render::text_renderer::{TaggedLine, TextDecorator};
+
+    struct TestDecorator;
+
+    impl TextDecorator for TestDecorator {
+        type Annotation = bool;
+
+        fn decorate_link_start(&mut self, _url: &str) -> (String, Self::Annotation) {
+            Default::default()
+        }
+
+        fn decorate_link_end(&mut self) -> String {
+            Default::default()
+        }
+
+        fn decorate_em_start(&mut self) -> (String, Self::Annotation) {
+            Default::default()
+        }
+
+        fn decorate_em_end(&mut self) -> String {
+            Default::default()
+        }
+
+        fn decorate_strong_start(&mut self) -> (String, Self::Annotation) {
+            Default::default()
+        }
+
+        fn decorate_strong_end(&mut self) -> String {
+            Default::default()
+        }
+
+        fn decorate_strikeout_start(&mut self) -> (String, Self::Annotation) {
+            Default::default()
+        }
+
+        fn decorate_strikeout_end(&mut self) -> String {
+            Default::default()
+        }
+
+        fn decorate_code_start(&mut self) -> (String, Self::Annotation) {
+            Default::default()
+        }
+
+        fn decorate_code_end(&mut self) -> String {
+            Default::default()
+        }
+
+        fn decorate_preformat_first(&mut self) -> Self::Annotation {
+            Default::default()
+        }
+
+        fn decorate_preformat_cont(&mut self) -> Self::Annotation {
+            Default::default()
+        }
+
+        fn decorate_image(&mut self, _title: &str) -> (String, Self::Annotation) {
+            Default::default()
+        }
+
+        fn finalise(self) -> Vec<TaggedLine<bool>> {
+            vec![TaggedLine::from_string(String::new(), &true)]
+        }
+
+        fn make_subblock_decorator(&self) -> Self {
+            TestDecorator
+        }
+    }
+
+    assert_eq!(
+        crate::parse("test".as_bytes())
+            .render(80, TestDecorator)
+            .into_lines(),
+        vec![
+            TaggedLine::from_string("test".to_owned(), &Vec::new()),
+            TaggedLine::new(),
+            TaggedLine::from_string("".to_owned(), &vec![true]),
+        ]
+    );
+}

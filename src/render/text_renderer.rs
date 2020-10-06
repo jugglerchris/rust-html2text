@@ -733,30 +733,52 @@ impl<D: TextDecorator> TextRenderer<D> {
             self.start_block();
             for line in trailer.drain(0..) {
                 /* Hard wrap */
-                let mut output = String::new();
                 let mut pos = 0;
-                for c in line.chars() {
+                let mut wrapped_line = TaggedLine::new();
+                for ts in line.v.into_iter().filter_map(|tle| match tle {
+                    TaggedLineElement::Str(ts) => Some(ts),
+                    _ => None,
+                }) {
                     // FIXME: should we percent-escape?  This is probably
                     // an invalid URL to start with.
-                    let c = match c {
-                        '\n' => ' ',
-                        x => x,
-                    };
-                    let c_width = UnicodeWidthChar::width(c).unwrap_or(0);
-                    if pos + c_width > self.width {
-                        let mut tmp_s = String::new();
-                        mem::swap(&mut output, &mut tmp_s);
-                        self.lines
-                            .push(RenderLine::Text(TaggedLine::from_string(tmp_s, &vec![])));
-                        output.push(c);
-                        pos = c_width;
+                    let s = ts.s.replace('\n', " ");
+                    let tag = vec![ts.tag];
+
+                    let width = s.width();
+                    if pos + width > self.width {
+                        // split the string and start a new line
+                        let mut buf = String::new();
+                        for c in s.chars() {
+                            let c_width = UnicodeWidthChar::width(c).unwrap_or(0);
+                            if pos + c_width > self.width {
+                                if !buf.is_empty() {
+                                    wrapped_line.push_str(TaggedString {
+                                        s: buf,
+                                        tag: tag.clone(),
+                                    });
+                                    buf = String::new();
+                                }
+
+                                self.lines.push(RenderLine::Text(wrapped_line));
+                                wrapped_line = TaggedLine::new();
+                                pos = 0;
+                            }
+                            pos += c_width;
+                            buf.push(c);
+                        }
+                        wrapped_line.push_str(TaggedString {
+                            s: buf,
+                            tag,
+                        });
                     } else {
-                        output.push(c);
-                        pos += c_width;
+                        wrapped_line.push_str(TaggedString {
+                            s: s.to_owned(),
+                            tag,
+                        });
+                        pos += width;
                     }
                 }
-                self.lines
-                    .push(RenderLine::Text(TaggedLine::from_string(output, &vec![])));
+                self.lines.push(RenderLine::Text(wrapped_line));
             }
         }
         self.lines
