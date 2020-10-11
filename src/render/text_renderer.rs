@@ -172,6 +172,15 @@ impl<T: Debug + Eq + PartialEq + Clone + Default> TaggedLine<T> {
         })
     }
 
+    /// Converts the tagged line into an iterator over the tagged strings in this line, ignoring
+    /// any fragments.
+    pub fn into_tagged_strings(self) -> impl Iterator<Item = TaggedString<T>> {
+        self.v.into_iter().filter_map(|tle| match tle {
+            TaggedLineElement::Str(ts) => Some(ts),
+            _ => None,
+        })
+    }
+
     /// Return the width of the line in cells
     pub fn width(&self) -> usize {
         self.tagged_strings().map(TaggedString::width).sum()
@@ -735,10 +744,7 @@ impl<D: TextDecorator> TextRenderer<D> {
                 /* Hard wrap */
                 let mut pos = 0;
                 let mut wrapped_line = TaggedLine::new();
-                for ts in line.v.into_iter().filter_map(|tle| match tle {
-                    TaggedLineElement::Str(ts) => Some(ts),
-                    _ => None,
-                }) {
+                for ts in line.into_tagged_strings() {
                     // FIXME: should we percent-escape?  This is probably
                     // an invalid URL to start with.
                     let s = ts.s.replace('\n', " ");
