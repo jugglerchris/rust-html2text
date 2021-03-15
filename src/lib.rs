@@ -1502,5 +1502,11 @@ where
         .into_lines()
 }
 
+#[cfg(feature = "ansi_colours")]
+mod ansi_colours;
+
+#[cfg(feature = "ansi_colours")]
+pub use ansi_colours::from_read_coloured;
+
 #[cfg(test)]
 mod tests;
