@@ -38,9 +38,11 @@ where
     R: io::Read,
 {
     #[cfg(feature = "ansi_colours")]
-    if _use_colour {
-        return html2text::from_read_coloured(input, width, default_colour_map).unwrap()
-    };
+    {
+        if _use_colour {
+            return html2text::from_read_coloured(input, width, default_colour_map).unwrap()
+        };
+    }
     if literal {
         let decorator = html2text::render::text_renderer::TrivialDecorator::new();
         html2text::from_read_with_decorator(input, width, decorator)
