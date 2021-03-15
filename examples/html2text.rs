@@ -33,12 +33,12 @@ fn default_colour_map(annotation: &RichAnnotation) -> (String, String)
     }
 }
 
-fn translate<R>(input: R, width: usize, literal: bool, use_colour: bool) -> String
+fn translate<R>(input: R, width: usize, literal: bool, _use_colour: bool) -> String
 where
     R: io::Read,
 {
     #[cfg(feature = "ansi_colours")]
-    if use_colour {
+    if _use_colour {
         return html2text::from_read_coloured(input, width, default_colour_map).unwrap()
     };
     if literal {
@@ -54,7 +54,7 @@ fn main() {
     let mut outfile: Option<String> = None;
     let mut width: usize = 80;
     let mut literal: bool = false;
-    #[cfg(feature = "ansi_colours")]
+    #[allow(unused)]
     let mut use_colour = false;
 
     {
