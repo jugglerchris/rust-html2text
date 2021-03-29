@@ -423,9 +423,9 @@ fn test_link_wrap() {
        <a href="http://www.example.com/">Hello</a>"#,
         r"[Hello][1]
 
-[1]: http:/
-/www.examp
-le.com/
+[1]: http:
+//www.exam
+ple.com/
 ",
         10,
     );
