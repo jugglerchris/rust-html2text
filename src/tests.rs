@@ -35,7 +35,7 @@ fn test_table() {
    </table>
 "##,
         r#"───┬───┬────
-1  │2  │3   
+1  │2  │3
 ───┴───┴────
 "#,
         12,
@@ -64,9 +64,9 @@ fn test_thead() {
    </table>
 "##,
         r#"────┬────┬─────
-Col1│Col2│Col3 
+Col1│Col2│Col3
 ────┼────┼─────
-1   │2   │3    
+1   │2   │3
 ────┴────┴─────
 "#,
         15,
@@ -94,11 +94,11 @@ fn test_colspan() {
    </table>
 "##,
         r#"───┬───┬────
-1  │2  │3   
+1  │2  │3
 ───┴───┼────
-12     │3   
+12     │3
 ───┬───┴────
-1  │23      
+1  │23
 ───┴────────
 "#,
         12,
@@ -305,7 +305,7 @@ fn test_strip_nl_tbl() {
         </table>
      "#,
         r"────────────────────
-One Two Three       
+One Two Three
 ────────────────────
 ",
         20,
@@ -330,7 +330,7 @@ fn test_unknown_element() {
         </foo>
      "#,
         r"────────────────────
-One Two Three       
+One Two Three
 ────────────────────
 ",
         20,
@@ -353,7 +353,7 @@ fn test_strip_nl_tbl_p() {
         </table>
      "#,
         r"────────────────────
-One Two Three       
+One Two Three
 ────────────────────
 ",
         20,
@@ -385,7 +385,7 @@ fn test_link() {
        <p>Hello, <a href="http://www.example.com/">world</a></p>"#,
         r"Hello, [world][1]
 
-[1] http://www.example.com/
+[1]: http://www.example.com/
 ",
         80,
     );
@@ -397,7 +397,7 @@ fn test_link2() {
        <p>Hello, <a href="http://www.example.com/">world</a>!</p>"#,
         r"Hello, [world][1]!
 
-[1] http://www.example.com/
+[1]: http://www.example.com/
 ",
         80,
     );
@@ -410,7 +410,7 @@ fn test_link3() {
        <p>Hello, <a href="http://www.example.com/">w</a>orld</p>"#,
         r"Hello, [w][1]orld
 
-[1] http://www.example.com/
+[1]: http://www.example.com/
 ",
         80,
     );
@@ -423,7 +423,7 @@ fn test_link_wrap() {
        <a href="http://www.example.com/">Hello</a>"#,
         r"[Hello][1]
 
-[1] http:/
+[1]: http:/
 /www.examp
 le.com/
 ",
@@ -467,7 +467,7 @@ fn test_wrap3() {
         r#"[http://example.org/blah/
 ][1] one two three
 
-[1] dest
+[1]: dest
 "#,
         25,
     );
@@ -535,7 +535,7 @@ fn test_subblock() {
 * Bullet
 * Bullet
 
-[1] https://example.com/
+[1]: https://example.com/
 ",
         80,
     );
@@ -589,11 +589,11 @@ fn test_nested_table_1() {
    </table>
 "##,
         r#"─┬─┬──┬─┬─┬──┬─┬─┬───
-1│2│3 │4│5│6 │7│8│9  
+1│2│3 │4│5│6 │7│8│9
 ─┼─┼──┼─┼─┼──┼─┼─┼───
-1│2│3 │4│5│6 │7│8│9  
+1│2│3 │4│5│6 │7│8│9
 ─┼─┼──┼─┼─┼──┼─┼─┼───
-1│2│3 │4│5│6 │7│8│9  
+1│2│3 │4│5│6 │7│8│9
 ─┴─┴──┴─┴─┴──┴─┴─┴───
 "#,
         21,
@@ -623,11 +623,11 @@ five
    </table>
 "##,
         r#"─┬───┬─────
-1│a  │one  
-─┼───│two  
+1│a  │one
+─┼───│two
 2│b  │three
- │   │four 
- │   │five 
+ │   │four
+ │   │five
 ─┴───┴─────
 "#,
         11,
@@ -758,8 +758,8 @@ fn test_deeply_nested_table() {
     test_html(
         html.as_bytes(),
         r#"────┬─┬───
-hi  │h│   
-    │i│   
+hi  │h│
+    │i│
 ────┴─┴───
 "#,
         10,
@@ -776,7 +776,7 @@ fn test_table_no_id() {
     test_html(
         html.as_bytes(),
         r#"──────────
-hi, world 
+hi, world
 ──────────
 "#,
         10,
@@ -793,7 +793,7 @@ fn test_table_cell_id() {
     test_html(
         html.as_bytes(),
         r#"──────────
-hi, world 
+hi, world
 ──────────
 "#,
         10,
@@ -810,7 +810,7 @@ fn test_table_row_id() {
     test_html(
         html.as_bytes(),
         r#"──────────
-hi, world 
+hi, world
 ──────────
 "#,
         10,
@@ -827,7 +827,7 @@ fn test_table_table_id() {
     test_html(
         html.as_bytes(),
         r#"──────────
-hi, world 
+hi, world
 ──────────
 "#,
         10,
@@ -846,7 +846,7 @@ fn test_table_tbody_id() {
     test_html(
         html.as_bytes(),
         r#"──────────
-hi, world 
+hi, world
 ──────────
 "#,
         10,
@@ -872,7 +872,7 @@ fn test_header_width() {
 ## ### i
 ## ### n
 ## ### g
-## 
+##
 ## ────
 "#,
         7,
@@ -894,7 +894,7 @@ fn test_header_width() {
 ## ### i
 ## ### n
 ## ### g
-## 
+##
 ## ──
 "#,
         5,
@@ -951,7 +951,7 @@ fn test_link_id_longline() {
         r#"[quitelong
 line][1]
 
-[1] foo
+[1]: foo
 "#,
         10,
     );
