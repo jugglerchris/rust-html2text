@@ -385,7 +385,7 @@ fn test_link() {
        <p>Hello, <a href="http://www.example.com/">world</a></p>"#,
         r"Hello, [world][1]
 
-[1] http://www.example.com/
+[1]: http://www.example.com/
 ",
         80,
     );
@@ -397,7 +397,7 @@ fn test_link2() {
        <p>Hello, <a href="http://www.example.com/">world</a>!</p>"#,
         r"Hello, [world][1]!
 
-[1] http://www.example.com/
+[1]: http://www.example.com/
 ",
         80,
     );
@@ -410,7 +410,7 @@ fn test_link3() {
        <p>Hello, <a href="http://www.example.com/">w</a>orld</p>"#,
         r"Hello, [w][1]orld
 
-[1] http://www.example.com/
+[1]: http://www.example.com/
 ",
         80,
     );
@@ -423,9 +423,9 @@ fn test_link_wrap() {
        <a href="http://www.example.com/">Hello</a>"#,
         r"[Hello][1]
 
-[1] http:/
-/www.examp
-le.com/
+[1]: http:
+//www.exam
+ple.com/
 ",
         10,
     );
@@ -467,7 +467,7 @@ fn test_wrap3() {
         r#"[http://example.org/blah/
 ][1] one two three
 
-[1] dest
+[1]: dest
 "#,
         25,
     );
@@ -535,7 +535,7 @@ fn test_subblock() {
 * Bullet
 * Bullet
 
-[1] https://example.com/
+[1]: https://example.com/
 ",
         80,
     );
@@ -951,7 +951,7 @@ fn test_link_id_longline() {
         r#"[quitelong
 line][1]
 
-[1] foo
+[1]: foo
 "#,
         10,
     );

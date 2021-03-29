@@ -1283,7 +1283,7 @@ impl TextDecorator for PlainDecorator {
         self.links
             .into_iter()
             .enumerate()
-            .map(|(idx, s)| TaggedLine::from_string(format!("[{}] {}", idx + 1, s), &()))
+            .map(|(idx, s)| TaggedLine::from_string(format!("[{}]: {}", idx + 1, s), &()))
             .collect()
     }
 
