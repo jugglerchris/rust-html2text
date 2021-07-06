@@ -99,6 +99,18 @@ pub trait Renderer {
     /// Add an image
     fn add_image(&mut self, title: &str);
 
+    /// Get prefix string of header in specific level.
+    fn header_prefix(&mut self, level: usize) -> String;
+
+    /// Get prefix string of quoted block.
+    fn quote_prefix(&mut self) -> String;
+
+    /// Get prefix string of unordered list item.
+    fn unordered_item_prefix(&mut self) -> String;
+
+    /// Get prefix string of ith ordered list item.
+    fn ordered_item_prefix(&mut self, i: i64) -> String;
+
     /// Record the start of a named HTML fragment
     fn record_frag_start(&mut self, fragname: &str);
 }
