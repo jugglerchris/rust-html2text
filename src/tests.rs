@@ -914,9 +914,9 @@ fn test_trivial_decorator() {
      </div>"#,
         r"Here's a link.
 
-* Bullet
-* Bullet
-* Bullet
+Bullet
+Bullet
+Bullet
 ",
         80,
         TrivialDecorator::new(),
@@ -1101,6 +1101,22 @@ fn test_finalise() {
 
         fn decorate_image(&mut self, _title: &str) -> (String, Self::Annotation) {
             Default::default()
+        }
+
+        fn header_prefix(&mut self, level: usize) -> String {
+        "#".repeat(level) + " "
+        }
+
+        fn quote_prefix(&mut self) -> String {
+            "> ".to_string()
+        }
+
+        fn unordered_item_prefix(&mut self) -> String {
+            "* ".to_string()
+        }
+
+        fn ordered_item_prefix(&mut self, i: i64) -> String {
+            format!("{}. ", i)
         }
 
         fn finalise(self) -> Vec<TaggedLine<bool>> {

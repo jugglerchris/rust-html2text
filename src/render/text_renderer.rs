@@ -492,6 +492,18 @@ pub trait TextDecorator {
     /// Return an annotation and rendering prefix for a link.
     fn decorate_image(&mut self, title: &str) -> (String, Self::Annotation);
 
+    /// Return prefix string of header in specific level.
+    fn header_prefix(&mut self, level: usize) -> String;
+
+    /// Return prefix string of quoted block.
+    fn quote_prefix(&mut self) -> String;
+
+    /// Return prefix string of unordered list item.
+    fn unordered_item_prefix(&mut self) -> String;
+
+    /// Return prefix string of ith ordered list item.
+    fn ordered_item_prefix(&mut self, i: i64) -> String;
+
     /// Return a new decorator of the same type which can be used
     /// for sub blocks.
     fn make_subblock_decorator(&self) -> Self;
@@ -1198,6 +1210,39 @@ impl<D: TextDecorator> Renderer for TextRenderer<D> {
             self.ann_stack.pop();
         }
     }
+
+    fn header_prefix(&mut self, level: usize) -> String {
+        if let Some(d) = self.decorator.as_mut() {
+            d.header_prefix(level)
+        } else {
+            "".to_owned()
+        }
+    }
+
+    fn quote_prefix(&mut self) -> String {
+        if let Some(d) = self.decorator.as_mut() {
+            d.quote_prefix()
+        } else {
+            "".to_owned()
+        }
+    }
+
+    fn unordered_item_prefix(&mut self) -> String {
+        if let Some(d) = self.decorator.as_mut() {
+            d.unordered_item_prefix()
+        } else {
+            "".to_owned()
+        }
+    }
+    
+    fn ordered_item_prefix(&mut self, i: i64) -> String {
+        if let Some(d) = self.decorator.as_mut() {
+            d.ordered_item_prefix(i)
+        } else {
+            "".to_owned()
+        }
+    }
+
     fn record_frag_start(&mut self, fragname: &str) {
         use self::TaggedLineElement::FragmentStart;
 
@@ -1279,6 +1324,22 @@ impl TextDecorator for PlainDecorator {
         (format!("[{}]", title), ())
     }
 
+    fn header_prefix(&mut self, level: usize) -> String {
+        "#".repeat(level) + " "
+    }
+
+    fn quote_prefix(&mut self) -> String {
+        "> ".to_string()
+    }
+
+    fn unordered_item_prefix(&mut self) -> String {
+        "* ".to_string()
+    }
+
+    fn ordered_item_prefix(&mut self, i: i64) -> String {
+        format!("{}. ", i)
+    }
+
     fn finalise(self) -> Vec<TaggedLine<()>> {
         self.links
             .into_iter()
@@ -1358,6 +1419,22 @@ impl TextDecorator for TrivialDecorator {
     fn decorate_image(&mut self, title: &str) -> (String, Self::Annotation) {
         // FIXME: this should surely be the alt text, not the title text
         (title.to_string(), ())
+    }
+
+    fn header_prefix(&mut self, _level: usize) -> String {
+        "".to_string()
+    }
+
+    fn quote_prefix(&mut self) -> String {
+        "".to_string()
+    }
+
+    fn unordered_item_prefix(&mut self) -> String {
+        "".to_string()
+    }
+
+    fn ordered_item_prefix(&mut self, _i: i64) -> String {
+        "".to_string()
     }
 
     fn finalise(self) -> Vec<TaggedLine<()>> {
@@ -1463,6 +1540,22 @@ impl TextDecorator for RichDecorator {
 
     fn decorate_image(&mut self, title: &str) -> (String, Self::Annotation) {
         (title.to_string(), RichAnnotation::Image)
+    }
+
+    fn header_prefix(&mut self, level: usize) -> String {
+        "#".repeat(level) + " "
+    }
+
+    fn quote_prefix(&mut self) -> String {
+        "> ".to_string()
+    }
+
+    fn unordered_item_prefix(&mut self) -> String {
+        "* ".to_string()
+    }
+
+    fn ordered_item_prefix(&mut self, i: i64) -> String {
+        format!("{}. ", i)
     }
 
     fn finalise(self) -> Vec<TaggedLine<RichAnnotation>> {
