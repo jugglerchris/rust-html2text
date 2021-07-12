@@ -1155,16 +1155,15 @@ fn do_render_node<'a, 'b, T: Write, R: Renderer>(
             })
         }
         Header(level, children) => {
-            let min_width = max(builder.width(), 1 + level + 1);
-            let sub_builder = builder.new_sub_renderer(min_width - (1 + level));
+            let prefix = builder.header_prefix(level);
+            let min_width = max(builder.width(), 1 + prefix.len());
+            let sub_builder = builder.new_sub_renderer(min_width - prefix.len());
             builder.push(sub_builder);
             pending2(children, move |builder: &mut BuilderStack<R>, _| {
                 let sub_builder = builder.pop();
 
-                let qs: String = "#".repeat(level) + " ";
-
                 builder.start_block();
-                builder.append_subrender(sub_builder, repeat(&qs[..]));
+                builder.append_subrender(sub_builder, repeat(&prefix[..]));
                 builder.end_block();
                 Some(None)
             })
@@ -1186,13 +1185,14 @@ fn do_render_node<'a, 'b, T: Write, R: Renderer>(
             })
         }
         BlockQuote(children) => {
-            let sub_builder = builder.new_sub_renderer(builder.width() - 2);
+            let prefix = builder.quote_prefix();
+            let sub_builder = builder.new_sub_renderer(builder.width() - prefix.len());
             builder.push(sub_builder);
-            pending2(children, |builder: &mut BuilderStack<R>, _| {
+            pending2(children, move |builder: &mut BuilderStack<R>, _| {
                 let sub_builder = builder.pop();
 
                 builder.start_block();
-                builder.append_subrender(sub_builder, repeat("> "));
+                builder.append_subrender(sub_builder, repeat(&prefix[..]));
                 builder.end_block();
                 Some(None)
             })
@@ -1200,16 +1200,22 @@ fn do_render_node<'a, 'b, T: Write, R: Renderer>(
         Ul(items) => {
             builder.start_block();
 
+            let prefix = builder.unordered_item_prefix();
+            let prefix_len = prefix.len();
+
             TreeMapResult::PendingChildren {
                 children: items,
                 cons: Box::new(|_, _| Some(None)),
-                prefn: Some(Box::new(|builder: &mut BuilderStack<R>, _| {
-                    let sub_builder = builder.new_sub_renderer(builder.width() - 2);
+                prefn: Some(Box::new(move |builder: &mut BuilderStack<R>, _| {
+                    let sub_builder = builder.new_sub_renderer(builder.width() - prefix_len);
                     builder.push(sub_builder);
                 })),
-                postfn: Some(Box::new(|builder: &mut BuilderStack<R>, _| {
+                postfn: Some(Box::new(move |builder: &mut BuilderStack<R>, _| {
                     let sub_builder = builder.pop();
-                    builder.append_subrender(sub_builder, once("* ").chain(repeat("  ")));
+
+                    let indent = " ".repeat(prefix.len());
+
+                    builder.append_subrender(sub_builder, once(&prefix[..]).chain(repeat(&indent[..])));
                 })),
             }
         }
@@ -1222,8 +1228,8 @@ fn do_render_node<'a, 'b, T: Write, R: Renderer>(
             let min_number = start;
             // Assumption: num_items can't overflow isize.
             let max_number = start + (num_items as i64) - 1;
-            let prefix_width_min = format!("{}", min_number).len() + 2;
-            let prefix_width_max = format!("{}", max_number).len() + 2;
+            let prefix_width_min = builder.ordered_item_prefix(min_number).len();
+            let prefix_width_max = builder.ordered_item_prefix(max_number).len();
             let prefix_width = max(prefix_width_min, prefix_width_max);
             let prefixn = format!("{: <width$}", "", width = prefix_width);
             let i: Cell<_> = Cell::new(start);
@@ -1237,7 +1243,7 @@ fn do_render_node<'a, 'b, T: Write, R: Renderer>(
                 })),
                 postfn: Some(Box::new(move |builder: &mut BuilderStack<R>, _| {
                     let sub_builder = builder.pop();
-                    let prefix1 = format!("{}.", i.get());
+                    let prefix1 = builder.ordered_item_prefix(i.get());
                     let prefix1 = format!("{: <width$}", prefix1, width = prefix_width);
 
                     builder.append_subrender(
