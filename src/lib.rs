@@ -1215,7 +1215,10 @@ fn do_render_node<'a, 'b, T: Write, R: Renderer>(
 
                     let indent = " ".repeat(prefix.len());
 
-                    builder.append_subrender(sub_builder, once(&prefix[..]).chain(repeat(&indent[..])));
+                    builder.append_subrender(
+                        sub_builder,
+                        once(&prefix[..]).chain(repeat(&indent[..])),
+                    );
                 })),
             }
         }

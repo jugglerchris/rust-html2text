@@ -5,31 +5,29 @@ use std::io;
 use std::io::Write;
 
 #[cfg(feature = "ansi_colours")]
-use termion;
-#[cfg(feature = "ansi_colours")]
 use html2text::render::text_renderer::RichAnnotation;
+#[cfg(feature = "ansi_colours")]
+use termion;
 
 #[cfg(feature = "ansi_colours")]
-fn default_colour_map(annotation: &RichAnnotation) -> (String, String)
-{
+fn default_colour_map(annotation: &RichAnnotation) -> (String, String) {
     use termion::color::*;
     use RichAnnotation::*;
     match annotation {
         Default => ("".into(), "".into()),
-        Link(_) => (format!("{}", termion::style::Underline),
-                    format!("{}", termion::style::Reset)),
-        Image => (format!("{}", Fg(Blue)),
-                  format!("{}", Fg(Reset))),
-        Emphasis => (format!("{}", termion::style::Bold),
-                     format!("{}", termion::style::Reset)),
-        Strong => (format!("{}", Fg(LightYellow)),
-                   format!("{}", Fg(Reset))),
-        Strikeout => (format!("{}", Fg(LightBlack)),
-                      format!("{}", Fg(Reset))),
-        Code => (format!("{}", Fg(Blue)),
-                 format!("{}", Fg(Reset))),
-        Preformat(_) => (format!("{}", Fg(Blue)),
-                         format!("{}", Fg(Reset)))
+        Link(_) => (
+            format!("{}", termion::style::Underline),
+            format!("{}", termion::style::Reset),
+        ),
+        Image => (format!("{}", Fg(Blue)), format!("{}", Fg(Reset))),
+        Emphasis => (
+            format!("{}", termion::style::Bold),
+            format!("{}", termion::style::Reset),
+        ),
+        Strong => (format!("{}", Fg(LightYellow)), format!("{}", Fg(Reset))),
+        Strikeout => (format!("{}", Fg(LightBlack)), format!("{}", Fg(Reset))),
+        Code => (format!("{}", Fg(Blue)), format!("{}", Fg(Reset))),
+        Preformat(_) => (format!("{}", Fg(Blue)), format!("{}", Fg(Reset))),
     }
 }
 
@@ -40,7 +38,7 @@ where
     #[cfg(feature = "ansi_colours")]
     {
         if _use_colour {
-            return html2text::from_read_coloured(input, width, default_colour_map).unwrap()
+            return html2text::from_read_coloured(input, width, default_colour_map).unwrap();
         };
     }
     if literal {
@@ -82,11 +80,8 @@ fn main() {
             "Output only literal text (no decorations)",
         );
         #[cfg(feature = "ansi_colours")]
-        ap.refer(&mut use_colour).add_option(
-            &["--colour"],
-            StoreTrue,
-            "Use ANSI terminal colours",
-        );
+        ap.refer(&mut use_colour)
+            .add_option(&["--colour"], StoreTrue, "Use ANSI terminal colours");
         ap.parse_args_or_exit();
     }
 

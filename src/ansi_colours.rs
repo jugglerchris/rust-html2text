@@ -5,8 +5,8 @@
 //! underlining in some terminals).
 
 use crate::{parse, RichAnnotation, RichDecorator};
-use std::io;
 use std::fmt::Write;
+use std::io;
 
 /// Reads HTML from `input`, and returns text wrapped to `width` columns.
 /// The text is returned as a `Vec<TaggedLine<_>>`; the annotations are vectors
@@ -16,14 +16,18 @@ use std::fmt::Write;
 /// return a pair of static strings which should be inserted before/after a text
 /// span with that annotation; for example a string which sets text colour
 /// and a string which sets the colour back to the default.
-pub fn from_read_coloured<R, FMap>(input: R, width: usize, colour_map: FMap) -> Result<String, std::fmt::Error>
+pub fn from_read_coloured<R, FMap>(
+    input: R,
+    width: usize,
+    colour_map: FMap,
+) -> Result<String, std::fmt::Error>
 where
     R: io::Read,
-    FMap: Fn(&RichAnnotation) -> (String, String)
+    FMap: Fn(&RichAnnotation) -> (String, String),
 {
     let lines = parse(input)
-                     .render(width, RichDecorator::new())
-                     .into_lines();
+        .render(width, RichDecorator::new())
+        .into_lines();
 
     let mut result = String::new();
     for line in lines {

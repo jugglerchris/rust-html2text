@@ -451,7 +451,7 @@ impl<T: Clone + Eq + Debug + Default> WrappedBlock<T> {
 /// Decorating refers to adding extra text around the rendered version
 /// of some elements, such as surrounding emphasised text with `*` like
 /// in markdown: `Some *bold* text`.  The decorations are formatted and
-/// wrapped along with the rest of the rendered text.  This is 
+/// wrapped along with the rest of the rendered text.  This is
 ///
 /// In addition, instances of `TextDecorator` can also return annotations
 /// of an associated type `Annotation` which will be associated with spans of
@@ -795,10 +795,7 @@ impl<D: TextDecorator> TextRenderer<D> {
                             pos += c_width;
                             buf.push(c);
                         }
-                        wrapped_line.push_str(TaggedString {
-                            s: buf,
-                            tag,
-                        });
+                        wrapped_line.push_str(TaggedString { s: buf, tag });
                     } else {
                         wrapped_line.push_str(TaggedString {
                             s: s.to_owned(),
@@ -1245,7 +1242,7 @@ impl<D: TextDecorator> Renderer for TextRenderer<D> {
             "".to_owned()
         }
     }
-    
+
     fn ordered_item_prefix(&mut self, i: i64) -> String {
         if let Some(d) = self.decorator.as_mut() {
             d.ordered_item_prefix(i)
