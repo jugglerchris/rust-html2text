@@ -16,7 +16,6 @@ travis-ci = { repository = "jugglerchris/rust-html2text" }
 appveyor = { repository = "jugglerchris/rust-html2text", service = "github" }
 
 [dependencies]
-clippy = { version = "0.0.302", optional=true }
 html5ever = "0.25.0"
 unicode-width = "0.1.5"
 backtrace = { version = "0.3", optional=true }
@@ -26,6 +25,7 @@ markup5ever_rcdom = "0.1.0"
 html_trace = []
 html_trace_bt = ["backtrace"]
 default = []
+ansi_colours = []
 
 [[example]]
 name = "html2term"

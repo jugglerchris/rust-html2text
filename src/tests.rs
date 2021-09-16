@@ -1104,7 +1104,7 @@ fn test_finalise() {
         }
 
         fn header_prefix(&mut self, level: usize) -> String {
-        "#".repeat(level) + " "
+            "#".repeat(level) + " "
         }
 
         fn quote_prefix(&mut self) -> String {

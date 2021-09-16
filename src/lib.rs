@@ -1215,7 +1215,10 @@ fn do_render_node<'a, 'b, T: Write, R: Renderer>(
 
                     let indent = " ".repeat(prefix.len());
 
-                    builder.append_subrender(sub_builder, once(&prefix[..]).chain(repeat(&indent[..])));
+                    builder.append_subrender(
+                        sub_builder,
+                        once(&prefix[..]).chain(repeat(&indent[..])),
+                    );
                 })),
             }
         }
@@ -1507,6 +1510,12 @@ where
         .render(width, RichDecorator::new())
         .into_lines()
 }
+
+#[cfg(feature = "ansi_colours")]
+mod ansi_colours;
+
+#[cfg(feature = "ansi_colours")]
+pub use ansi_colours::from_read_coloured;
 
 #[cfg(test)]
 mod tests;
