@@ -774,21 +774,31 @@ fn test_deeply_nested() {
 #[test]
 fn test_deeply_nested_table() {
     use ::std::iter::repeat;
+    let rpt = 1000;
     let html = repeat("<table><tr><td>hi</td><td>")
-        .take(1000)
+        .take(rpt)
         .collect::<Vec<_>>()
         .concat()
         + &repeat("</td></tr></table>")
-            .take(1000)
+            .take(rpt)
             .collect::<Vec<_>>()
             .concat();
+
+    let result = repeat(r#"──────────
+hi        
+"#)
+        .take(rpt - 3)
+        .collect::<Vec<_>>()
+        .concat()
+        + &r#"──┬───────
+hi│hi     
+  │────   
+  │hi     
+──┴───────
+"#;
     test_html(
         html.as_bytes(),
-        r#"────┬─┬───
-hi  │h│   
-    │i│   
-────┴─┴───
-"#,
+        &result,
         10,
     );
 }
