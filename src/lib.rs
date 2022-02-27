@@ -119,6 +119,14 @@ impl SizeEstimate {
             min_width: max(self.min_width, other.min_width),
         }
     }
+
+    /// Combine two estimates into one (take max of each)
+    pub fn max(self, other: SizeEstimate) -> SizeEstimate {
+        SizeEstimate {
+            size: max(self.size, other.size),
+            min_width: max(self.min_width, other.min_width),
+        }
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -1323,7 +1331,7 @@ fn render_table_tree<T: Write, R: Renderer>(
             estimate.size /= cell.colspan;
             estimate.min_width /= cell.colspan;
             for i in 0..cell.colspan {
-                col_sizes[colno + i] = (col_sizes[colno + i]).add(estimate);
+                col_sizes[colno + i] = (col_sizes[colno + i]).max(estimate);
             }
             colno += cell.colspan;
         }
