@@ -1399,7 +1399,7 @@ fn render_table_tree<T: Write, R: Renderer>(
         width
     } else {
         col_widths.iter().cloned().sum::<usize>() +
-        col_widths.len().saturating_sub(1)
+        col_widths.iter().filter(|&w| w > &0).count().saturating_sub(1)
     };
 
     builder.add_horizontal_border_width(table_width);

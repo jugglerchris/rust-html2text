@@ -1177,3 +1177,71 @@ fn test_finalise() {
         ]
     );
 }
+
+#[test]
+fn test_empty_rows() {
+    test_html(
+        br##"
+   <table>
+     <tr>
+       <td>1</td>
+       <td>2</td>
+       <td>3</td>
+     </tr>
+     <tr><td></td><td></td><td></td></tr>
+     <tr>
+       <td>4</td>
+       <td>5</td>
+       <td>6</td>
+     </tr>
+   </table>
+"##,
+        r#"─┬─┬─
+1│2│3
+─┼─┼─
+4│5│6
+─┴─┴─
+"#,
+        12,
+    );
+}
+
+#[test]
+fn test_empty_cols() {
+    test_html(
+        br##"
+   <table>
+     <tr>
+       <td></td>
+       <td>1</td>
+       <td></td>
+       <td>2</td>
+       <td></td>
+     </tr>
+     <tr>
+       <td></td>
+       <td>3</td>
+       <td></td>
+       <td>4</td>
+       <td></td>
+     </tr>
+     <tr>
+       <td></td>
+       <td>5</td>
+       <td></td>
+       <td>6</td>
+       <td></td>
+     </tr>
+   </table>
+"##,
+        r#"─┬─
+1│2
+─┼─
+3│4
+─┼─
+5│6
+─┴─
+"#,
+        12,
+    );
+}
