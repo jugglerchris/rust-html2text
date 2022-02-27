@@ -159,6 +159,12 @@ impl<T: Debug + Eq + PartialEq + Clone + Default> TaggedLine<T> {
         }))
     }
 
+    #[doc(hidden)]
+    /// Return a string contents for debugging.
+    fn to_string(&self) -> String {
+        self.chars().collect()
+    }
+
     /// Iterator over TaggedLineElements
     pub fn iter<'a>(&'a self) -> Box<dyn Iterator<Item = &TaggedLineElement<T>> + 'a> {
         Box::new(self.v.iter())
@@ -666,6 +672,15 @@ impl<T: PartialEq + Eq + Clone + Debug + Default> RenderLine<T> {
             }
         }
     }
+
+    #[doc(hidden)]
+    /// For testing, return a simple string of the contents.
+    fn to_string(&self) -> String {
+        match self {
+            RenderLine::Text(tagged) => tagged.to_string(),
+            RenderLine::Line(border) => border.to_string(),
+        }
+    }
 }
 
 /// A renderer which just outputs plain text with
@@ -755,6 +770,17 @@ impl<D: TextDecorator> TextRenderer<D> {
         html_trace!("into_string({}, {:?})", width, result);
         result
     }
+
+    /// Returns a string of the current builder contents (for testing).
+    fn to_string(&self) -> String {
+        let mut result = String::new();
+        for line in &self.lines {
+            result += &line.to_string();
+            result.push_str("\n");
+        }
+        result
+    }
+    
 
     /// Returns a `Vec` of `TaggedLine`s with therendered text.
     pub fn into_lines(mut self) -> LinkedList<RenderLine<Vec<D::Annotation>>> {
@@ -990,6 +1016,7 @@ impl<D: TextDecorator> Renderer for TextRenderer<D> {
         I: IntoIterator<Item = Self>,
     {
         use self::TaggedLineElement::Str;
+        html_trace!("append_columns_with_borders(collapse={})", collapse);
 
         self.flush_wrapping();
 
@@ -1000,6 +1027,7 @@ impl<D: TextDecorator> Renderer for TextRenderer<D> {
             .map(|sub_r| {
                 let width = sub_r.width;
                 tot_width += width;
+                html_trace!("Adding column: {}", sub_r.to_string());
                 (
                     width,
                     sub_r

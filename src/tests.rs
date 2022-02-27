@@ -1255,7 +1255,7 @@ fn test_issue_54_oob() {
     <table>
         <tr>
             <td>
-                <table >
+                <table>
                     <tr>
                         <td>&nbsp;</td>
                         <td>
