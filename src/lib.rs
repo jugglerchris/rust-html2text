@@ -76,7 +76,7 @@ use markup5ever_rcdom::{
     RcDom,
 };
 use std::cell::Cell;
-use std::cmp::max;
+use std::cmp::{min,max};
 use std::io;
 use std::io::Write;
 use std::iter::{once, repeat};
@@ -93,7 +93,7 @@ impl Write for Discard {
     }
 }
 
-const MIN_WIDTH: usize = 5;
+const MIN_WIDTH: usize = 3;
 
 /// Size information/estimate
 #[derive(Debug, Copy, Clone)]
@@ -193,9 +193,10 @@ impl RenderTableRow {
         let col_sizes = self.col_sizes.unwrap();
         for mut cell in self.cells {
             let colspan = cell.colspan;
-            let col_width: usize = col_sizes[colno..colno + cell.colspan].iter().sum();
-            if col_width > 1 {
-                cell.col_width = Some(col_width - 1);
+            let col_width = col_sizes[colno..colno + cell.colspan].iter().sum::<usize>();
+            // Skip any zero-width columns
+            if col_width > 0 {
+                cell.col_width = Some(col_width + cell.colspan - 1);
                 result.push(RenderNode::new(RenderNodeInfo::TableCell(cell)));
             }
             colno += colspan;
@@ -371,7 +372,7 @@ impl RenderNode {
                 let len = t.trim().len();
                 SizeEstimate {
                     size: len,
-                    min_width: if len > 0 { MIN_WIDTH } else { 0 },
+                    min_width: len.min(MIN_WIDTH),
                 }
             }
 
@@ -1327,32 +1328,61 @@ fn render_table_tree<T: Write, R: Renderer>(
             colno += cell.colspan;
         }
     }
+    // TODO: remove empty columns
     let tot_size: usize = col_sizes.iter().map(|est| est.size).sum();
+    let min_size: usize = col_sizes.iter().map(|est| est.min_width).sum::<usize>() +
+                          col_sizes.len().saturating_sub(1);
     let width = builder.width();
-    let mut col_widths: Vec<usize> = col_sizes
-        .iter()
-        .map(|sz| {
-            if sz.size == 0 {
-                0
-            } else {
-                max(sz.size * width / tot_size, sz.min_width)
-            }
-        })
-        .collect();
 
-    /* The minimums may have put the total width too high */
-    let vert_row = col_widths.iter().cloned().sum::<usize>() > width;
-    if !col_widths.is_empty() {
-        // Slight fudge; we're not drawing extreme edges, so one of the columns
-        // can gets a free character cell from not having a border.
-        // make it the last.
-        let last = col_widths.len() - 1;
-        col_widths[last] += 1;
+    let vert_row = min_size > width;
+
+    let mut col_widths: Vec<usize> = if !vert_row {
+        col_sizes
+            .iter()
+            .map(|sz| {
+                if sz.size == 0 {
+                    0
+                } else {
+                    min(sz.size,
+                        max(sz.size * width / tot_size, sz.min_width))
+                }
+            })
+            .collect()
+    } else {
+        col_sizes
+            .iter()
+            .map(|_| width)
+            .collect()
+    };
+
+    if !vert_row {
+        loop {
+            let cur_width = col_widths.iter().cloned().sum::<usize>();
+            if cur_width <= width {
+                break;
+            }
+            let (i, _) = col_widths
+                .iter()
+                .cloned()
+                .enumerate()
+                .max_by_key(|&(colno, width)| {
+                    (
+                        width.saturating_sub(col_sizes[colno].min_width),
+                        width,
+                        usize::max_value() - colno,
+                    )
+                })
+                .unwrap();
+            col_widths[i] -= 1;
+        }
     }
 
     builder.start_block();
 
-    builder.add_horizontal_border();
+    let table_width = col_widths.iter().cloned().sum::<usize>() +
+        col_widths.len().saturating_sub(1);
+
+    builder.add_horizontal_border_width(table_width);
 
     TreeMapResult::PendingChildren {
         children: table.into_rows(col_widths, vert_row),

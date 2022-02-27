@@ -34,9 +34,9 @@ fn test_table() {
      </tr>
    </table>
 "##,
-        r#"───┬───┬────
-1  │2  │3   
-───┴───┴────
+        r#"─┬─┬─
+1│2│3
+─┴─┴─
 "#,
         12,
     );
@@ -775,9 +775,9 @@ fn test_table_no_id() {
     </table></body></html>"#;
     test_html(
         html.as_bytes(),
-        r#"──────────
-hi, world 
-──────────
+        r#"─────────
+hi, world
+─────────
 "#,
         10,
     );
@@ -792,9 +792,9 @@ fn test_table_cell_id() {
     </table></body></html>"#;
     test_html(
         html.as_bytes(),
-        r#"──────────
-hi, world 
-──────────
+        r#"─────────
+hi, world
+─────────
 "#,
         10,
     );
@@ -809,9 +809,9 @@ fn test_table_row_id() {
     </table></body></html>"#;
     test_html(
         html.as_bytes(),
-        r#"──────────
-hi, world 
-──────────
+        r#"─────────
+hi, world
+─────────
 "#,
         10,
     );
@@ -826,9 +826,9 @@ fn test_table_table_id() {
     </table></body></html>"#;
     test_html(
         html.as_bytes(),
-        r#"──────────
-hi, world 
-──────────
+        r#"─────────
+hi, world
+─────────
 "#,
         10,
     );
@@ -845,9 +845,9 @@ fn test_table_tbody_id() {
     </table></body></html>"#;
     test_html(
         html.as_bytes(),
-        r#"──────────
-hi, world 
-──────────
+        r#"─────────
+hi, world
+─────────
 "#,
         10,
     );

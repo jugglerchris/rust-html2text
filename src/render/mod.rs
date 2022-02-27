@@ -26,6 +26,11 @@ pub trait Renderer {
     /// Add a horizontal table border.
     fn add_horizontal_border(&mut self);
 
+    /// Add a horizontal border which is no the full width
+    fn add_horizontal_border_width(&mut self, #[allow(unused_variables)] width: usize) {
+        self.add_horizontal_border();
+    }
+
     /// Begin a preformatted block.  Until the corresponding end,
     /// whitespace will used verbatim.  Pre regions can nest.
     fn start_pre(&mut self);

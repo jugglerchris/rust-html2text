@@ -874,6 +874,12 @@ impl<D: TextDecorator> Renderer for TextRenderer<D> {
             .push(RenderLine::Line(BorderHoriz::new(self.width)));
     }
 
+    fn add_horizontal_border_width(&mut self, width: usize) {
+        self.flush_wrapping();
+        self.lines
+            .push(RenderLine::Line(BorderHoriz::new(width)));
+    }
+
     fn start_pre(&mut self) {
         self.pre_depth += 1;
     }
@@ -985,12 +991,13 @@ impl<D: TextDecorator> Renderer for TextRenderer<D> {
 
         self.flush_wrapping();
 
-        let mut next_border = BorderHoriz::new(self.width);
+        let mut tot_width = 0;
 
         let mut line_sets = cols
             .into_iter()
             .map(|sub_r| {
                 let width = sub_r.width;
+                tot_width += width;
                 (
                     width,
                     sub_r
@@ -1009,6 +1016,10 @@ impl<D: TextDecorator> Renderer for TextRenderer<D> {
                 )
             })
             .collect::<Vec<(usize, Vec<RenderLine<_>>)>>();
+
+        tot_width += line_sets.len().saturating_sub(1);
+
+        let mut next_border = BorderHoriz::new(tot_width);
 
         // Join the vertical lines to all the borders
         {
