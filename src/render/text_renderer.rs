@@ -159,7 +159,7 @@ impl<T: Debug + Eq + PartialEq + Clone + Default> TaggedLine<T> {
         }))
     }
 
-    #[doc(hidden)]
+    #[cfg(html_trace)]
     /// Return a string contents for debugging.
     fn to_string(&self) -> String {
         self.chars().collect()
@@ -683,7 +683,7 @@ impl<T: PartialEq + Eq + Clone + Debug + Default> RenderLine<T> {
         }
     }
 
-    #[doc(hidden)]
+    #[cfg(html_trace)]
     /// For testing, return a simple string of the contents.
     fn to_string(&self) -> String {
         match self {
@@ -781,7 +781,7 @@ impl<D: TextDecorator> TextRenderer<D> {
         result
     }
 
-    #[doc(hidden)]
+    #[cfg(html_trace)]
     /// Returns a string of the current builder contents (for testing).
     fn to_string(&self) -> String {
         let mut result = String::new();
