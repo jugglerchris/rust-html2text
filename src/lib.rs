@@ -377,7 +377,11 @@ impl RenderNode {
         // Otherwise, make an estimate.
         let estimate = match self.info {
             Text(ref t) | Img(ref t) => {
-                let len = t.trim().len();
+                let mut len = t.trim().len();
+                // Add one for preceding whitespace.
+                if let Some(true) = t.chars().next().map(|c| c.is_whitespace()) {
+                    len += 1;
+                }
                 SizeEstimate {
                     size: len,
                     min_width: len.min(MIN_WIDTH),
