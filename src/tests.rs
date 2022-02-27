@@ -1245,3 +1245,33 @@ fn test_empty_cols() {
         12,
     );
 }
+
+#[test]
+fn test_issue_54_oob() {
+    test_html(
+        br##"
+<html>
+<body>
+    <table>
+        <tr>
+            <td>
+                <table >
+                    <tr>
+                        <td>&nbsp;</td>
+                        <td>
+                            <table>
+                                <tr>
+                                    <td>Blah blah blah
+                                    </td>
+                                </tr>
+                            </table>
+                        </td>
+                        <td>&nbsp;</td>
+                    </tr>
+                </table>
+            </td>
+        </tr>
+    </table>
+</body>
+"##, r#""#, 10);
+}
