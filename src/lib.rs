@@ -429,6 +429,42 @@ impl RenderNode {
         self.size_estimate.set(Some(estimate));
         estimate
     }
+
+    /// Return true if this node is definitely empty.  This is used to quickly
+    /// remove e.g. links with no anchor text in most cases, but can't recurse
+    /// and look more deeply.
+    pub fn is_shallow_empty(&self) -> bool {
+        use RenderNodeInfo::*;
+
+        // Otherwise, make an estimate.
+        match self.info {
+            Text(ref t) | Img(ref t) => {
+                let len = t.trim().len();
+                len == 0
+            }
+
+            Container(ref v)
+            | Link(_, ref v)
+            | Em(ref v)
+            | Strong(ref v)
+            | Strikeout(ref v)
+            | Code(ref v)
+            | Block(ref v)
+            | Div(ref v)
+            | Pre(ref v)
+            | BlockQuote(ref v)
+            | Dl(ref v)
+            | Dt(ref v)
+            | Dd(ref v)
+            | Ul(ref v)
+            | Ol(_, ref v) => v.is_empty(),
+            Header(_level, ref v) => v.is_empty(),
+            Break => true,
+            Table(ref _t) => false,
+            TableRow(..) | TableBody(_) | TableCell(_) => false,
+            FragStart(_) => true,
+        }
+    }
 }
 
 fn precalc_size_estimate<'a>(node: &'a RenderNode) -> TreeMapResult<(), &'a RenderNode, ()> {
@@ -892,7 +928,15 @@ fn process_dom_node<'a, 'b, T: Write>(
                             // is unstable.  So we'll just move a string in and clone
                             // it on use.
                             let href: String = href.into();
-                            Box::new(move |_, cs| Some(RenderNode::new(Link(href.clone(), cs))))
+                            Box::new(move |_, cs: Vec<RenderNode>| {
+                                if cs
+                                    .iter()
+                                    .any(|c| !c.is_shallow_empty()) {
+                                    Some(RenderNode::new(Link(href.clone(), cs)))
+                                } else {
+                                    None
+                                }
+                            })
                         } else {
                             Box::new(|_, cs| Some(RenderNode::new(Container(cs))))
                         },
@@ -914,7 +958,7 @@ fn process_dom_node<'a, 'b, T: Write>(
                     let borrowed = attrs.borrow();
                     let mut title = None;
                     for attr in borrowed.iter() {
-                        if &attr.name.local == "alt" {
+                        if &attr.name.local == "alt" && !attr.value.is_empty() {
                             title = Some(&*attr.value);
                             break;
                         }

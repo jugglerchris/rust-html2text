@@ -159,7 +159,7 @@ impl<T: Debug + Eq + PartialEq + Clone + Default> TaggedLine<T> {
         }))
     }
 
-    #[cfg(html_trace)]
+    #[cfg(feature = "html_trace")]
     /// Return a string contents for debugging.
     fn to_string(&self) -> String {
         self.chars().collect()
@@ -450,6 +450,10 @@ impl<T: Clone + Eq + Debug + Default> WrappedBlock<T> {
     pub fn text_len(&self) -> usize {
         self.textlen + self.linelen + self.wordlen
     }
+
+    pub fn is_empty(&self) -> bool {
+        self.text_len() == 0
+    }
 }
 
 /// Allow decorating/styling text.
@@ -683,7 +687,7 @@ impl<T: PartialEq + Eq + Clone + Debug + Default> RenderLine<T> {
         }
     }
 
-    #[cfg(html_trace)]
+    #[cfg(feature = "html_trace")]
     /// For testing, return a simple string of the contents.
     fn to_string(&self) -> String {
         match self {
@@ -781,7 +785,7 @@ impl<D: TextDecorator> TextRenderer<D> {
         result
     }
 
-    #[cfg(html_trace)]
+    #[cfg(feature = "html_trace")]
     /// Returns a string of the current builder contents (for testing).
     fn to_string(&self) -> String {
         let mut result = String::new();
@@ -1186,7 +1190,11 @@ impl<D: TextDecorator> Renderer for TextRenderer<D> {
     }
 
     fn empty(&self) -> bool {
-        self.lines.is_empty() && self.wrapping.is_none()
+        self.lines.is_empty() && if let Some(wrapping) = &self.wrapping {
+            wrapping.is_empty()
+        } else {
+            true
+        }
     }
 
     fn text_len(&self) -> usize {

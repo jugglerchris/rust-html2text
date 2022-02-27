@@ -26,7 +26,7 @@ pub trait Renderer {
     /// Add a horizontal table border.
     fn add_horizontal_border(&mut self);
 
-    /// Add a horizontal border which is no the full width
+    /// Add a horizontal border which is not the full width
     fn add_horizontal_border_width(&mut self, #[allow(unused_variables)] width: usize) {
         self.add_horizontal_border();
     }
