@@ -559,12 +559,18 @@ impl BorderHoriz {
         }
     }
 
+    /// Stretch the line to at least the specified width
+    pub fn stretch_to(&mut self, width: usize) {
+        use self::BorderSegHoriz::*;
+        while width > self.segments.len() {
+            self.segments.push(Straight);
+        }
+    }
+
     /// Make a join to a line above at the xth cell
     pub fn join_above(&mut self, x: usize) {
         use self::BorderSegHoriz::*;
-        while x >= self.segments.len() {
-            self.segments.push(Straight);
-        }
+        self.stretch_to(x+1);
         let prev = self.segments[x];
         self.segments[x] = match prev {
             Straight | JoinAbove => JoinAbove,
@@ -575,9 +581,7 @@ impl BorderHoriz {
     /// Make a join to a line below at the xth cell
     pub fn join_below(&mut self, x: usize) {
         use self::BorderSegHoriz::*;
-        while x >= self.segments.len() {
-            self.segments.push(Straight);
-        }
+        self.stretch_to(x+1);
         let prev = self.segments[x];
         self.segments[x] = match prev {
             Straight | JoinBelow => JoinBelow,
@@ -1046,7 +1050,9 @@ impl<D: TextDecorator> Renderer for TextRenderer<D> {
                                 RenderLine::Text(ref mut tline) => {
                                     tline.pad_to(width);
                                 }
-                                RenderLine::Line(_) => {}
+                                RenderLine::Line(ref mut border) => {
+                                    border.stretch_to(width);
+                                }
                             }
                             line
                         })
