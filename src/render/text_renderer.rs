@@ -562,6 +562,9 @@ impl BorderHoriz {
     /// Make a join to a line above at the xth cell
     pub fn join_above(&mut self, x: usize) {
         use self::BorderSegHoriz::*;
+        while x >= self.segments.len() {
+            self.segments.push(Straight);
+        }
         let prev = self.segments[x];
         self.segments[x] = match prev {
             Straight | JoinAbove => JoinAbove,
@@ -572,6 +575,9 @@ impl BorderHoriz {
     /// Make a join to a line below at the xth cell
     pub fn join_below(&mut self, x: usize) {
         use self::BorderSegHoriz::*;
+        while x >= self.segments.len() {
+            self.segments.push(Straight);
+        }
         let prev = self.segments[x];
         self.segments[x] = match prev {
             Straight | JoinBelow => JoinBelow,
@@ -771,6 +777,7 @@ impl<D: TextDecorator> TextRenderer<D> {
         result
     }
 
+    #[doc(hidden)]
     /// Returns a string of the current builder contents (for testing).
     fn to_string(&self) -> String {
         let mut result = String::new();
@@ -1017,6 +1024,7 @@ impl<D: TextDecorator> Renderer for TextRenderer<D> {
     {
         use self::TaggedLineElement::Str;
         html_trace!("append_columns_with_borders(collapse={})", collapse);
+        html_trace!("self=\n{}", self.to_string());
 
         self.flush_wrapping();
 
@@ -1027,7 +1035,7 @@ impl<D: TextDecorator> Renderer for TextRenderer<D> {
             .map(|sub_r| {
                 let width = sub_r.width;
                 tot_width += width;
-                html_trace!("Adding column: {}", sub_r.to_string());
+                html_trace!("Adding column:\n{}", sub_r.to_string());
                 (
                     width,
                     sub_r
@@ -1055,7 +1063,9 @@ impl<D: TextDecorator> Renderer for TextRenderer<D> {
         {
             let mut pos = 0;
             if let &mut RenderLine::Line(ref mut prev_border) = self.lines.back_mut().unwrap() {
+                html_trace!("Merging with last line:\n{}", prev_border.to_string());
                 for &(w, _) in &line_sets[..line_sets.len() - 1] {
+                    html_trace!("pos={}, w={}", pos, w);
                     prev_border.join_below(pos + w);
                     next_border.join_above(pos + w);
                     pos += w + 1;
@@ -1075,6 +1085,7 @@ impl<D: TextDecorator> Renderer for TextRenderer<D> {
 
         // If we're collapsing borders, do so.
         if collapse {
+            html_trace!("Collapsing borders.");
             /* Collapse any top border */
             let mut pos = 0;
             for &mut (w, ref mut sublines) in &mut line_sets {
@@ -1088,10 +1099,13 @@ impl<D: TextDecorator> Renderer for TextRenderer<D> {
                     false
                 };
                 if starts_border {
+                    html_trace!("Starts border");
                     if let &mut RenderLine::Line(ref mut prev_border) =
                         self.lines.back_mut().expect("No previous line")
                     {
                         if let RenderLine::Line(line) = sublines.remove(0) {
+                            html_trace!("prev border:\n{}\n, pos={}, line:\n{}",
+                                        prev_border.to_string(), pos, line.to_string());
                             prev_border.merge_from_below(&line, pos);
                         }
                     } else {
@@ -1114,6 +1128,7 @@ impl<D: TextDecorator> Renderer for TextRenderer<D> {
                     false
                 };
                 if ends_border {
+                    html_trace!("Ends border");
                     if let RenderLine::Line(line) = sublines.pop().unwrap() {
                         next_border.merge_from_above(&line, pos);
                         column_padding[col_no] = Some(line.to_vertical_lines_above())
