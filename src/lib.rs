@@ -1391,8 +1391,12 @@ fn render_table_tree<T: Write, R: Renderer>(
 
     builder.start_block();
 
-    let table_width = col_widths.iter().cloned().sum::<usize>() +
-        col_widths.len().saturating_sub(1);
+    let table_width = if vert_row {
+        width
+    } else {
+        col_widths.iter().cloned().sum::<usize>() +
+        col_widths.len().saturating_sub(1)
+    };
 
     builder.add_horizontal_border_width(table_width);
 
