@@ -195,13 +195,17 @@ impl RenderTableRow {
 
     /// Return the contained cells as RenderNodes, annotated with their
     /// widths if available.  Skips cells with no width allocated.
-    pub fn into_cells(self) -> Vec<RenderNode> {
+    pub fn into_cells(self, vertical: bool) -> Vec<RenderNode> {
         let mut result = Vec::new();
         let mut colno = 0;
         let col_sizes = self.col_sizes.unwrap();
         for mut cell in self.cells {
             let colspan = cell.colspan;
-            let col_width = col_sizes[colno..colno + cell.colspan].iter().sum::<usize>();
+            let col_width = if vertical {
+                col_sizes[colno]
+            } else {
+                col_sizes[colno..colno + cell.colspan].iter().sum::<usize>()
+            };
             // Skip any zero-width columns
             if col_width > 0 {
                 cell.col_width = Some(col_width + cell.colspan - 1);
@@ -1414,7 +1418,7 @@ fn render_table_row<T: Write, R: Renderer>(
     _err_out: &mut T,
 ) -> TreeMapResult<'static, BuilderStack<R>, RenderNode, Option<R>> {
     TreeMapResult::PendingChildren {
-        children: row.into_cells(),
+        children: row.into_cells(false),
         cons: Box::new(|builders, children| {
             let children: Vec<_> = children.into_iter().map(Option::unwrap).collect();
             if children.iter().any(|c| !c.empty()) {
@@ -1440,11 +1444,11 @@ fn render_table_row_vert<T: Write, R: Renderer>(
     _err_out: &mut T,
 ) -> TreeMapResult<'static, BuilderStack<R>, RenderNode, Option<R>> {
     TreeMapResult::PendingChildren {
-        children: row.into_cells(),
+        children: row.into_cells(true),
         cons: Box::new(|builders, children| {
             let children: Vec<_> = children.into_iter().map(Option::unwrap).collect();
             for child in children {
-                builders.append_columns_with_borders([child], true);
+                builders.append_subrender(child, repeat(""));
             }
             Some(None)
         }),
