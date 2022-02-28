@@ -7,9 +7,9 @@ jobs:
       - run: cargo --version
       - run: cargo build
       - run: cargo test
-  build-1.36:
+  build-1.41:
     docker:
-      - image: cimg/rust:1.36
+      - image: cimg/rust:1.41
     steps:
       - checkout
       - run: cargo --version
@@ -21,4 +21,4 @@ workflows:
   build:
     jobs:
       - "build-stable"
-      - "build-1.36"
+      - "build-1.41"
