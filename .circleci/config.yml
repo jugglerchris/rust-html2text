@@ -1,0 +1,24 @@
+jobs:
+  build-stable:
+    docker:
+      - image: cimg/rust:1.59
+    steps:
+      - checkout
+      - run: cargo --version
+      - run: cargo build
+      - run: cargo test
+  build-1.41:
+    docker:
+      - image: cimg/rust:1.41
+    steps:
+      - checkout
+      - run: cargo --version
+      - run: cargo build
+      - run: cargo test
+
+workflows:
+  version: 2
+  build:
+    jobs:
+      - "build-stable"
+      - "build-1.41"
