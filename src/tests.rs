@@ -34,9 +34,36 @@ fn test_table() {
      </tr>
    </table>
 "##,
-        r#"───┬───┬────
-1  │2  │3   
-───┴───┴────
+        r#"─┬─┬─
+1│2│3
+─┴─┴─
+"#,
+        12,
+    );
+}
+
+#[test]
+fn test_table2() {
+    test_html(
+        br##"
+   <table>
+     <tr>
+       <td>1</td>
+       <td>2</td>
+       <td>3</td>
+     </tr>
+     <tr>
+       <td>4</td>
+       <td>5</td>
+       <td>6</td>
+     </tr>
+   </table>
+"##,
+        r#"─┬─┬─
+1│2│3
+─┼─┼─
+4│5│6
+─┴─┴─
 "#,
         12,
     );
@@ -63,11 +90,11 @@ fn test_thead() {
      </tbody>
    </table>
 "##,
-        r#"────┬────┬─────
-Col1│Col2│Col3 
-────┼────┼─────
-1   │2   │3    
-────┴────┴─────
+        r#"────┬────┬────
+Col1│Col2│Col3
+────┼────┼────
+1   │2   │3   
+────┴────┴────
 "#,
         15,
     );
@@ -93,13 +120,13 @@ fn test_colspan() {
      </tr>
    </table>
 "##,
-        r#"───┬───┬────
-1  │2  │3   
-───┴───┼────
-12     │3   
-───┬───┴────
-1  │23      
-───┴────────
+        r#"─┬─┬─
+1│2│3
+─┴─┼─
+12 │3
+─┬─┴─
+1│23 
+─┴───
 "#,
         12,
     );
@@ -304,9 +331,9 @@ fn test_strip_nl_tbl() {
           </tr>
         </table>
      "#,
-        r"────────────────────
-One Two Three       
-────────────────────
+        r"──────────────
+One Two Three 
+──────────────
 ",
         20,
     );
@@ -329,9 +356,9 @@ fn test_unknown_element() {
         </table>
         </foo>
      "#,
-        r"────────────────────
-One Two Three       
-────────────────────
+        r"──────────────
+One Two Three 
+──────────────
 ",
         20,
     );
@@ -352,9 +379,9 @@ fn test_strip_nl_tbl_p() {
           </tr>
         </table>
      "#,
-        r"────────────────────
-One Two Three       
-────────────────────
+        r"──────────────
+One Two Three 
+──────────────
 ",
         20,
     );
@@ -588,13 +615,13 @@ fn test_nested_table_1() {
      </tr>
    </table>
 "##,
-        r#"─┬─┬──┬─┬─┬──┬─┬─┬───
-1│2│3 │4│5│6 │7│8│9  
-─┼─┼──┼─┼─┼──┼─┼─┼───
-1│2│3 │4│5│6 │7│8│9  
-─┼─┼──┼─┼─┼──┼─┼─┼───
-1│2│3 │4│5│6 │7│8│9  
-─┴─┴──┴─┴─┴──┴─┴─┴───
+        r#"─┬─┬─┬─┬─┬─┬─┬─┬─
+1│2│3│4│5│6│7│8│9
+─┼─┼─┼─┼─┼─┼─┼─┼─
+1│2│3│4│5│6│7│8│9
+─┼─┼─┼─┼─┼─┼─┼─┼─
+1│2│3│4│5│6│7│8│9
+─┴─┴─┴─┴─┴─┴─┴─┴─
 "#,
         21,
     );
@@ -622,13 +649,13 @@ five
      </tr>
    </table>
 "##,
-        r#"─┬───┬─────
-1│a  │one  
-─┼───│two  
-2│b  │three
- │   │four 
- │   │five 
-─┴───┴─────
+        r#"─┬─┬────────
+1│a│one     
+─┼─│two     
+2│b│three   
+ │ │four    
+ │ │five    
+─┴─┴────────
 "#,
         11,
     );
@@ -747,21 +774,34 @@ fn test_deeply_nested() {
 #[test]
 fn test_deeply_nested_table() {
     use ::std::iter::repeat;
+    let rpt = 1000;
     let html = repeat("<table><tr><td>hi</td><td>")
-        .take(1000)
+        .take(rpt)
         .collect::<Vec<_>>()
         .concat()
         + &repeat("</td></tr></table>")
-            .take(1000)
+            .take(rpt)
             .collect::<Vec<_>>()
             .concat();
+
+    let result = repeat(r#"──────────
+hi
+//////////
+"#)
+        .take(rpt - 3)
+        .collect::<Vec<_>>()
+        .concat()
+        + &r#"──┬────
+hi│hi  
+  │////
+  │──  
+  │hi  
+  │──  
+──┴────
+"# + &repeat("──────────\n").take(rpt-3).collect::<String>();
     test_html(
         html.as_bytes(),
-        r#"────┬─┬───
-hi  │h│   
-    │i│   
-────┴─┴───
-"#,
+        &result,
         10,
     );
 }
@@ -775,9 +815,9 @@ fn test_table_no_id() {
     </table></body></html>"#;
     test_html(
         html.as_bytes(),
-        r#"──────────
-hi, world 
-──────────
+        r#"─────────
+hi, world
+─────────
 "#,
         10,
     );
@@ -792,9 +832,9 @@ fn test_table_cell_id() {
     </table></body></html>"#;
     test_html(
         html.as_bytes(),
-        r#"──────────
-hi, world 
-──────────
+        r#"─────────
+hi, world
+─────────
 "#,
         10,
     );
@@ -809,9 +849,9 @@ fn test_table_row_id() {
     </table></body></html>"#;
     test_html(
         html.as_bytes(),
-        r#"──────────
-hi, world 
-──────────
+        r#"─────────
+hi, world
+─────────
 "#,
         10,
     );
@@ -826,9 +866,9 @@ fn test_table_table_id() {
     </table></body></html>"#;
     test_html(
         html.as_bytes(),
-        r#"──────────
-hi, world 
-──────────
+        r#"─────────
+hi, world
+─────────
 "#,
         10,
     );
@@ -845,9 +885,9 @@ fn test_table_tbody_id() {
     </table></body></html>"#;
     test_html(
         html.as_bytes(),
-        r#"──────────
-hi, world 
-──────────
+        r#"─────────
+hi, world
+─────────
 "#,
         10,
     );
@@ -873,7 +913,7 @@ fn test_header_width() {
 ## ### n
 ## ### g
 ## 
-## ────
+## 
 "#,
         7,
     );
@@ -895,7 +935,7 @@ fn test_header_width() {
 ## ### n
 ## ### g
 ## 
-## ──
+## 
 "#,
         5,
     );
@@ -1138,4 +1178,128 @@ fn test_finalise() {
             TaggedLine::from_string("".to_owned(), &vec![true]),
         ]
     );
+}
+
+#[test]
+fn test_empty_rows() {
+    test_html(
+        br##"
+   <table>
+     <tr>
+       <td>1</td>
+       <td>2</td>
+       <td>3</td>
+     </tr>
+     <tr><td></td><td></td><td></td></tr>
+     <tr>
+       <td>4</td>
+       <td>5</td>
+       <td>6</td>
+     </tr>
+   </table>
+"##,
+        r#"─┬─┬─
+1│2│3
+─┼─┼─
+4│5│6
+─┴─┴─
+"#,
+        12,
+    );
+}
+
+#[test]
+fn test_empty_cols() {
+    test_html(
+        br##"
+   <table>
+     <tr>
+       <td></td>
+       <td>1</td>
+       <td></td>
+       <td>2</td>
+       <td></td>
+     </tr>
+     <tr>
+       <td></td>
+       <td>3</td>
+       <td></td>
+       <td>4</td>
+       <td></td>
+     </tr>
+     <tr>
+       <td></td>
+       <td>5</td>
+       <td></td>
+       <td>6</td>
+       <td></td>
+     </tr>
+   </table>
+"##,
+        r#"─┬─
+1│2
+─┼─
+3│4
+─┼─
+5│6
+─┴─
+"#,
+        12,
+    );
+}
+
+#[test]
+fn test_issue_54_oob() {
+    test_html(
+        br##"
+<html>
+<body>
+    <table>
+        <tr>
+            <td>
+                <table>
+                    <tr>
+                        <td>&nbsp;</td>
+                        <td>
+                            <table>
+                                <tr>
+                                    <td>Blah blah blah
+                                    </td>
+                                </tr>
+                            </table>
+                        </td>
+                        <td>&nbsp;</td>
+                    </tr>
+                </table>
+            </td>
+        </tr>
+    </table>
+</body>
+"##, r#"─┬────────┬
+ │Blah    │ 
+ │blah    │ 
+ │blah    │ 
+─┴────────┴
+"#, 10);
+}
+
+#[test]
+fn test_table_vertical_rows() {
+    test_html(
+        br##"
+<table>
+    <tr>
+        <td>wid</td>
+        <td>kin</td>
+        <td>der</td>
+    </tr>
+</table>
+"##, "─────
+wid
+/////
+kin
+/////
+der
+─────
+", 5);
 }

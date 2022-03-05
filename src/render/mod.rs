@@ -26,6 +26,11 @@ pub trait Renderer {
     /// Add a horizontal table border.
     fn add_horizontal_border(&mut self);
 
+    /// Add a horizontal border which is not the full width
+    fn add_horizontal_border_width(&mut self, #[allow(unused_variables)] width: usize) {
+        self.add_horizontal_border();
+    }
+
     /// Begin a preformatted block.  Until the corresponding end,
     /// whitespace will used verbatim.  Pre regions can nest.
     fn start_pre(&mut self);
@@ -54,6 +59,13 @@ pub trait Renderer {
     /// If collapse is true, then merge top/bottom borders of the subrenderer
     /// with the surrounding one.
     fn append_columns_with_borders<I>(&mut self, cols: I, collapse: bool)
+    where
+        I: IntoIterator<Item = Self>,
+        Self: Sized;
+
+    /// Append a set of sub renderers joined vertically with lines, for tables
+    /// which would otherwise be too wide for the screen.
+    fn append_vert_row<I>(&mut self, cols: I)
     where
         I: IntoIterator<Item = Self>,
         Self: Sized;

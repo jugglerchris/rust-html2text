@@ -4,7 +4,7 @@
 //! into different text formats.
 
 use super::Renderer;
-use std::fmt::Debug;
+use std::{fmt::Debug, collections::LinkedList};
 use std::mem;
 use std::ops::Deref;
 use std::vec;
@@ -128,7 +128,7 @@ impl<T: Debug + Eq + PartialEq + Clone + Default> TaggedLine<T> {
         let mut s = String::new();
         s.push(c);
         self.v.push(Str(TaggedString {
-            s: s,
+            s,
             tag: tag.clone(),
         }));
     }
@@ -157,6 +157,12 @@ impl<T: Debug + Eq + PartialEq + Clone + Default> TaggedLine<T> {
                 "".chars()
             }
         }))
+    }
+
+    #[cfg(feature = "html_trace")]
+    /// Return a string contents for debugging.
+    fn to_string(&self) -> String {
+        self.chars().collect()
     }
 
     /// Iterator over TaggedLineElements
@@ -220,7 +226,7 @@ impl<T: Clone + Eq + Debug + Default> WrappedBlock<T> {
     pub fn new(width: usize) -> WrappedBlock<T> {
         assert!(width > 0);
         WrappedBlock {
-            width: width,
+            width,
             text: Vec::new(),
             textlen: 0,
             line: TaggedLine::new(),
@@ -444,6 +450,10 @@ impl<T: Clone + Eq + Debug + Default> WrappedBlock<T> {
     pub fn text_len(&self) -> usize {
         self.textlen + self.linelen + self.wordlen
     }
+
+    pub fn is_empty(&self) -> bool {
+        self.text_len() == 0
+    }
 }
 
 /// Allow decorating/styling text.
@@ -535,6 +545,9 @@ pub enum BorderSegHoriz {
     JoinBelow,
     /// Joins both ways
     JoinCross,
+    /// Horizontal line, but separating two table cells from a row
+    /// which wouldn't fit next to each other.
+    StraightVert,
 }
 
 /// A dividing line between table rows which tracks intersections
@@ -553,23 +566,42 @@ impl BorderHoriz {
         }
     }
 
+    /// Create a new blank border line.
+    pub fn new_type(width: usize, linetype: BorderSegHoriz) -> BorderHoriz {
+        BorderHoriz {
+            segments: vec![linetype; width],
+        }
+    }
+
+    /// Stretch the line to at least the specified width
+    pub fn stretch_to(&mut self, width: usize) {
+        use self::BorderSegHoriz::*;
+        while width > self.segments.len() {
+            self.segments.push(Straight);
+        }
+    }
+
     /// Make a join to a line above at the xth cell
     pub fn join_above(&mut self, x: usize) {
         use self::BorderSegHoriz::*;
+        self.stretch_to(x+1);
         let prev = self.segments[x];
         self.segments[x] = match prev {
             Straight | JoinAbove => JoinAbove,
             JoinBelow | JoinCross => JoinCross,
+            StraightVert => StraightVert,
         }
     }
 
     /// Make a join to a line below at the xth cell
     pub fn join_below(&mut self, x: usize) {
         use self::BorderSegHoriz::*;
+        self.stretch_to(x+1);
         let prev = self.segments[x];
         self.segments[x] = match prev {
             Straight | JoinBelow => JoinBelow,
             JoinAbove | JoinCross => JoinCross,
+            StraightVert => StraightVert,
         }
     }
 
@@ -578,7 +610,7 @@ impl BorderHoriz {
         use self::BorderSegHoriz::*;
         for (idx, seg) in other.segments.iter().enumerate() {
             match *seg {
-                Straight => (),
+                Straight | StraightVert => (),
                 JoinAbove | JoinBelow | JoinCross => {
                     self.join_below(idx + pos);
                 }
@@ -591,7 +623,7 @@ impl BorderHoriz {
         use self::BorderSegHoriz::*;
         for (idx, seg) in other.segments.iter().enumerate() {
             match *seg {
-                Straight => (),
+                Straight | StraightVert => (),
                 JoinAbove | JoinBelow | JoinCross => {
                     self.join_above(idx + pos);
                 }
@@ -606,7 +638,7 @@ impl BorderHoriz {
         self.segments
             .iter()
             .map(|seg| match *seg {
-                Straight | JoinBelow => ' ',
+                Straight | JoinBelow | StraightVert => ' ',
                 JoinAbove | JoinCross => '│',
             })
             .collect()
@@ -618,6 +650,7 @@ impl BorderHoriz {
             .into_iter()
             .map(|seg| match seg {
                 BorderSegHoriz::Straight => '─',
+                BorderSegHoriz::StraightVert => '/',
                 BorderSegHoriz::JoinAbove => '┴',
                 BorderSegHoriz::JoinBelow => '┬',
                 BorderSegHoriz::JoinCross => '┼',
@@ -666,13 +699,22 @@ impl<T: PartialEq + Eq + Clone + Debug + Default> RenderLine<T> {
             }
         }
     }
+
+    #[cfg(feature = "html_trace")]
+    /// For testing, return a simple string of the contents.
+    fn to_string(&self) -> String {
+        match self {
+            RenderLine::Text(tagged) => tagged.to_string(),
+            RenderLine::Line(border) => border.to_string(),
+        }
+    }
 }
 
 /// A renderer which just outputs plain text with
 /// annotations depending on a decorator.
 pub struct TextRenderer<D: TextDecorator> {
     width: usize,
-    lines: Vec<RenderLine<Vec<D::Annotation>>>,
+    lines: LinkedList<RenderLine<Vec<D::Annotation>>>,
     /// True at the end of a block, meaning we should add
     /// a blank line if any other text is added.
     at_block_end: bool,
@@ -689,8 +731,8 @@ impl<D: TextDecorator> TextRenderer<D> {
     pub fn new(width: usize, decorator: D) -> TextRenderer<D> {
         html_trace!("new({})", width);
         TextRenderer {
-            width: width,
-            lines: Vec::new(),
+            width,
+            lines: LinkedList::new(),
             at_block_end: false,
             wrapping: None,
             decorator: Some(decorator),
@@ -756,8 +798,20 @@ impl<D: TextDecorator> TextRenderer<D> {
         result
     }
 
+    #[cfg(feature = "html_trace")]
+    /// Returns a string of the current builder contents (for testing).
+    fn to_string(&self) -> String {
+        let mut result = String::new();
+        for line in &self.lines {
+            result += &line.to_string();
+            result.push_str("\n");
+        }
+        result
+    }
+    
+
     /// Returns a `Vec` of `TaggedLine`s with therendered text.
-    pub fn into_lines(mut self) -> Vec<RenderLine<Vec<D::Annotation>>> {
+    pub fn into_lines(mut self) -> LinkedList<RenderLine<Vec<D::Annotation>>> {
         self.flush_wrapping();
         // And add the links
         let mut trailer = self.decorator.take().unwrap().finalise();
@@ -788,7 +842,7 @@ impl<D: TextDecorator> TextRenderer<D> {
                                     buf = String::new();
                                 }
 
-                                self.lines.push(RenderLine::Text(wrapped_line));
+                                self.lines.push_back(RenderLine::Text(wrapped_line));
                                 wrapped_line = TaggedLine::new();
                                 pos = 0;
                             }
@@ -804,10 +858,15 @@ impl<D: TextDecorator> TextRenderer<D> {
                         pos += width;
                     }
                 }
-                self.lines.push(RenderLine::Text(wrapped_line));
+                self.lines.push_back(RenderLine::Text(wrapped_line));
             }
         }
         self.lines
+    }
+
+    fn add_horizontal_line(&mut self, line: BorderHoriz) {
+        self.flush_wrapping();
+        self.lines.push_back(RenderLine::Line(line));
     }
 }
 
@@ -828,7 +887,7 @@ impl<D: TextDecorator> Renderer for TextRenderer<D> {
     fn add_empty_line(&mut self) {
         html_trace!("add_empty_line()");
         self.flush_all();
-        self.lines.push(RenderLine::Text(TaggedLine::new()));
+        self.lines.push_back(RenderLine::Text(TaggedLine::new()));
         html_trace_quiet!("add_empty_line: at_block_end <- false");
         self.at_block_end = false;
         html_trace_quiet!("add_empty_line: new lines: {:?}", self.lines);
@@ -871,7 +930,13 @@ impl<D: TextDecorator> Renderer for TextRenderer<D> {
     fn add_horizontal_border(&mut self) {
         self.flush_wrapping();
         self.lines
-            .push(RenderLine::Line(BorderHoriz::new(self.width)));
+            .push_back(RenderLine::Line(BorderHoriz::new(self.width)));
+    }
+
+    fn add_horizontal_border_width(&mut self, width: usize) {
+        self.flush_wrapping();
+        self.lines
+            .push_back(RenderLine::Line(BorderHoriz::new(width)));
     }
 
     fn start_pre(&mut self) {
@@ -955,10 +1020,12 @@ impl<D: TextDecorator> Renderer for TextRenderer<D> {
                 .zip(prefixes)
                 .map(|(line, prefix)| match line {
                     RenderLine::Text(mut tline) => {
-                        tline.insert_front(TaggedString {
-                            s: prefix.to_string(),
-                            tag: tag.clone(),
-                        });
+                        if !prefix.is_empty() {
+                            tline.insert_front(TaggedString {
+                                s: prefix.to_string(),
+                                tag: tag.clone(),
+                            });
+                        }
                         RenderLine::Text(tline)
                     }
                     RenderLine::Line(l) => {
@@ -980,17 +1047,22 @@ impl<D: TextDecorator> Renderer for TextRenderer<D> {
     fn append_columns_with_borders<I>(&mut self, cols: I, collapse: bool)
     where
         I: IntoIterator<Item = Self>,
+        Self: Sized
     {
         use self::TaggedLineElement::Str;
+        html_trace!("append_columns_with_borders(collapse={})", collapse);
+        html_trace!("self=\n{}", self.to_string());
 
         self.flush_wrapping();
 
-        let mut next_border = BorderHoriz::new(self.width);
+        let mut tot_width = 0;
 
         let mut line_sets = cols
             .into_iter()
             .map(|sub_r| {
                 let width = sub_r.width;
+                tot_width += width;
+                html_trace!("Adding column:\n{}", sub_r.to_string());
                 (
                     width,
                     sub_r
@@ -1001,7 +1073,9 @@ impl<D: TextDecorator> Renderer for TextRenderer<D> {
                                 RenderLine::Text(ref mut tline) => {
                                     tline.pad_to(width);
                                 }
-                                RenderLine::Line(_) => {}
+                                RenderLine::Line(ref mut border) => {
+                                    border.stretch_to(width);
+                                }
                             }
                             line
                         })
@@ -1010,11 +1084,17 @@ impl<D: TextDecorator> Renderer for TextRenderer<D> {
             })
             .collect::<Vec<(usize, Vec<RenderLine<_>>)>>();
 
+        tot_width += line_sets.len().saturating_sub(1);
+
+        let mut next_border = BorderHoriz::new(tot_width);
+
         // Join the vertical lines to all the borders
         {
             let mut pos = 0;
-            if let &mut RenderLine::Line(ref mut prev_border) = self.lines.last_mut().unwrap() {
+            if let &mut RenderLine::Line(ref mut prev_border) = self.lines.back_mut().unwrap() {
+                html_trace!("Merging with last line:\n{}", prev_border.to_string());
                 for &(w, _) in &line_sets[..line_sets.len() - 1] {
+                    html_trace!("pos={}, w={}", pos, w);
                     prev_border.join_below(pos + w);
                     next_border.join_above(pos + w);
                     pos += w + 1;
@@ -1034,6 +1114,7 @@ impl<D: TextDecorator> Renderer for TextRenderer<D> {
 
         // If we're collapsing borders, do so.
         if collapse {
+            html_trace!("Collapsing borders.");
             /* Collapse any top border */
             let mut pos = 0;
             for &mut (w, ref mut sublines) in &mut line_sets {
@@ -1047,10 +1128,13 @@ impl<D: TextDecorator> Renderer for TextRenderer<D> {
                     false
                 };
                 if starts_border {
+                    html_trace!("Starts border");
                     if let &mut RenderLine::Line(ref mut prev_border) =
-                        self.lines.last_mut().expect("No previous line")
+                        self.lines.back_mut().expect("No previous line")
                     {
                         if let RenderLine::Line(line) = sublines.remove(0) {
+                            html_trace!("prev border:\n{}\n, pos={}, line:\n{}",
+                                        prev_border.to_string(), pos, line.to_string());
                             prev_border.merge_from_below(&line, pos);
                         }
                     } else {
@@ -1073,6 +1157,7 @@ impl<D: TextDecorator> Renderer for TextRenderer<D> {
                     false
                 };
                 if ends_border {
+                    html_trace!("Ends border");
                     if let RenderLine::Line(line) = sublines.pop().unwrap() {
                         next_border.merge_from_above(&line, pos);
                         column_padding[col_no] = Some(line.to_vertical_lines_above())
@@ -1118,13 +1203,43 @@ impl<D: TextDecorator> Renderer for TextRenderer<D> {
                     line.push_char('│', &self.ann_stack);
                 }
             }
-            self.lines.push(RenderLine::Text(line));
+            self.lines.push_back(RenderLine::Text(line));
         }
-        self.lines.push(RenderLine::Line(next_border));
+        self.lines.push_back(RenderLine::Line(next_border));
     }
 
+    fn append_vert_row<I>(&mut self, cols: I)
+    where
+        I: IntoIterator<Item = Self>,
+        Self: Sized
+    {
+        html_trace!("append_vert_row()");
+        html_trace!("self=\n{}", self.to_string());
+
+        self.flush_wrapping();
+
+        let width = self.width();
+
+        let mut first = true;
+        for col in cols {
+            if first {
+                first = false;
+            } else {
+                let border = BorderHoriz::new_type(width, BorderSegHoriz::StraightVert);
+                self.add_horizontal_line(border);
+            }
+            self.append_subrender(col, std::iter::repeat(""));
+        }
+        self.add_horizontal_border();
+    }
+
+
     fn empty(&self) -> bool {
-        self.lines.is_empty() && self.wrapping.is_none()
+        self.lines.is_empty() && if let Some(wrapping) = &self.wrapping {
+            wrapping.is_empty()
+        } else {
+            true
+        }
     }
 
     fn text_len(&self) -> usize {

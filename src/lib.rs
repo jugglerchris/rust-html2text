@@ -76,7 +76,7 @@ use markup5ever_rcdom::{
     RcDom,
 };
 use std::cell::Cell;
-use std::cmp::max;
+use std::cmp::{min,max};
 use std::io;
 use std::io::Write;
 use std::iter::{once, repeat};
@@ -93,7 +93,7 @@ impl Write for Discard {
     }
 }
 
-const MIN_WIDTH: usize = 5;
+const MIN_WIDTH: usize = 3;
 
 /// Size information/estimate
 #[derive(Debug, Copy, Clone)]
@@ -116,6 +116,14 @@ impl SizeEstimate {
     pub fn add(self, other: SizeEstimate) -> SizeEstimate {
         SizeEstimate {
             size: self.size + other.size,
+            min_width: max(self.min_width, other.min_width),
+        }
+    }
+
+    /// Combine two estimates into one (take max of each)
+    pub fn max(self, other: SizeEstimate) -> SizeEstimate {
+        SizeEstimate {
+            size: max(self.size, other.size),
             min_width: max(self.min_width, other.min_width),
         }
     }
@@ -187,15 +195,20 @@ impl RenderTableRow {
 
     /// Return the contained cells as RenderNodes, annotated with their
     /// widths if available.  Skips cells with no width allocated.
-    pub fn into_cells(self) -> Vec<RenderNode> {
+    pub fn into_cells(self, vertical: bool) -> Vec<RenderNode> {
         let mut result = Vec::new();
         let mut colno = 0;
         let col_sizes = self.col_sizes.unwrap();
         for mut cell in self.cells {
             let colspan = cell.colspan;
-            let col_width: usize = col_sizes[colno..colno + cell.colspan].iter().sum();
-            if col_width > 1 {
-                cell.col_width = Some(col_width - 1);
+            let col_width = if vertical {
+                col_sizes[colno]
+            } else {
+                col_sizes[colno..colno + cell.colspan].iter().sum::<usize>()
+            };
+            // Skip any zero-width columns
+            if col_width > 0 {
+                cell.col_width = Some(col_width + cell.colspan - 1);
                 result.push(RenderNode::new(RenderNodeInfo::TableCell(cell)));
             }
             colno += colspan;
@@ -217,8 +230,8 @@ impl RenderTable {
     pub fn new(rows: Vec<RenderTableRow>) -> RenderTable {
         let num_columns = rows.iter().map(|r| r.num_cells()).max().unwrap_or(0);
         RenderTable {
-            rows: rows,
-            num_columns: num_columns,
+            rows,
+            num_columns,
             size_estimate: Cell::new(None),
         }
     }
@@ -234,12 +247,12 @@ impl RenderTable {
     }
     /// Consume this and return a Vec<RenderNode> containing the children;
     /// the children know the column sizes required.
-    pub fn into_rows(self, col_sizes: Vec<usize>) -> Vec<RenderNode> {
+    pub fn into_rows(self, col_sizes: Vec<usize>, vert: bool) -> Vec<RenderNode> {
         self.rows
             .into_iter()
             .map(|mut tr| {
                 tr.col_sizes = Some(col_sizes.clone());
-                RenderNode::new(RenderNodeInfo::TableRow(tr))
+                RenderNode::new(RenderNodeInfo::TableRow(tr, vert))
             })
             .collect()
     }
@@ -272,8 +285,7 @@ impl RenderTable {
         let size = sizes.iter().map(|s| s.size).sum(); // Include borders?
         let min_width = sizes.iter().map(|s| s.min_width).sum::<usize>() + self.num_columns - 1;
         self.size_estimate.set(Some(SizeEstimate {
-            size: size,
-            min_width: min_width,
+            size, min_width,
         }));
     }
 
@@ -332,7 +344,9 @@ pub enum RenderNodeInfo {
     /// A set of table rows (from either <thead> or <tbody>
     TableBody(Vec<RenderTableRow>),
     /// Table row (must only appear within a table body)
-    TableRow(RenderTableRow),
+    /// If the boolean is true, then the cells are drawn vertically
+    /// instead of horizontally (because of space).
+    TableRow(RenderTableRow, bool),
     /// Table cell (must only appear within a table row)
     TableCell(RenderTableCell),
     /// Start of a named HTML fragment
@@ -351,7 +365,7 @@ impl RenderNode {
     pub fn new(info: RenderNodeInfo) -> RenderNode {
         RenderNode {
             size_estimate: Cell::new(None),
-            info: info,
+            info,
         }
     }
 
@@ -367,10 +381,14 @@ impl RenderNode {
         // Otherwise, make an estimate.
         let estimate = match self.info {
             Text(ref t) | Img(ref t) => {
-                let len = t.trim().len();
+                let mut len = t.trim().len();
+                // Add one for preceding whitespace.
+                if let Some(true) = t.chars().next().map(|c| c.is_whitespace()) {
+                    len += 1;
+                }
                 SizeEstimate {
                     size: len,
-                    min_width: if len > 0 { MIN_WIDTH } else { 0 },
+                    min_width: len.min(MIN_WIDTH),
                 }
             }
 
@@ -405,11 +423,47 @@ impl RenderNode {
                 min_width: 1,
             },
             Table(ref t) => t.get_size_estimate(),
-            TableRow(_) | TableBody(_) | TableCell(_) => unimplemented!(),
+            TableRow(..) | TableBody(_) | TableCell(_) => unimplemented!(),
             FragStart(_) => Default::default(),
         };
         self.size_estimate.set(Some(estimate));
         estimate
+    }
+
+    /// Return true if this node is definitely empty.  This is used to quickly
+    /// remove e.g. links with no anchor text in most cases, but can't recurse
+    /// and look more deeply.
+    pub fn is_shallow_empty(&self) -> bool {
+        use RenderNodeInfo::*;
+
+        // Otherwise, make an estimate.
+        match self.info {
+            Text(ref t) | Img(ref t) => {
+                let len = t.trim().len();
+                len == 0
+            }
+
+            Container(ref v)
+            | Link(_, ref v)
+            | Em(ref v)
+            | Strong(ref v)
+            | Strikeout(ref v)
+            | Code(ref v)
+            | Block(ref v)
+            | Div(ref v)
+            | Pre(ref v)
+            | BlockQuote(ref v)
+            | Dl(ref v)
+            | Dt(ref v)
+            | Dd(ref v)
+            | Ul(ref v)
+            | Ol(_, ref v) => v.is_empty(),
+            Header(_level, ref v) => v.is_empty(),
+            Break => true,
+            Table(ref _t) => false,
+            TableRow(..) | TableBody(_) | TableCell(_) => false,
+            FragStart(_) => true,
+        }
     }
 }
 
@@ -457,7 +511,7 @@ fn precalc_size_estimate<'a>(node: &'a RenderNode) -> TreeMapResult<(), &'a Rend
                 }
             }
             TreeMapResult::PendingChildren {
-                children: children,
+                children,
                 cons: Box::new(move |_, _cs| {
                     node.get_size_estimate();
                     None
@@ -466,7 +520,7 @@ fn precalc_size_estimate<'a>(node: &'a RenderNode) -> TreeMapResult<(), &'a Rend
                 postfn: None,
             }
         }
-        TableRow(_) | TableBody(_) | TableCell(_) => unimplemented!(),
+        TableRow(..) | TableBody(_) | TableCell(_) => unimplemented!(),
     }
 }
 
@@ -562,7 +616,7 @@ fn tbody_to_render_tree<'a, 'b, T: Write>(
         let rows = rowchildren
             .into_iter()
             .flat_map(|rownode| {
-                if let RenderNodeInfo::TableRow(row) = rownode.info {
+                if let RenderNodeInfo::TableRow(row, _) = rownode.info {
                     Some(row)
                 } else {
                     html_trace!("  [[tbody child: {:?}]]", rownode);
@@ -594,7 +648,7 @@ fn tr_to_render_tree<'a, 'b, T: Write>(
         Some(RenderNode::new(RenderNodeInfo::TableRow(RenderTableRow {
             cells,
             col_sizes: None,
-        })))
+        }, false)))
     })
 }
 
@@ -615,7 +669,7 @@ fn td_to_render_tree<'a, 'b, T: Write>(
     pending(handle, move |_, children| {
         Some(RenderNode::new(RenderNodeInfo::TableCell(
             RenderTableCell {
-                colspan: colspan,
+                colspan,
                 content: children,
                 size_estimate: Cell::new(None),
                 col_width: None,
@@ -792,7 +846,7 @@ fn prepend_marker(prefix: RenderNode, mut orig: RenderNode) -> RenderNode {
         }
 
         // For table rows and tables, push down if there's any content.
-        TableRow(ref mut rrow) => {
+        TableRow(ref mut rrow, _) => {
             // If the row is empty, then there isn't really anything
             // to attach the fragment start to.
             if rrow.cells.len() > 0 {
@@ -874,7 +928,15 @@ fn process_dom_node<'a, 'b, T: Write>(
                             // is unstable.  So we'll just move a string in and clone
                             // it on use.
                             let href: String = href.into();
-                            Box::new(move |_, cs| Some(RenderNode::new(Link(href.clone(), cs))))
+                            Box::new(move |_, cs: Vec<RenderNode>| {
+                                if cs
+                                    .iter()
+                                    .any(|c| !c.is_shallow_empty()) {
+                                    Some(RenderNode::new(Link(href.clone(), cs)))
+                                } else {
+                                    None
+                                }
+                            })
                         } else {
                             Box::new(|_, cs| Some(RenderNode::new(Container(cs))))
                         },
@@ -896,7 +958,7 @@ fn process_dom_node<'a, 'b, T: Write>(
                     let borrowed = attrs.borrow();
                     let mut title = None;
                     for attr in borrowed.iter() {
-                        if &attr.name.local == "alt" {
+                        if &attr.name.local == "alt" && !attr.value.is_empty() {
                             title = Some(&*attr.value);
                             break;
                         }
@@ -988,9 +1050,9 @@ fn process_dom_node<'a, 'b, T: Write>(
                     } => {
                         let fragname: String = fragname.into();
                         PendingChildren {
-                            children: children,
-                            prefn: prefn,
-                            postfn: postfn,
+                            children,
+                            prefn,
+                            postfn,
                             cons: Box::new(move |ctx, ch| {
                                 let fragnode = RenderNode::new(FragStart(fragname.clone()));
                                 match cons(ctx, ch) {
@@ -1087,7 +1149,7 @@ fn pending2<
     f: F,
 ) -> TreeMapResult<'a, BuilderStack<R>, RenderNode, Option<R>> {
     TreeMapResult::PendingChildren {
-        children: children,
+        children,
         cons: Box::new(f),
         prefn: None,
         postfn: None,
@@ -1289,7 +1351,8 @@ fn do_render_node<'a, 'b, T: Write, R: Renderer>(
             Finished(None)
         }
         Table(tab) => render_table_tree(builder.deref_mut(), tab, err_out),
-        TableRow(row) => render_table_row(builder.deref_mut(), row, err_out),
+        TableRow(row, false) => render_table_row(builder.deref_mut(), row, err_out),
+        TableRow(row, true) => render_table_row_vert(builder.deref_mut(), row, err_out),
         TableBody(_) => unimplemented!("Unexpected TableBody while rendering"),
         TableCell(cell) => render_table_cell(builder.deref_mut(), cell, err_out),
         FragStart(fragname) => {
@@ -1320,53 +1383,73 @@ fn render_table_tree<T: Write, R: Renderer>(
             estimate.size /= cell.colspan;
             estimate.min_width /= cell.colspan;
             for i in 0..cell.colspan {
-                col_sizes[colno + i] = (col_sizes[colno + i]).add(estimate);
+                col_sizes[colno + i] = (col_sizes[colno + i]).max(estimate);
             }
             colno += cell.colspan;
         }
     }
+    // TODO: remove empty columns
     let tot_size: usize = col_sizes.iter().map(|est| est.size).sum();
+    let min_size: usize = col_sizes.iter().map(|est| est.min_width).sum::<usize>() +
+                          col_sizes.len().saturating_sub(1);
     let width = builder.width();
-    let mut col_widths: Vec<usize> = col_sizes
-        .iter()
-        .map(|sz| {
-            if sz.size == 0 {
-                0
-            } else {
-                max(sz.size * width / tot_size, sz.min_width)
-            }
-        })
-        .collect();
-    /* The minimums may have put the total width too high */
-    while col_widths.iter().cloned().sum::<usize>() > width {
-        let (i, _) = col_widths
+
+    let vert_row = min_size > width;
+
+    let mut col_widths: Vec<usize> = if !vert_row {
+        col_sizes
             .iter()
-            .cloned()
-            .enumerate()
-            .max_by_key(|&(colno, width)| {
-                (
-                    width.saturating_sub(col_sizes[colno].min_width),
-                    width,
-                    usize::max_value() - colno,
-                )
+            .map(|sz| {
+                if sz.size == 0 {
+                    0
+                } else {
+                    min(sz.size,
+                        max(sz.size * width / tot_size, sz.min_width))
+                }
             })
-            .unwrap();
-        col_widths[i] -= 1;
-    }
-    if !col_widths.is_empty() {
-        // Slight fudge; we're not drawing extreme edges, so one of the columns
-        // can gets a free character cell from not having a border.
-        // make it the last.
-        let last = col_widths.len() - 1;
-        col_widths[last] += 1;
+            .collect()
+    } else {
+        col_sizes
+            .iter()
+            .map(|_| width)
+            .collect()
+    };
+
+    if !vert_row {
+        loop {
+            let cur_width = col_widths.iter().cloned().sum::<usize>();
+            if cur_width <= width {
+                break;
+            }
+            let (i, _) = col_widths
+                .iter()
+                .cloned()
+                .enumerate()
+                .max_by_key(|&(colno, width)| {
+                    (
+                        width.saturating_sub(col_sizes[colno].min_width),
+                        width,
+                        usize::max_value() - colno,
+                    )
+                })
+                .unwrap();
+            col_widths[i] -= 1;
+        }
     }
 
     builder.start_block();
 
-    builder.add_horizontal_border();
+    let table_width = if vert_row {
+        width
+    } else {
+        col_widths.iter().cloned().sum::<usize>() +
+        col_widths.iter().filter(|&w| w > &0).count().saturating_sub(1)
+    };
+
+    builder.add_horizontal_border_width(table_width);
 
     TreeMapResult::PendingChildren {
-        children: table.into_rows(col_widths),
+        children: table.into_rows(col_widths, vert_row),
         cons: Box::new(|_, _| Some(None)),
         prefn: Some(Box::new(|_, _| {})),
         postfn: Some(Box::new(|_, _| {})),
@@ -1379,12 +1462,36 @@ fn render_table_row<T: Write, R: Renderer>(
     _err_out: &mut T,
 ) -> TreeMapResult<'static, BuilderStack<R>, RenderNode, Option<R>> {
     TreeMapResult::PendingChildren {
-        children: row.into_cells(),
+        children: row.into_cells(false),
         cons: Box::new(|builders, children| {
             let children: Vec<_> = children.into_iter().map(Option::unwrap).collect();
             if children.iter().any(|c| !c.empty()) {
                 builders.append_columns_with_borders(children, true);
             }
+            Some(None)
+        }),
+        prefn: Some(Box::new(|builder: &mut BuilderStack<R>, node| {
+            if let RenderNodeInfo::TableCell(ref cell) = node.info {
+                let sub_builder = builder.new_sub_renderer(cell.col_width.unwrap());
+                builder.push(sub_builder);
+            } else {
+                panic!()
+            }
+        })),
+        postfn: Some(Box::new(|_builder: &mut BuilderStack<R>, _| {})),
+    }
+}
+
+fn render_table_row_vert<T: Write, R: Renderer>(
+    _builder: &mut R,
+    row: RenderTableRow,
+    _err_out: &mut T,
+) -> TreeMapResult<'static, BuilderStack<R>, RenderNode, Option<R>> {
+    TreeMapResult::PendingChildren {
+        children: row.into_cells(true),
+        cons: Box::new(|builders, children| {
+            let children: Vec<_> = children.into_iter().map(Option::unwrap).collect();
+            builders.append_vert_row(children);
             Some(None)
         }),
         prefn: Some(Box::new(|builder: &mut BuilderStack<R>, node| {

@@ -1,3 +1,8 @@
+version: 2.1
+
+orbs:
+  win: circleci/windows@2.2.0
+
 jobs:
   build-stable:
     docker:
@@ -7,7 +12,7 @@ jobs:
       - run: cargo --version
       - run: cargo build
       - run: cargo test
-  build-1.41:
+  build-1-41:
     docker:
       - image: cimg/rust:1.41
     steps:
@@ -15,10 +20,39 @@ jobs:
       - run: cargo --version
       - run: cargo build
       - run: cargo test
+  build-windows:
+    executor:
+      name: win/default
+      size: medium
+      shell: bash.exe
+    environment:
+      PATHk
+    steps:
+      - checkout
+      - run:
+          name: Install Rust
+          command: |
+            curl https://static.rust-lang.org/rustup/dist/x86_64-pc-windows-msvc/rustup-init.exe --output rustup-init.exe
+            ./rustup-init.exe -y
+      - run:
+          name: Update PATH and cargo config
+          command: |
+            echo "[net]" >> $USERPROFILE/.cargo/config
+            echo "git-fetch-with-cli = true" >> $USERPROFILE/.cargo/config
+            echo 'export PATH=$USERPROFILE/.cargo/bin:$PATH' >> $BASH_ENV
+      - run:
+          name: Build
+          command: |
+            cargo build
+      - run:
+          name: Tests
+          command: |
+            cargo test
 
 workflows:
   version: 2
   build:
     jobs:
       - "build-stable"
-      - "build-1.41"
+      - "build-1-41"
+      - "build-windows"
