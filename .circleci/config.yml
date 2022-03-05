@@ -15,6 +15,32 @@ jobs:
       - run: cargo --version
       - run: cargo build
       - run: cargo test
+  build-windows:
+    executor:
+      name: win/default
+      size: medium
+      shell: bash.exe
+    environment:
+      PATHk
+    steps:
+      - checkout
+      - run:
+        name: Install Rust
+        command: |
+          curl https://static.rust-lang.org/rustup/dist/x86_64-pc-windows-msvc/rustup-init.exe --output rustup-init.exe
+          ./rustup-init.exe -y
+      - run:
+        name: Update PATH
+        command: |
+          echo 'export PATH=$USERPROFILE/.cargo/bin:$PATH' >> $BASH_ENV
+      - run:
+        name: Build
+        command: |
+          cargo build
+      - run:
+        name: Tests
+        command: |
+          cargo test
 
 workflows:
   version: 2
@@ -22,3 +48,4 @@ workflows:
     jobs:
       - "build-stable"
       - "build-1.41"
+      - "build-windows"
