@@ -12,7 +12,7 @@ jobs:
       - run: cargo --version
       - run: cargo build
       - run: cargo test
-  build-1.41:
+  build-1-41:
     docker:
       - image: cimg/rust:1.41
     steps:
@@ -30,27 +30,27 @@ jobs:
     steps:
       - checkout
       - run:
-        name: Install Rust
-        command: |
-          curl https://static.rust-lang.org/rustup/dist/x86_64-pc-windows-msvc/rustup-init.exe --output rustup-init.exe
-          ./rustup-init.exe -y
+          name: Install Rust
+          command: |
+            curl https://static.rust-lang.org/rustup/dist/x86_64-pc-windows-msvc/rustup-init.exe --output rustup-init.exe
+            ./rustup-init.exe -y
       - run:
-        name: Update PATH
-        command: |
-          echo 'export PATH=$USERPROFILE/.cargo/bin:$PATH' >> $BASH_ENV
+          name: Update PATH
+          command: |
+            echo 'export PATH=$USERPROFILE/.cargo/bin:$PATH' >> $BASH_ENV
       - run:
-        name: Build
-        command: |
-          cargo build
+          name: Build
+          command: |
+            cargo build
       - run:
-        name: Tests
-        command: |
-          cargo test
+          name: Tests
+          command: |
+            cargo test
 
 workflows:
   version: 2
   build:
     jobs:
       - "build-stable"
-      - "build-1.41"
+      - "build-1-41"
       - "build-windows"
