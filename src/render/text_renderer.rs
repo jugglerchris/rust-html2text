@@ -545,6 +545,9 @@ pub enum BorderSegHoriz {
     JoinBelow,
     /// Joins both ways
     JoinCross,
+    /// Horizontal line, but separating two table cells from a row
+    /// which wouldn't fit next to each other.
+    StraightVert,
 }
 
 /// A dividing line between table rows which tracks intersections
@@ -560,6 +563,13 @@ impl BorderHoriz {
     pub fn new(width: usize) -> BorderHoriz {
         BorderHoriz {
             segments: vec![BorderSegHoriz::Straight; width],
+        }
+    }
+
+    /// Create a new blank border line.
+    pub fn new_type(width: usize, linetype: BorderSegHoriz) -> BorderHoriz {
+        BorderHoriz {
+            segments: vec![linetype; width],
         }
     }
 
@@ -579,6 +589,7 @@ impl BorderHoriz {
         self.segments[x] = match prev {
             Straight | JoinAbove => JoinAbove,
             JoinBelow | JoinCross => JoinCross,
+            StraightVert => StraightVert,
         }
     }
 
@@ -590,6 +601,7 @@ impl BorderHoriz {
         self.segments[x] = match prev {
             Straight | JoinBelow => JoinBelow,
             JoinAbove | JoinCross => JoinCross,
+            StraightVert => StraightVert,
         }
     }
 
@@ -598,7 +610,7 @@ impl BorderHoriz {
         use self::BorderSegHoriz::*;
         for (idx, seg) in other.segments.iter().enumerate() {
             match *seg {
-                Straight => (),
+                Straight | StraightVert => (),
                 JoinAbove | JoinBelow | JoinCross => {
                     self.join_below(idx + pos);
                 }
@@ -611,7 +623,7 @@ impl BorderHoriz {
         use self::BorderSegHoriz::*;
         for (idx, seg) in other.segments.iter().enumerate() {
             match *seg {
-                Straight => (),
+                Straight | StraightVert => (),
                 JoinAbove | JoinBelow | JoinCross => {
                     self.join_above(idx + pos);
                 }
@@ -626,7 +638,7 @@ impl BorderHoriz {
         self.segments
             .iter()
             .map(|seg| match *seg {
-                Straight | JoinBelow => ' ',
+                Straight | JoinBelow | StraightVert => ' ',
                 JoinAbove | JoinCross => '│',
             })
             .collect()
@@ -638,6 +650,7 @@ impl BorderHoriz {
             .into_iter()
             .map(|seg| match seg {
                 BorderSegHoriz::Straight => '─',
+                BorderSegHoriz::StraightVert => '/',
                 BorderSegHoriz::JoinAbove => '┴',
                 BorderSegHoriz::JoinBelow => '┬',
                 BorderSegHoriz::JoinCross => '┼',
@@ -849,6 +862,11 @@ impl<D: TextDecorator> TextRenderer<D> {
             }
         }
         self.lines
+    }
+
+    fn add_horizontal_line(&mut self, line: BorderHoriz) {
+        self.flush_wrapping();
+        self.lines.push_back(RenderLine::Line(line));
     }
 }
 
@@ -1188,6 +1206,31 @@ impl<D: TextDecorator> Renderer for TextRenderer<D> {
         }
         self.lines.push_back(RenderLine::Line(next_border));
     }
+
+    fn append_vert_row<I>(&mut self, cols: I)
+    where
+        I: IntoIterator<Item = Self>,
+    {
+        html_trace!("append_vert_row()");
+        html_trace!("self=\n{}", self.to_string());
+
+        self.flush_wrapping();
+
+        let width = self.width();
+
+        let mut first = true;
+        for col in cols {
+            if first {
+                first = false;
+            } else {
+                let border = BorderHoriz::new_type(width, BorderSegHoriz::StraightVert);
+                self.add_horizontal_line(border);
+            }
+            self.append_subrender(col, std::iter::repeat(""));
+        }
+        self.add_horizontal_border();
+    }
+
 
     fn empty(&self) -> bool {
         self.lines.is_empty() && if let Some(wrapping) = &self.wrapping {

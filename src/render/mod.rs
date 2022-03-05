@@ -63,6 +63,12 @@ pub trait Renderer {
         I: IntoIterator<Item = Self>,
         Self: Sized;
 
+    /// Append a set of sub renderers joined vertically with lines, for tables
+    /// which would otherwise be too wide for the screen.
+    fn append_vert_row<I>(&mut self, cols: I)
+    where
+        I: IntoIterator<Item = Self>;
+
     /// Returns true if this renderer has no content.
     fn empty(&self) -> bool;
 

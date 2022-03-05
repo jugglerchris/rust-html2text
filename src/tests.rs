@@ -774,7 +774,7 @@ fn test_deeply_nested() {
 #[test]
 fn test_deeply_nested_table() {
     use ::std::iter::repeat;
-    let rpt = 2000;
+    let rpt = 1000;
     let html = repeat("<table><tr><td>hi</td><td>")
         .take(rpt)
         .collect::<Vec<_>>()
@@ -786,17 +786,19 @@ fn test_deeply_nested_table() {
 
     let result = repeat(r#"──────────
 hi
+//////////
 "#)
         .take(rpt - 3)
         .collect::<Vec<_>>()
         .concat()
         + &r#"──┬────
 hi│hi  
+  │////
   │──  
   │hi  
   │──  
 ──┴────
-"#;
+"# + &repeat("──────────\n").take(rpt-3).collect::<String>();
     test_html(
         html.as_bytes(),
         &result,
@@ -1279,4 +1281,25 @@ fn test_issue_54_oob() {
  │blah    │ 
 ─┴────────┴
 "#, 10);
+}
+
+#[test]
+fn test_table_vertical_rows() {
+    test_html(
+        br##"
+<table>
+    <tr>
+        <td>wid</td>
+        <td>kin</td>
+        <td>der</td>
+    </tr>
+</table>
+"##, "─────
+wid
+/////
+kin
+/////
+der
+─────
+", 5);
 }

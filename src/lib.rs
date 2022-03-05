@@ -1491,9 +1491,7 @@ fn render_table_row_vert<T: Write, R: Renderer>(
         children: row.into_cells(true),
         cons: Box::new(|builders, children| {
             let children: Vec<_> = children.into_iter().map(Option::unwrap).collect();
-            for child in children {
-                builders.append_subrender(child, repeat(""));
-            }
+            builders.append_vert_row(children);
             Some(None)
         }),
         prefn: Some(Box::new(|builder: &mut BuilderStack<R>, node| {
