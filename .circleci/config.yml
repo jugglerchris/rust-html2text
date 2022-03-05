@@ -35,8 +35,10 @@ jobs:
             curl https://static.rust-lang.org/rustup/dist/x86_64-pc-windows-msvc/rustup-init.exe --output rustup-init.exe
             ./rustup-init.exe -y
       - run:
-          name: Update PATH
+          name: Update PATH and cargo config
           command: |
+            echo "[net]" >> $USERPROFILE/.cargo/config
+            echo "git-fetch-with-cli = true" >> $USERPROFILE/.cargo/config
             echo 'export PATH=$USERPROFILE/.cargo/bin:$PATH' >> $BASH_ENV
       - run:
           name: Build

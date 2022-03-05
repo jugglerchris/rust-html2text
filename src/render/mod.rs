@@ -67,7 +67,8 @@ pub trait Renderer {
     /// which would otherwise be too wide for the screen.
     fn append_vert_row<I>(&mut self, cols: I)
     where
-        I: IntoIterator<Item = Self>;
+        I: IntoIterator<Item = Self>,
+        Self: Sized;
 
     /// Returns true if this renderer has no content.
     fn empty(&self) -> bool;

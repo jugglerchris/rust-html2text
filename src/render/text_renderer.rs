@@ -1047,6 +1047,7 @@ impl<D: TextDecorator> Renderer for TextRenderer<D> {
     fn append_columns_with_borders<I>(&mut self, cols: I, collapse: bool)
     where
         I: IntoIterator<Item = Self>,
+        Self: Sized
     {
         use self::TaggedLineElement::Str;
         html_trace!("append_columns_with_borders(collapse={})", collapse);
@@ -1210,6 +1211,7 @@ impl<D: TextDecorator> Renderer for TextRenderer<D> {
     fn append_vert_row<I>(&mut self, cols: I)
     where
         I: IntoIterator<Item = Self>,
+        Self: Sized
     {
         html_trace!("append_vert_row()");
         html_trace!("self=\n{}", self.to_string());
