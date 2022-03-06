@@ -9,6 +9,10 @@ Possible log types:
 - `[fixed]` for any bug fixes.
 - `[security]` to invite users to upgrade in case of vulnerabilities.
 
+### 0.3.1
+
+- [changed] Update the build badges to reflect the updated CI configuration.
+
 ### 0.3.0
 
 - [added] New experimental `from_read_coloured()` (under `ansi_colours` feature).

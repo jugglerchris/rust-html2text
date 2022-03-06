@@ -1,6 +1,6 @@
 [package]
 name = "html2text"
-version = "0.3.0"
+version = "0.3.1"
 authors = ["Chris Emerson <github@mail.nosreme.org>"]
 description = "Render HTML as plain text."
 repository = "https://github.com/jugglerchris/rust-html2text/"
@@ -10,10 +10,6 @@ edition = "2018"
 
 keywords = ["html", "text"]
 license = "MIT"
-
-[badges]
-travis-ci = { repository = "jugglerchris/rust-html2text" }
-appveyor = { repository = "jugglerchris/rust-html2text", service = "github" }
 
 [dependencies]
 html5ever = "0.25.0"
