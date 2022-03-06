@@ -9,6 +9,22 @@ Possible log types:
 - `[fixed]` for any bug fixes.
 - `[security]` to invite users to upgrade in case of vulnerabilities.
 
+### 0.3.0
+
+- [added] New experimental `from_read_coloured()` (under `ansi_colours` feature).
+- [added] Add `into_tagged_strings` and `tagged_strings` methods to `TaggedLine`
+  (thanks Robin Krahl)
+- [added] Add `width` method to `TaggedString` (thanks Robin Krahl)
+- [changed] Keep annotations in `TextRenderer::into_lines` (thanks Robin Krahl)
+- [fixed] Add colon to reference style link (thanks zakaluka)
+- [added] Allow text decorators to customise block prefix strings (thanks SardineFish)
+- [fixed] Fixed some problems rendering some complicated tables, including a panic
+  and near-infinite loops.
+- [changed] Tables which are too wide to possibly render in the given width are now
+  arranged vertically instead (with `///`) lines.
+- [changed] A number of small table rendering improvements.
+- [changed] MSRV is now 1.41.
+
 ### 0.2.1
 
 - [added] New entry points - split HTML parsing from rendering the output,
