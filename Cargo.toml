@@ -12,7 +12,7 @@ keywords = ["html", "text"]
 license = "MIT"
 
 [dependencies]
-html5ever = "0.25.0"
+html5ever = "0.26.0"
 unicode-width = "0.1.5"
 backtrace = { version = "0.3", optional=true }
 markup5ever_rcdom = "0.1.0"
