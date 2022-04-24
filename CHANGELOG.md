@@ -9,11 +9,15 @@ Possible log types:
 - `[fixed]` for any bug fixes.
 - `[security]` to invite users to upgrade in case of vulnerabilities.
 
-### 0.4.1
+### 0.4.2
+
+- [changed] Moved the rcdom module directly into src/
+
+### 0.4.1 (unpublished)
 
 - [changed] rcdom now vendored as a module.
 
-### 0.4.0
+### 0.4.0 (unpublished)
 
 - [changed] Update html5ever to v0.26.
 - [changed] MSRV is now 1.49.
