@@ -15,7 +15,7 @@ license = "MIT"
 html5ever = "0.26.0"
 unicode-width = "0.1.5"
 backtrace = { version = "0.3", optional=true }
-markup5ever_rcdom = "0.1.0"
+markup5ever_rcdom = { path = "html5ever_rcdom" }
 
 [features]
 html_trace = []
