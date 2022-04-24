@@ -9,6 +9,11 @@ Possible log types:
 - `[fixed]` for any bug fixes.
 - `[security]` to invite users to upgrade in case of vulnerabilities.
 
+### 0.4.0
+
+- [changed] Update html5ever to v0.26.
+- [changed] MSRV is now 1.49.
+
 ### 0.3.1
 
 - [changed] Update the build badges to reflect the updated CI configuration.
