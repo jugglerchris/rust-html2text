@@ -14,9 +14,11 @@ license = "MIT"
 
 [dependencies]
 html5ever = "0.26.0"
+markup5ever = "0.11.0"
+tendril = "0.4"
+xml5ever = "0.17"
 unicode-width = "0.1.5"
 backtrace = { version = "0.3", optional=true }
-markup5ever_rcdom = { path = "html5ever_rcdom" }
 
 [features]
 html_trace = []

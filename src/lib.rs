@@ -70,8 +70,10 @@ use html5ever::driver::ParseOpts;
 use html5ever::parse_document;
 use html5ever::tendril::TendrilSink;
 use html5ever::tree_builder::TreeBuilderOpts;
+#[path = "../html5ever_rcdom/lib.rs"]
+mod markup5ever_rcdom;
 use markup5ever_rcdom::{
-    self, Handle,
+    Handle,
     NodeData::{Comment, Document, Element},
     RcDom,
 };
