@@ -9,6 +9,10 @@ Possible log types:
 - `[fixed]` for any bug fixes.
 - `[security]` to invite users to upgrade in case of vulnerabilities.
 
+### 0.4.1
+
+- [changed] rcdom now vendored as a module.
+
 ### 0.4.0
 
 - [changed] Update html5ever to v0.26.
