@@ -9,6 +9,11 @@ Possible log types:
 - `[fixed]` for any bug fixes.
 - `[security]` to invite users to upgrade in case of vulnerabilities.
 
+### 0.4.3
+
+- [changed] MSRV is now 1.56.
+- [fixed] Fix some panics when very large widths are used with tables.
+
 ### 0.4.2
 
 - [changed] Moved the rcdom module directly into src/
