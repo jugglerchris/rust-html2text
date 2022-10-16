@@ -1405,7 +1405,13 @@ fn render_table_tree<T: Write, R: Renderer>(
                     0
                 } else {
                     min(sz.size,
-                        max(sz.size * width / tot_size, sz.min_width))
+                        if usize::MAX/width <= sz.size {
+                            // The provided width is too large to multiply by width,
+                            // so do it the other way around.
+                            max((width / tot_size) * sz.size, sz.min_width)
+                        } else {
+                            max(sz.size * width / tot_size, sz.min_width)
+                        })
                 }
             })
             .collect()

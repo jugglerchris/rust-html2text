@@ -1303,3 +1303,11 @@ der
 ─────
 ", 5);
 }
+
+#[test]
+fn test_max_width() {
+    let html = r#"<table><td><p>3,266</p>"#;
+    let decorator = crate::render::text_renderer::PlainDecorator::new();
+    let text = from_read_with_decorator(html.as_bytes(), usize::MAX, decorator.clone());
+    println!("{}", text);
+}
