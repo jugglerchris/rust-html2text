@@ -1172,7 +1172,7 @@ impl<D: TextDecorator> Renderer for TextRenderer<D> {
             .map(|&(_, ref v)| v.len())
             .max()
             .unwrap_or(0);
-        let spaces: String = (0..self.width).map(|_| ' ').collect();
+        let spaces: String = (0..tot_width).map(|_| ' ').collect();
         let last_cellno = line_sets.len() - 1;
         for i in 0..cell_height {
             let mut line = TaggedLine::new();
