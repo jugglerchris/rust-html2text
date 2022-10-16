@@ -7,7 +7,7 @@ repository = "https://github.com/jugglerchris/rust-html2text/"
 readme = "README.md"
 documentation = "https://docs.rs/html2text/"
 edition = "2018"
-rust-version = "1.49"
+rust-version = "1.56"
 
 keywords = ["html", "text"]
 license = "MIT"

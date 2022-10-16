@@ -12,9 +12,9 @@ jobs:
       - run: cargo --version
       - run: cargo build
       - run: cargo test
-  build-1-49:
+  build-1-56:
     docker:
-      - image: cimg/rust:1.49
+      - image: cimg/rust:1.56
     steps:
       - checkout
       - run: cargo --version
@@ -54,5 +54,5 @@ workflows:
   build:
     jobs:
       - "build-stable"
-      - "build-1-49"
+      - "build-1-56"
       - "build-windows"
