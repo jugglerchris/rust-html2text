@@ -38,4 +38,4 @@ path = "examples/html2text.rs"
 argparse = "0.2.2"
 
 [target.'cfg(unix)'.dev-dependencies]
-termion = "1.5"
+termion = "2.0"
