@@ -784,13 +784,15 @@ fn test_deeply_nested_table() {
             .collect::<Vec<_>>()
             .concat();
 
-    let result = repeat(r#"──────────
+    let result = repeat(
+        r#"──────────
 hi
 //////////
-"#)
-        .take(rpt - 3)
-        .collect::<Vec<_>>()
-        .concat()
+"#,
+    )
+    .take(rpt - 3)
+    .collect::<Vec<_>>()
+    .concat()
         + &r#"──┬────
 hi│hi  
   │////
@@ -798,12 +800,8 @@ hi│hi
   │hi  
   │──  
 ──┴────
-"# + &repeat("──────────\n").take(rpt-3).collect::<String>();
-    test_html(
-        html.as_bytes(),
-        &result,
-        10,
-    );
+"# + &repeat("──────────\n").take(rpt - 3).collect::<String>();
+    test_html(html.as_bytes(), &result, 10);
 }
 
 #[test]
@@ -1086,6 +1084,7 @@ fn test_pre_rich() {
 fn test_finalise() {
     use crate::render::text_renderer::{TaggedLine, TextDecorator};
 
+    #[derive(Clone, Debug)]
     struct TestDecorator;
 
     impl TextDecorator for TestDecorator {
@@ -1275,12 +1274,15 @@ fn test_issue_54_oob() {
         </tr>
     </table>
 </body>
-"##, r#"─┬────────┬
+"##,
+        r#"─┬────────┬
  │Blah    │ 
  │blah    │ 
  │blah    │ 
 ─┴────────┴
-"#, 10);
+"#,
+        10,
+    );
 }
 
 #[test]
@@ -1294,14 +1296,17 @@ fn test_table_vertical_rows() {
         <td>der</td>
     </tr>
 </table>
-"##, "─────
+"##,
+        "─────
 wid
 /////
 kin
 /////
 der
 ─────
-", 5);
+",
+        5,
+    );
 }
 
 #[test]
