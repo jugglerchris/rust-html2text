@@ -4,15 +4,15 @@
 //! into different text formats.
 
 use super::Renderer;
-use std::{fmt::Debug, collections::LinkedList};
 use std::mem;
 use std::ops::Deref;
 use std::vec;
+use std::{collections::LinkedList, fmt::Debug};
 use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
 
 /// A wrapper around a String with extra metadata.
-#[derive(Debug, PartialEq)]
-pub struct TaggedString<T: Debug + PartialEq> {
+#[derive(Debug, Clone, PartialEq)]
+pub struct TaggedString<T> {
     /// The wrapped text.
     pub s: String,
 
@@ -33,8 +33,8 @@ impl<T: Debug + PartialEq> TaggedString<T> {
 
 /// An element of a line of tagged text: either a TaggedString or a
 /// marker appearing in between document characters.
-#[derive(Debug, PartialEq)]
-pub enum TaggedLineElement<T: Debug + Eq + PartialEq + Clone> {
+#[derive(Clone, Debug, PartialEq)]
+pub enum TaggedLineElement<T> {
     /// A string with tag information attached.
     Str(TaggedString<T>),
 
@@ -43,8 +43,8 @@ pub enum TaggedLineElement<T: Debug + Eq + PartialEq + Clone> {
 }
 
 /// A line of tagged text (composed of a set of `TaggedString`s).
-#[derive(Debug, PartialEq)]
-pub struct TaggedLine<T: Debug + Eq + PartialEq + Clone> {
+#[derive(Debug, Clone, PartialEq)]
+pub struct TaggedLine<T> {
     v: Vec<TaggedLineElement<T>>,
 }
 
@@ -209,8 +209,8 @@ impl<T: Debug + Eq + PartialEq + Clone + Default> TaggedLine<T> {
 
 /// A type to build up wrapped text, allowing extra metadata for
 /// spans.
-#[derive(Debug)]
-struct WrappedBlock<T: Clone + Eq + Debug + Default> {
+#[derive(Debug, Clone)]
+struct WrappedBlock<T> {
     width: usize,
     text: Vec<TaggedLine<T>>,
     textlen: usize,
@@ -584,7 +584,7 @@ impl BorderHoriz {
     /// Make a join to a line above at the xth cell
     pub fn join_above(&mut self, x: usize) {
         use self::BorderSegHoriz::*;
-        self.stretch_to(x+1);
+        self.stretch_to(x + 1);
         let prev = self.segments[x];
         self.segments[x] = match prev {
             Straight | JoinAbove => JoinAbove,
@@ -596,7 +596,7 @@ impl BorderHoriz {
     /// Make a join to a line below at the xth cell
     pub fn join_below(&mut self, x: usize) {
         use self::BorderSegHoriz::*;
-        self.stretch_to(x+1);
+        self.stretch_to(x + 1);
         let prev = self.segments[x];
         self.segments[x] = match prev {
             Straight | JoinBelow => JoinBelow,
@@ -665,7 +665,7 @@ impl BorderHoriz {
 }
 
 /// A line, which can either be text or a line.
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub enum RenderLine<T: PartialEq + Eq + Clone + Debug + Default> {
     /// Some rendered text
     Text(TaggedLine<T>),
@@ -712,6 +712,7 @@ impl<T: PartialEq + Eq + Clone + Debug + Default> RenderLine<T> {
 
 /// A renderer which just outputs plain text with
 /// annotations depending on a decorator.
+#[derive(Clone)]
 pub struct TextRenderer<D: TextDecorator> {
     width: usize,
     lines: LinkedList<RenderLine<Vec<D::Annotation>>>,
@@ -724,6 +725,18 @@ pub struct TextRenderer<D: TextDecorator> {
     text_filter_stack: Vec<fn(&str) -> Option<String>>,
     /// The depth of <pre> block stacking.
     pre_depth: usize,
+}
+
+impl<D: TextDecorator + Debug> std::fmt::Debug for TextRenderer<D> {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        f.debug_struct("TextRenderer")
+            .field("width", &self.width)
+            .field("lines", &self.lines)
+            .field("decorator", &self.decorator)
+            .field("ann_stack", &self.ann_stack)
+            .field("pre_depth", &self.pre_depth)
+            .finish()
+    }
 }
 
 impl<D: TextDecorator> TextRenderer<D> {
@@ -808,7 +821,6 @@ impl<D: TextDecorator> TextRenderer<D> {
         }
         result
     }
-    
 
     /// Returns a `Vec` of `TaggedLine`s with therendered text.
     pub fn into_lines(mut self) -> LinkedList<RenderLine<Vec<D::Annotation>>> {
@@ -1047,7 +1059,7 @@ impl<D: TextDecorator> Renderer for TextRenderer<D> {
     fn append_columns_with_borders<I>(&mut self, cols: I, collapse: bool)
     where
         I: IntoIterator<Item = Self>,
-        Self: Sized
+        Self: Sized,
     {
         use self::TaggedLineElement::Str;
         html_trace!("append_columns_with_borders(collapse={})", collapse);
@@ -1133,8 +1145,12 @@ impl<D: TextDecorator> Renderer for TextRenderer<D> {
                         self.lines.back_mut().expect("No previous line")
                     {
                         if let RenderLine::Line(line) = sublines.remove(0) {
-                            html_trace!("prev border:\n{}\n, pos={}, line:\n{}",
-                                        prev_border.to_string(), pos, line.to_string());
+                            html_trace!(
+                                "prev border:\n{}\n, pos={}, line:\n{}",
+                                prev_border.to_string(),
+                                pos,
+                                line.to_string()
+                            );
                             prev_border.merge_from_below(&line, pos);
                         }
                     } else {
@@ -1211,7 +1227,7 @@ impl<D: TextDecorator> Renderer for TextRenderer<D> {
     fn append_vert_row<I>(&mut self, cols: I)
     where
         I: IntoIterator<Item = Self>,
-        Self: Sized
+        Self: Sized,
     {
         html_trace!("append_vert_row()");
         html_trace!("self=\n{}", self.to_string());
@@ -1233,13 +1249,13 @@ impl<D: TextDecorator> Renderer for TextRenderer<D> {
         self.add_horizontal_border();
     }
 
-
     fn empty(&self) -> bool {
-        self.lines.is_empty() && if let Some(wrapping) = &self.wrapping {
-            wrapping.is_empty()
-        } else {
-            true
-        }
+        self.lines.is_empty()
+            && if let Some(wrapping) = &self.wrapping {
+                wrapping.is_empty()
+            } else {
+                true
+            }
     }
 
     fn text_len(&self) -> usize {
@@ -1379,7 +1395,7 @@ impl<D: TextDecorator> Renderer for TextRenderer<D> {
 
 /// A decorator for use with `TextRenderer` which outputs plain UTF-8 text
 /// with no annotations.  Markup is rendered as text characters or footnotes.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct PlainDecorator {
     links: Vec<String>,
 }
@@ -1478,7 +1494,7 @@ impl TextDecorator for PlainDecorator {
 
 /// A decorator for use with `TextRenderer` which outputs plain UTF-8 text
 /// with no annotations or markup, emitting only the literal text.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct TrivialDecorator {}
 
 impl TrivialDecorator {
@@ -1571,7 +1587,7 @@ impl TextDecorator for TrivialDecorator {
 
 /// A decorator to generate rich text (styled) rather than
 /// pure text output.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct RichDecorator {}
 
 /// Annotation type for "rich" text.  Text is associated with a set of

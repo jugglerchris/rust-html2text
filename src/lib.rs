@@ -77,7 +77,7 @@ use markup5ever_rcdom::{
     RcDom,
 };
 use std::cell::Cell;
-use std::cmp::{min,max};
+use std::cmp::{max, min};
 use std::io;
 use std::io::Write;
 use std::iter::{once, repeat};
@@ -285,9 +285,8 @@ impl RenderTable {
         }
         let size = sizes.iter().map(|s| s.size).sum(); // Include borders?
         let min_width = sizes.iter().map(|s| s.min_width).sum::<usize>() + self.num_columns - 1;
-        self.size_estimate.set(Some(SizeEstimate {
-            size, min_width,
-        }));
+        self.size_estimate
+            .set(Some(SizeEstimate { size, min_width }));
     }
 
     /// Calculate and store (or return stored value) of estimated size
@@ -370,7 +369,7 @@ impl RenderNode {
         }
     }
 
-    /// Get a size estimate (~characters)
+    /// Get a size estimate
     pub fn get_size_estimate(&self) -> SizeEstimate {
         // If it's already calculated, then just return the answer.
         if let Some(s) = self.size_estimate.get() {
@@ -382,7 +381,8 @@ impl RenderNode {
         // Otherwise, make an estimate.
         let estimate = match self.info {
             Text(ref t) | Img(ref t) => {
-                let mut len = t.trim().len();
+                use unicode_width::UnicodeWidthStr;
+                let mut len = t.trim().width();
                 // Add one for preceding whitespace.
                 if let Some(true) = t.chars().next().map(|c| c.is_whitespace()) {
                     len += 1;
@@ -405,12 +405,26 @@ impl RenderNode {
             | BlockQuote(ref v)
             | Dl(ref v)
             | Dt(ref v)
-            | Dd(ref v)
-            | Ul(ref v)
-            | Ol(_, ref v) => v
+            | Dd(ref v) => v
                 .iter()
                 .map(RenderNode::get_size_estimate)
                 .fold(Default::default(), SizeEstimate::add),
+            Ul(ref v) => v
+                .iter()
+                .map(RenderNode::get_size_estimate)
+                .fold(Default::default(), SizeEstimate::add)
+                .add(SizeEstimate {
+                    size: 2,
+                    min_width: 2,
+                }),
+            Ol(i, ref v) => v
+                .iter()
+                .map(RenderNode::get_size_estimate)
+                .fold(Default::default(), SizeEstimate::add)
+                .add(SizeEstimate {
+                    size: i.to_string().len() + 2,
+                    min_width: i.to_string().len() + 2,
+                }),
             Header(level, ref v) => v
                 .iter()
                 .map(RenderNode::get_size_estimate)
@@ -646,10 +660,13 @@ fn tr_to_render_tree<'a, 'b, T: Write>(
                 }
             })
             .collect();
-        Some(RenderNode::new(RenderNodeInfo::TableRow(RenderTableRow {
-            cells,
-            col_sizes: None,
-        }, false)))
+        Some(RenderNode::new(RenderNodeInfo::TableRow(
+            RenderTableRow {
+                cells,
+                col_sizes: None,
+            },
+            false,
+        )))
     })
 }
 
@@ -930,9 +947,7 @@ fn process_dom_node<'a, 'b, T: Write>(
                             // it on use.
                             let href: String = href.into();
                             Box::new(move |_, cs: Vec<RenderNode>| {
-                                if cs
-                                    .iter()
-                                    .any(|c| !c.is_shallow_empty()) {
+                                if cs.iter().any(|c| !c.is_shallow_empty()) {
                                     Some(RenderNode::new(Link(href.clone(), cs)))
                                 } else {
                                     None
@@ -1082,6 +1097,7 @@ fn process_dom_node<'a, 'b, T: Write>(
 /// Context to use during tree parsing.
 /// This mainly gives access to a Renderer, but needs to be able to push
 /// new ones on for nested structures.
+#[derive(Clone, Debug)]
 struct BuilderStack<R: Renderer> {
     builders: Vec<R>,
 }
@@ -1132,7 +1148,6 @@ fn render_tree_to_string<T: Write, R: Renderer>(
 ) -> R {
     /* Phase 1: get size estimates. */
     tree_map_reduce(&mut (), &tree, |_, node| precalc_size_estimate(&node));
-
     /* Phase 2: actually render. */
     let mut bs = BuilderStack::new(builder);
     tree_map_reduce(&mut bs, tree, |builders, node| {
@@ -1391,8 +1406,8 @@ fn render_table_tree<T: Write, R: Renderer>(
     }
     // TODO: remove empty columns
     let tot_size: usize = col_sizes.iter().map(|est| est.size).sum();
-    let min_size: usize = col_sizes.iter().map(|est| est.min_width).sum::<usize>() +
-                          col_sizes.len().saturating_sub(1);
+    let min_size: usize = col_sizes.iter().map(|est| est.min_width).sum::<usize>()
+        + col_sizes.len().saturating_sub(1);
     let width = builder.width();
 
     let vert_row = min_size > width;
@@ -1404,22 +1419,21 @@ fn render_table_tree<T: Write, R: Renderer>(
                 if sz.size == 0 {
                     0
                 } else {
-                    min(sz.size,
-                        if usize::MAX/width <= sz.size {
+                    min(
+                        sz.size,
+                        if usize::MAX / width <= sz.size {
                             // The provided width is too large to multiply by width,
                             // so do it the other way around.
                             max((width / tot_size) * sz.size, sz.min_width)
                         } else {
                             max(sz.size * width / tot_size, sz.min_width)
-                        })
+                        },
+                    )
                 }
             })
             .collect()
     } else {
-        col_sizes
-            .iter()
-            .map(|_| width)
-            .collect()
+        col_sizes.iter().map(|_| width).collect()
     };
 
     if !vert_row {
@@ -1449,8 +1463,12 @@ fn render_table_tree<T: Write, R: Renderer>(
     let table_width = if vert_row {
         width
     } else {
-        col_widths.iter().cloned().sum::<usize>() +
-        col_widths.iter().filter(|&w| w > &0).count().saturating_sub(1)
+        col_widths.iter().cloned().sum::<usize>()
+            + col_widths
+                .iter()
+                .filter(|&w| w > &0)
+                .count()
+                .saturating_sub(1)
     };
 
     builder.add_horizontal_border_width(table_width);
@@ -1533,7 +1551,11 @@ pub struct RenderTree(RenderNode);
 
 impl RenderTree {
     /// Render this document using the given `decorator` and wrap it to `width` columns.
-    pub fn render<D: TextDecorator>(self, width: usize, decorator: D) -> RenderedText<D> {
+    pub fn render<D: TextDecorator>(
+        self,
+        width: usize,
+        decorator: D,
+    ) -> RenderedText<D> {
         let builder = TextRenderer::new(width, decorator);
         let builder = render_tree_to_string(builder, self.0, &mut Discard {});
         RenderedText(builder)
@@ -1595,7 +1617,11 @@ pub fn parse(mut input: impl io::Read) -> RenderTree {
 
 /// Reads HTML from `input`, decorates it using `decorator`, and
 /// returns a `String` with text wrapped to `width` columns.
-pub fn from_read_with_decorator<R, D>(input: R, width: usize, decorator: D) -> String
+pub fn from_read_with_decorator<R, D>(
+    input: R,
+    width: usize,
+    decorator: D,
+) -> String
 where
     R: io::Read,
     D: TextDecorator,

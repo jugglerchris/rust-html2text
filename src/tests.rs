@@ -784,13 +784,15 @@ fn test_deeply_nested_table() {
             .collect::<Vec<_>>()
             .concat();
 
-    let result = repeat(r#"──────────
+    let result = repeat(
+        r#"──────────
 hi
 //////////
-"#)
-        .take(rpt - 3)
-        .collect::<Vec<_>>()
-        .concat()
+"#,
+    )
+    .take(rpt - 3)
+    .collect::<Vec<_>>()
+    .concat()
         + &r#"──┬────
 hi│hi  
   │////
@@ -798,12 +800,8 @@ hi│hi
   │hi  
   │──  
 ──┴────
-"# + &repeat("──────────\n").take(rpt-3).collect::<String>();
-    test_html(
-        html.as_bytes(),
-        &result,
-        10,
-    );
+"# + &repeat("──────────\n").take(rpt - 3).collect::<String>();
+    test_html(html.as_bytes(), &result, 10);
 }
 
 #[test]
@@ -1086,6 +1084,7 @@ fn test_pre_rich() {
 fn test_finalise() {
     use crate::render::text_renderer::{TaggedLine, TextDecorator};
 
+    #[derive(Clone, Debug)]
     struct TestDecorator;
 
     impl TextDecorator for TestDecorator {
@@ -1275,12 +1274,15 @@ fn test_issue_54_oob() {
         </tr>
     </table>
 </body>
-"##, r#"─┬────────┬
+"##,
+        r#"─┬────────┬
  │Blah    │ 
  │blah    │ 
  │blah    │ 
 ─┴────────┴
-"#, 10);
+"#,
+        10,
+    );
 }
 
 #[test]
@@ -1294,14 +1296,70 @@ fn test_table_vertical_rows() {
         <td>der</td>
     </tr>
 </table>
-"##, "─────
+"##,
+        "─────
 wid
 /////
 kin
 /////
 der
 ─────
-", 5);
+",
+        5,
+    );
+}
+
+#[test]
+fn test_unicode() {
+    test_html(
+        "<table>
+      <td>နတမစ</td>
+      <td>နတမစ</td>
+      <td>aaa</td>
+</table>"
+            .as_bytes(),
+        "────┬────┬───
+နတမစ│နတမစ│aaa
+────┴────┴───
+",
+        15,
+    );
+}
+
+#[test]
+fn test_list_in_table() {
+    test_html(
+        b"<table>
+<td><ol>
+<li>0</li>
+<li>1</li>
+<li>2</li>
+<li>3</li>
+<li>4</li>
+<li>5</li>
+<li>6</li>
+<li>7</li>
+<li>8</li>
+<li>9</li>
+<li>10</li>
+</ol></td>
+</table>",
+        "──────
+1.  0 
+2.  1 
+3.  2 
+4.  3 
+5.  4 
+6.  5 
+7.  6 
+8.  7 
+9.  8 
+10. 9 
+11. 10
+──────
+",
+        6,
+    );
 }
 
 #[test]
