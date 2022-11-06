@@ -224,7 +224,6 @@ struct WrappedBlock<T> {
 
 impl<T: Clone + Eq + Debug + Default> WrappedBlock<T> {
     pub fn new(width: usize) -> WrappedBlock<T> {
-        assert!(width > 0);
         WrappedBlock {
             width,
             text: Vec::new(),
@@ -906,7 +905,6 @@ impl<D: TextDecorator> Renderer for TextRenderer<D> {
     }
 
     fn new_sub_renderer(&self, width: usize) -> Self {
-        assert!(width > 0);
         TextRenderer::new(
             width,
             self.decorator.as_ref().unwrap().make_subblock_decorator(),
