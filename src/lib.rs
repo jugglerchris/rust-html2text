@@ -394,7 +394,6 @@ impl RenderNode {
             }
 
             Container(ref v)
-            | Link(_, ref v)
             | Em(ref v)
             | Strong(ref v)
             | Strikeout(ref v)
@@ -409,6 +408,14 @@ impl RenderNode {
                 .iter()
                 .map(RenderNode::get_size_estimate)
                 .fold(Default::default(), SizeEstimate::add),
+            Link(ref target, ref v) => v
+                .iter()
+                .map(RenderNode::get_size_estimate)
+                .fold(Default::default(), SizeEstimate::add)
+                .add(SizeEstimate {
+                   size: target.len() + 4,
+                   min_width: 4,
+                }),
             Ul(ref v) => v
                 .iter()
                 .map(RenderNode::get_size_estimate)
