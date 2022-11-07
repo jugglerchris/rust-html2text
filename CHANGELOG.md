@@ -9,6 +9,11 @@ Possible log types:
 - `[fixed]` for any bug fixes.
 - `[security]` to invite users to upgrade in case of vulnerabilities.
 
+### 0.4.4
+
+- [fixed] Fix some panics when enumerated lists are in tables (thanks sfts).
+- [fixed] Impove table size estimation to include links.
+
 ### 0.4.3
 
 - [changed] MSRV is now 1.56.
