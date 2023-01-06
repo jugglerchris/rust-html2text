@@ -329,11 +329,15 @@ impl<T: Clone + Eq + Debug + Default> WrappedBlock<T> {
 
     fn flush_line(&mut self) {
         if !self.line.is_empty() {
-            let mut tmp_line = TaggedLine::new();
-            mem::swap(&mut tmp_line, &mut self.line);
-            self.text.push(tmp_line);
-            self.linelen = 0;
+            self.force_flush_line();
         }
+    }
+
+    fn force_flush_line(&mut self) {
+        let mut tmp_line = TaggedLine::new();
+        mem::swap(&mut tmp_line, &mut self.line);
+        self.text.push(tmp_line);
+        self.linelen = 0;
     }
 
     fn flush(&mut self) {
@@ -410,7 +414,7 @@ impl<T: Clone + Eq + Debug + Default> WrappedBlock<T> {
             } else {
                 match c {
                     '\n' => {
-                        self.flush_line();
+                        self.force_flush_line();
                         self.pre_wrapped = false;
                     }
                     '\t' => {

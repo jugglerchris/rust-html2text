@@ -1369,3 +1369,16 @@ fn test_max_width() {
     let text = from_read_with_decorator(html.as_bytes(), usize::MAX, decorator.clone());
     println!("{}", text);
 }
+
+#[test]
+fn test_preserving_empty_newlines_in_pre_blocks() {
+    let html = r#"<pre>
+Test.
+
+
+End.
+</pre>"#;
+    let decorator = crate::render::text_renderer::TrivialDecorator::new();
+    let text = from_read_with_decorator(html.as_bytes(), usize::MAX, decorator.clone());
+    assert_eq!(text, "Test.\n\n\nEnd.\n");
+} 
