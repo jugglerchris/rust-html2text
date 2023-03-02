@@ -514,7 +514,7 @@ pub trait TextDecorator {
     fn decorate_preformat_cont(&mut self) -> Self::Annotation;
 
     /// Return an annotation and rendering prefix for a link.
-    fn decorate_image(&mut self, title: &str) -> (String, Self::Annotation);
+    fn decorate_image(&mut self, src: &str, title: &str) -> (String, Self::Annotation);
 
     /// Return prefix string of header in specific level.
     fn header_prefix(&mut self, level: usize) -> String;
@@ -1344,8 +1344,8 @@ impl<D: TextDecorator> Renderer for TextRenderer<D> {
             self.ann_stack.pop();
         }
     }
-    fn add_image(&mut self, title: &str) {
-        if let Some((s, tag)) = self.decorator.as_mut().map(|d| d.decorate_image(title)) {
+    fn add_image(&mut self, src: &str, title: &str) {
+        if let Some((s, tag)) = self.decorator.as_mut().map(|d| d.decorate_image(src, title)) {
             self.ann_stack.push(tag);
             self.add_inline_text(&s);
             self.ann_stack.pop();
@@ -1461,7 +1461,7 @@ impl TextDecorator for PlainDecorator {
         ()
     }
 
-    fn decorate_image(&mut self, title: &str) -> (String, Self::Annotation) {
+    fn decorate_image(&mut self, _src: &str, title: &str) -> (String, Self::Annotation) {
         (format!("[{}]", title), ())
     }
 
@@ -1557,7 +1557,7 @@ impl TextDecorator for TrivialDecorator {
         ()
     }
 
-    fn decorate_image(&mut self, title: &str) -> (String, Self::Annotation) {
+    fn decorate_image(&mut self, _src: &str, title: &str) -> (String, Self::Annotation) {
         // FIXME: this should surely be the alt text, not the title text
         (title.to_string(), ())
     }
@@ -1600,8 +1600,8 @@ pub enum RichAnnotation {
     Default,
     /// A link with the target.
     Link(String),
-    /// An image (attached to the title text)
-    Image,
+    /// An image with its src (this tag is attached to the title text)
+    Image(String),
     /// Emphasised text, which might be rendered in bold or another colour.
     Emphasis,
     /// Strong text, which might be rendered in bold or another colour.
@@ -1679,8 +1679,8 @@ impl TextDecorator for RichDecorator {
         RichAnnotation::Preformat(true)
     }
 
-    fn decorate_image(&mut self, title: &str) -> (String, Self::Annotation) {
-        (title.to_string(), RichAnnotation::Image)
+    fn decorate_image(&mut self, src: &str, title: &str) -> (String, Self::Annotation) {
+        (title.to_string(), RichAnnotation::Image(src.to_string()))
     }
 
     fn header_prefix(&mut self, level: usize) -> String {

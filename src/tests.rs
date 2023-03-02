@@ -1138,7 +1138,7 @@ fn test_finalise() {
             Default::default()
         }
 
-        fn decorate_image(&mut self, _title: &str) -> (String, Self::Annotation) {
+        fn decorate_image(&mut self, _src: &str, _title: &str) -> (String, Self::Annotation) {
             Default::default()
         }
 
