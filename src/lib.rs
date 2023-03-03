@@ -315,7 +315,7 @@ pub enum RenderNodeInfo {
     Strikeout(Vec<RenderNode>),
     /// A code region
     Code(Vec<RenderNode>),
-    /// An image (title)
+    /// An image (src, title)
     Img(String, String),
     /// A block element with children
     Block(Vec<RenderNode>),
