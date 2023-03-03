@@ -992,12 +992,11 @@ fn process_dom_node<'a, 'b, T: Write>(
                             break;
                         }
                     }
-                    return match (title, src) {
-                        (Some(title), Some(src)) => {
-                                Finished(RenderNode::new(Img(src.into(), title.into())))
-                        }
-                        _ => Nothing
-                    };
+                    if let (Some(title), Some(src)) = (title, src) {
+                        Finished(RenderNode::new(Img(src.into(), title.into())))
+                    } else {
+                        Nothing
+                    }
                 }
                 expanded_name!(html "h1")
                 | expanded_name!(html "h2")
