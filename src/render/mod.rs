@@ -109,7 +109,7 @@ pub trait Renderer {
     fn end_code(&mut self);
 
     /// Add an image
-    fn add_image(&mut self, title: &str);
+    fn add_image(&mut self, src: &str, title: &str);
 
     /// Get prefix string of header in specific level.
     fn header_prefix(&mut self, level: usize) -> String;

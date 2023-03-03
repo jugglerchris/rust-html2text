@@ -315,8 +315,8 @@ pub enum RenderNodeInfo {
     Strikeout(Vec<RenderNode>),
     /// A code region
     Code(Vec<RenderNode>),
-    /// An image (title)
-    Img(String),
+    /// An image (src, title)
+    Img(String, String),
     /// A block element with children
     Block(Vec<RenderNode>),
     /// A header (h1, h2, ...) with children
@@ -380,7 +380,7 @@ impl RenderNode {
 
         // Otherwise, make an estimate.
         let estimate = match self.info {
-            Text(ref t) | Img(ref t) => {
+            Text(ref t) | Img(_, ref t) => {
                 use unicode_width::UnicodeWidthStr;
                 let mut len = t.trim().width();
                 // Add one for preceding whitespace.
@@ -460,7 +460,7 @@ impl RenderNode {
 
         // Otherwise, make an estimate.
         match self.info {
-            Text(ref t) | Img(ref t) => {
+            Text(ref t) | Img(_, ref t) => {
                 let len = t.trim().len();
                 len == 0
             }
@@ -495,7 +495,7 @@ fn precalc_size_estimate<'a>(node: &'a RenderNode) -> TreeMapResult<(), &'a Rend
         return TreeMapResult::Nothing;
     }
     match node.info {
-        Text(_) | Img(_) | Break | FragStart(_) => {
+        Text(_) | Img(_, _) | Break | FragStart(_) => {
             let _ = node.get_size_estimate();
             TreeMapResult::Nothing
         }
@@ -980,14 +980,20 @@ fn process_dom_node<'a, 'b, T: Write>(
                 expanded_name!(html "img") => {
                     let borrowed = attrs.borrow();
                     let mut title = None;
+                    let mut src = None;
                     for attr in borrowed.iter() {
                         if &attr.name.local == "alt" && !attr.value.is_empty() {
                             title = Some(&*attr.value);
+                        }
+                        if &attr.name.local == "src" && !attr.value.is_empty() {
+                            src = Some(&*attr.value);
+                        }
+                        if title.is_some() && src.is_some() {
                             break;
                         }
                     }
-                    if let Some(title) = title {
-                        Finished(RenderNode::new(Img(title.into())))
+                    if let (Some(title), Some(src)) = (title, src) {
+                        Finished(RenderNode::new(Img(src.into(), title.into())))
                     } else {
                         Nothing
                     }
@@ -1228,8 +1234,8 @@ fn do_render_node<'a, 'b, T: Write, R: Renderer>(
                 Some(None)
             })
         }
-        Img(title) => {
-            builder.add_image(&title);
+        Img(src, title) => {
+            builder.add_image(&src, &title);
             Finished(None)
         }
         Block(children) => {
