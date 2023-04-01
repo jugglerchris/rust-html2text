@@ -1450,24 +1450,27 @@ fn render_table_tree<T: Write, R: Renderer>(
     };
 
     if !vert_row {
-        loop {
-            let cur_width = col_widths.iter().cloned().sum::<usize>();
-            if cur_width <= width {
-                break;
+        let num_cols = col_widths.len();
+        if num_cols > 0 {
+            loop {
+                let cur_width = col_widths.iter().cloned().sum::<usize>() + num_cols - 1;
+                if cur_width <= width {
+                    break;
+                }
+                let (i, _) = col_widths
+                    .iter()
+                    .cloned()
+                    .enumerate()
+                    .max_by_key(|&(colno, width)| {
+                        (
+                            width.saturating_sub(col_sizes[colno].min_width),
+                            width,
+                            usize::max_value() - colno,
+                        )
+                    })
+                    .unwrap();
+                col_widths[i] -= 1;
             }
-            let (i, _) = col_widths
-                .iter()
-                .cloned()
-                .enumerate()
-                .max_by_key(|&(colno, width)| {
-                    (
-                        width.saturating_sub(col_sizes[colno].min_width),
-                        width,
-                        usize::max_value() - colno,
-                    )
-                })
-                .unwrap();
-            col_widths[i] -= 1;
         }
     }
 
