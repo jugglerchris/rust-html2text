@@ -501,6 +501,21 @@ fn test_wrap3() {
 }
 
 #[test]
+fn test_wrap4() {
+    test_html(
+        br#"<table><tr><td colspan="2"><p>Hello, this should be wrapped.</p></table>"#,
+        r#"──────────
+Hello,    
+this      
+should be 
+wrapped.  
+──────────
+"#,
+        10,
+    );
+}
+
+#[test]
 fn test_div() {
     test_html(
         br"<p>Hello</p><div>Div</div>",
