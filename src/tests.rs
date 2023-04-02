@@ -501,6 +501,21 @@ fn test_wrap3() {
 }
 
 #[test]
+fn test_wrap4() {
+    test_html(
+        br#"<table><tr><td colspan="2"><p>Hello, this should be wrapped.</p></table>"#,
+        r#"──────────
+Hello,    
+this      
+should be 
+wrapped.  
+──────────
+"#,
+        10,
+    );
+}
+
+#[test]
 fn test_div() {
     test_html(
         br"<p>Hello</p><div>Div</div>",
@@ -649,13 +664,13 @@ five
      </tr>
    </table>
 "##,
-        r#"─┬─┬────────
-1│a│one     
-─┼─│two     
-2│b│three   
- │ │four    
- │ │five    
-─┴─┴────────
+        r#"─┬─┬───────
+1│a│one    
+─┼─│two    
+2│b│three  
+ │ │four   
+ │ │five   
+─┴─┴───────
 "#,
         11,
     );
@@ -1275,11 +1290,11 @@ fn test_issue_54_oob() {
     </table>
 </body>
 "##,
-        r#"─┬────────┬
- │Blah    │ 
- │blah    │ 
- │blah    │ 
-─┴────────┴
+        r#"─┬──────┬─
+ │Blah  │ 
+ │blah  │ 
+ │blah  │ 
+─┴──────┴─
 "#,
         10,
     );
