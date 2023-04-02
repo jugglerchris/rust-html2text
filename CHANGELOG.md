@@ -9,6 +9,10 @@ Possible log types:
 - `[fixed]` for any bug fixes.
 - `[security]` to invite users to upgrade in case of vulnerabilities.
 
+### 0.5.1
+
+- [fixed] Some tables were rendered too wide.
+
 ### 0.5.0
 
 - [changed] Rich Image annotations now include the src attirbute (thanks spencerwi).
