@@ -84,12 +84,10 @@ impl<T: Debug + Eq + PartialEq + Clone + Default> TaggedLine<T> {
     pub fn push_str(&mut self, ts: TaggedString<T>) {
         use self::TaggedLineElement::Str;
 
-        if !self.v.is_empty() {
-            if let Str(ref mut ts_prev) = self.v.last_mut().unwrap() {
-                if ts_prev.tag == ts.tag {
-                    ts_prev.s.push_str(&ts.s);
-                    return;
-                }
+        if let Some(Str(ref mut ts_prev)) = self.v.last_mut() {
+            if ts_prev.tag == ts.tag {
+                ts_prev.s.push_str(&ts.s);
+                return;
             }
         }
         self.v.push(Str(ts));
@@ -117,12 +115,10 @@ impl<T: Debug + Eq + PartialEq + Clone + Default> TaggedLine<T> {
     pub fn push_char(&mut self, c: char, tag: &T) {
         use self::TaggedLineElement::Str;
 
-        if !self.v.is_empty() {
-            if let Str(ref mut ts_prev) = self.v.last_mut().unwrap() {
-                if ts_prev.tag == *tag {
-                    ts_prev.s.push(c);
-                    return;
-                }
+        if let Some(Str(ref mut ts_prev)) = self.v.last_mut() {
+            if ts_prev.tag == *tag {
+                ts_prev.s.push(c);
+                return;
             }
         }
         let mut s = String::new();
@@ -825,7 +821,7 @@ impl<D: TextDecorator> TextRenderer<D> {
         result
     }
 
-    /// Returns a `Vec` of `TaggedLine`s with therendered text.
+    /// Returns a `Vec` of `TaggedLine`s with the rendered text.
     pub fn into_lines(mut self) -> LinkedList<RenderLine<Vec<D::Annotation>>> {
         self.flush_wrapping();
         // And add the links
