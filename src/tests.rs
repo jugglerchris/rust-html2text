@@ -1397,3 +1397,19 @@ End.
     let text = from_read_with_decorator(html.as_bytes(), usize::MAX, decorator.clone());
     assert_eq!(text, "Test.\n\n\nEnd.\n");
 }
+
+#[test]
+fn test_ws_table() {
+    let text = "<table>
+ <tbody>
+  <tr>
+   <th>Oggetto:</th>
+    <td>Your
+                 AT Account is Past Due - Suspension
+                 Notice</td>
+  </tr>
+ </tbody>
+</table>";
+    let txt = from_read(text.as_bytes(), 70);
+    println!("{txt}");
+}
