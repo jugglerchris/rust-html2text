@@ -392,13 +392,13 @@ fn test_pre() {
         br#"
        <pre>foo
 bar
-wib   asdf;
+wib asdf;
 </pre>
 <p>Hello</p>
      "#,
         r"foo
 bar
-wib   asdf;
+wib asdf;
 
 Hello
 ",
@@ -710,9 +710,9 @@ foo
 #[test]
 fn test_pre2() {
     test_html(
-        br##"<pre>Hello  sp
+        br##"<pre>Hello sp
 world</pre>"##,
-        r#"Hello  sp
+        r#"Hello sp
 world
 "#,
         21,

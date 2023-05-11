@@ -1088,7 +1088,21 @@ fn process_dom_node<'a, 'b, T: Write>(
             }
         }
         markup5ever_rcdom::NodeData::Text { contents: ref tstr } => {
-            Finished(RenderNode::new(Text((&*tstr.borrow()).into())))
+            let mut s = String::new();
+            let mut ws = false;
+            for c in tstr.borrow().chars() {
+                if c.is_whitespace() && c != '\n' {
+                    if ws {
+                        continue;
+                    }
+                    ws = true;
+                    s.push(c);
+                    continue;
+                }
+                ws = false;
+                s.push(c);
+            }
+            Finished(RenderNode::new(Text(s)))
         }
         _ => {
             // NodeData doesn't have a Debug impl.
