@@ -393,18 +393,9 @@ impl RenderNode {
                 }
             }
 
-            Container(ref v)
-            | Em(ref v)
-            | Strong(ref v)
-            | Strikeout(ref v)
-            | Code(ref v)
-            | Block(ref v)
-            | Div(ref v)
-            | Pre(ref v)
-            | BlockQuote(ref v)
-            | Dl(ref v)
-            | Dt(ref v)
-            | Dd(ref v) => v
+            Container(ref v) | Em(ref v) | Strong(ref v) | Strikeout(ref v) | Code(ref v)
+            | Block(ref v) | Div(ref v) | Pre(ref v) | BlockQuote(ref v) | Dl(ref v)
+            | Dt(ref v) | Dd(ref v) => v
                 .iter()
                 .map(RenderNode::get_size_estimate)
                 .fold(Default::default(), SizeEstimate::add),
@@ -413,8 +404,8 @@ impl RenderNode {
                 .map(RenderNode::get_size_estimate)
                 .fold(Default::default(), SizeEstimate::add)
                 .add(SizeEstimate {
-                   size: target.len() + 4,
-                   min_width: 4,
+                    size: target.len() + 4,
+                    min_width: 4,
                 }),
             Ul(ref v) => v
                 .iter()
@@ -1567,11 +1558,7 @@ pub struct RenderTree(RenderNode);
 
 impl RenderTree {
     /// Render this document using the given `decorator` and wrap it to `width` columns.
-    pub fn render<D: TextDecorator>(
-        self,
-        width: usize,
-        decorator: D,
-    ) -> RenderedText<D> {
+    pub fn render<D: TextDecorator>(self, width: usize, decorator: D) -> RenderedText<D> {
         let builder = TextRenderer::new(width, decorator);
         let builder = render_tree_to_string(builder, self.0, &mut Discard {});
         RenderedText(builder)
@@ -1633,11 +1620,7 @@ pub fn parse(mut input: impl io::Read) -> RenderTree {
 
 /// Reads HTML from `input`, decorates it using `decorator`, and
 /// returns a `String` with text wrapped to `width` columns.
-pub fn from_read_with_decorator<R, D>(
-    input: R,
-    width: usize,
-    decorator: D,
-) -> String
+pub fn from_read_with_decorator<R, D>(input: R, width: usize, decorator: D) -> String
 where
     R: io::Read,
     D: TextDecorator,
