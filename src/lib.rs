@@ -381,8 +381,20 @@ impl RenderNode {
         // Otherwise, make an estimate.
         let estimate = match self.info {
             Text(ref t) | Img(_, ref t) => {
-                use unicode_width::UnicodeWidthStr;
-                let mut len = t.trim().width();
+                use unicode_width::UnicodeWidthChar;
+                let mut len = 0;
+                let mut in_whitespace = false;
+                for c in t.trim().chars() {
+                    let is_ws = c.is_whitespace();
+                    if !is_ws {
+                        len += UnicodeWidthChar::width(c).unwrap_or(0);
+                        // Count the preceding whitespace as one.
+                        if in_whitespace {
+                            len += 1;
+                        }
+                    }
+                    in_whitespace = is_ws;
+                }
                 // Add one for preceding whitespace.
                 if let Some(true) = t.chars().next().map(|c| c.is_whitespace()) {
                     len += 1;
