@@ -1345,7 +1345,11 @@ impl<D: TextDecorator> Renderer for TextRenderer<D> {
         }
     }
     fn add_image(&mut self, src: &str, title: &str) {
-        if let Some((s, tag)) = self.decorator.as_mut().map(|d| d.decorate_image(src, title)) {
+        if let Some((s, tag)) = self
+            .decorator
+            .as_mut()
+            .map(|d| d.decorate_image(src, title))
+        {
             self.ann_stack.push(tag);
             self.add_inline_text(&s);
             self.ann_stack.pop();
