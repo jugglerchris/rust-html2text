@@ -825,7 +825,7 @@ impl<D: TextDecorator> TextRenderer<D> {
         result
     }
 
-    /// Returns a `Vec` of `TaggedLine`s with therendered text.
+    /// Returns a `Vec` of `TaggedLine`s with the rendered text.
     pub fn into_lines(mut self) -> LinkedList<RenderLine<Vec<D::Annotation>>> {
         self.flush_wrapping();
         // And add the links
