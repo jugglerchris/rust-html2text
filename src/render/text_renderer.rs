@@ -147,16 +147,16 @@ impl<T: Debug + Eq + PartialEq + Clone + Default> TaggedLine<T> {
 
     /// Iterator over the chars in this line.
     #[cfg_attr(feature = "clippy", allow(needless_lifetimes))]
-    pub fn chars<'a>(&'a self) -> Box<dyn Iterator<Item = char> + 'a> {
+    pub fn chars<'a>(&'a self) -> impl Iterator<Item = char> + 'a {
         use self::TaggedLineElement::Str;
 
-        Box::new(self.v.iter().flat_map(|tle| {
+        self.v.iter().flat_map(|tle| {
             if let Str(ts) = tle {
                 ts.s.chars()
             } else {
                 "".chars()
             }
-        }))
+        })
     }
 
     #[cfg(feature = "html_trace")]
@@ -166,8 +166,8 @@ impl<T: Debug + Eq + PartialEq + Clone + Default> TaggedLine<T> {
     }
 
     /// Iterator over TaggedLineElements
-    pub fn iter<'a>(&'a self) -> Box<dyn Iterator<Item = &TaggedLineElement<T>> + 'a> {
-        Box::new(self.v.iter())
+    pub fn iter<'a>(&'a self) -> impl Iterator<Item = &TaggedLineElement<T>> + 'a {
+        self.v.iter()
     }
 
     /// Iterator over the tagged strings in this line, ignoring any fragments.
