@@ -1173,7 +1173,7 @@ fn test_finalise() {
             format!("{}. ", i)
         }
 
-        fn finalise(self) -> Vec<TaggedLine<bool>> {
+        fn finalise(&self) -> Vec<TaggedLine<bool>> {
             vec![TaggedLine::from_string(String::new(), &true)]
         }
 
