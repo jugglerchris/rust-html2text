@@ -61,8 +61,8 @@ mod macros;
 pub mod render;
 
 use render::text_renderer::{
-    PlainDecorator, RenderLine, RichAnnotation, RichDecorator, TaggedLine, TextDecorator,
-    TextRenderer,
+    PlainDecorator, RenderLine, RichAnnotation, RichDecorator, SubRenderer, TaggedLine,
+    TextDecorator, TextRenderer,
 };
 use render::Renderer;
 
@@ -81,7 +81,6 @@ use std::cmp::{max, min};
 use std::io;
 use std::io::Write;
 use std::iter::{once, repeat};
-use std::ops::{Deref, DerefMut};
 
 /// A dummy writer which does nothing
 struct Discard {}
@@ -140,8 +139,12 @@ pub struct RenderTableCell {
 }
 
 impl RenderTableCell {
-    /// Render this cell to a builder.
-    pub fn render<T: Write, R: Renderer>(&mut self, _builder: &mut R, _err_out: &mut T) {
+    /// Render this cell to a renderer.
+    pub fn render<T: Write, D: TextDecorator>(
+        &mut self,
+        _renderer: &mut TextRenderer<D>,
+        _err_out: &mut T,
+    ) {
         unimplemented!()
         //render_tree_children_to_string(builder, &mut self.content, err_out)
     }
@@ -399,6 +402,9 @@ impl RenderNode {
                 if let Some(true) = t.chars().next().map(|c| c.is_whitespace()) {
                     len += 1;
                 }
+                if let Img(_, _) = self.info {
+                    len += 2;
+                }
                 SizeEstimate {
                     size: len,
                     min_width: len.min(MIN_WIDTH),
@@ -411,13 +417,13 @@ impl RenderNode {
                 .iter()
                 .map(RenderNode::get_size_estimate)
                 .fold(Default::default(), SizeEstimate::add),
-            Link(ref target, ref v) => v
+            Link(ref _target, ref v) => v
                 .iter()
                 .map(RenderNode::get_size_estimate)
                 .fold(Default::default(), SizeEstimate::add)
                 .add(SizeEstimate {
-                    size: target.len() + 4,
-                    min_width: 4,
+                    size: 5,
+                    min_width: 5,
                 }),
             Ul(ref v) => v
                 .iter()
@@ -1110,76 +1116,37 @@ fn process_dom_node<'a, 'b, T: Write>(
     }
 }
 
-/// Context to use during tree parsing.
-/// This mainly gives access to a Renderer, but needs to be able to push
-/// new ones on for nested structures.
-#[derive(Clone, Debug)]
-struct BuilderStack<R: Renderer> {
-    builders: Vec<R>,
-}
-
-impl<R: Renderer> BuilderStack<R> {
-    pub fn new(builder: R) -> BuilderStack<R> {
-        BuilderStack {
-            builders: vec![builder],
-        }
-    }
-
-    /// Push a new builder onto the stack
-    pub fn push(&mut self, builder: R) {
-        self.builders.push(builder);
-    }
-
-    /// Pop off the top builder and return it.
-    /// Panics if empty
-    pub fn pop(&mut self) -> R {
-        self.builders.pop().unwrap()
-    }
-
-    /// Pop off the only builder and return it.
-    /// panics if there aren't exactly 1 available.
-    pub fn into_inner(mut self) -> R {
-        assert_eq!(self.builders.len(), 1);
-        self.builders.pop().unwrap()
-    }
-}
-
-impl<R: Renderer> Deref for BuilderStack<R> {
-    type Target = R;
-    fn deref(&self) -> &R {
-        self.builders.last().expect("Underflow in BuilderStack")
-    }
-}
-
-impl<R: Renderer> DerefMut for BuilderStack<R> {
-    fn deref_mut(&mut self) -> &mut R {
-        self.builders.last_mut().expect("Underflow in BuilderStack")
-    }
-}
-
-fn render_tree_to_string<T: Write, R: Renderer>(
-    builder: R,
+fn render_tree_to_string<T: Write, D: TextDecorator>(
+    renderer: SubRenderer<D>,
     tree: RenderNode,
     err_out: &mut T,
-) -> R {
+) -> SubRenderer<D> {
     /* Phase 1: get size estimates. */
     tree_map_reduce(&mut (), &tree, |_, node| precalc_size_estimate(&node));
     /* Phase 2: actually render. */
-    let mut bs = BuilderStack::new(builder);
-    tree_map_reduce(&mut bs, tree, |builders, node| {
-        do_render_node(builders, node, err_out)
+    let mut renderer = TextRenderer::new(renderer);
+    tree_map_reduce(&mut renderer, tree, |renderer, node| {
+        do_render_node(renderer, node, err_out)
     });
-    bs.into_inner()
+    let (mut renderer, links) = renderer.into_inner();
+    let lines = renderer.finalise(links);
+    // And add the links
+    if !lines.is_empty() {
+        renderer.start_block();
+        renderer.fmt_links(lines);
+    }
+    renderer
 }
 
 fn pending2<
     'a,
-    R: Renderer,
-    F: Fn(&mut BuilderStack<R>, Vec<Option<R>>) -> Option<Option<R>> + 'static,
+    D: TextDecorator,
+    F: Fn(&mut TextRenderer<D>, Vec<Option<SubRenderer<D>>>) -> Option<Option<SubRenderer<D>>>
+        + 'static,
 >(
     children: Vec<RenderNode>,
     f: F,
-) -> TreeMapResult<'a, BuilderStack<R>, RenderNode, Option<R>> {
+) -> TreeMapResult<'a, TextRenderer<D>, RenderNode, Option<SubRenderer<D>>> {
     TreeMapResult::PendingChildren {
         children,
         cons: Box::new(f),
@@ -1188,128 +1155,128 @@ fn pending2<
     }
 }
 
-fn do_render_node<'a, 'b, T: Write, R: Renderer>(
-    builder: &mut BuilderStack<R>,
+fn do_render_node<'a, 'b, T: Write, D: TextDecorator>(
+    renderer: &mut TextRenderer<D>,
     tree: RenderNode,
     err_out: &'b mut T,
-) -> TreeMapResult<'static, BuilderStack<R>, RenderNode, Option<R>> {
+) -> TreeMapResult<'static, TextRenderer<D>, RenderNode, Option<SubRenderer<D>>> {
     html_trace!("do_render_node({:?}", tree);
     use RenderNodeInfo::*;
     use TreeMapResult::*;
     match tree.info {
         Text(ref tstr) => {
-            builder.add_inline_text(tstr);
+            renderer.add_inline_text(tstr);
             Finished(None)
         }
         Container(children) => pending2(children, |_, _| Some(None)),
         Link(href, children) => {
-            builder.start_link(&href);
-            pending2(children, |builder: &mut BuilderStack<R>, _| {
-                builder.end_link();
+            renderer.start_link(&href);
+            pending2(children, |renderer: &mut TextRenderer<D>, _| {
+                renderer.end_link();
                 Some(None)
             })
         }
         Em(children) => {
-            builder.start_emphasis();
-            pending2(children, |builder: &mut BuilderStack<R>, _| {
-                builder.end_emphasis();
+            renderer.start_emphasis();
+            pending2(children, |renderer: &mut TextRenderer<D>, _| {
+                renderer.end_emphasis();
                 Some(None)
             })
         }
         Strong(children) => {
-            builder.start_strong();
-            pending2(children, |builder: &mut BuilderStack<R>, _| {
-                builder.end_strong();
+            renderer.start_strong();
+            pending2(children, |renderer: &mut TextRenderer<D>, _| {
+                renderer.end_strong();
                 Some(None)
             })
         }
         Strikeout(children) => {
-            builder.start_strikeout();
-            pending2(children, |builder: &mut BuilderStack<R>, _| {
-                builder.end_strikeout();
+            renderer.start_strikeout();
+            pending2(children, |renderer: &mut TextRenderer<D>, _| {
+                renderer.end_strikeout();
                 Some(None)
             })
         }
         Code(children) => {
-            builder.start_code();
-            pending2(children, |builder: &mut BuilderStack<R>, _| {
-                builder.end_code();
+            renderer.start_code();
+            pending2(children, |renderer: &mut TextRenderer<D>, _| {
+                renderer.end_code();
                 Some(None)
             })
         }
         Img(src, title) => {
-            builder.add_image(&src, &title);
+            renderer.add_image(&src, &title);
             Finished(None)
         }
         Block(children) => {
-            builder.start_block();
-            pending2(children, |builder: &mut BuilderStack<R>, _| {
-                builder.end_block();
+            renderer.start_block();
+            pending2(children, |renderer: &mut TextRenderer<D>, _| {
+                renderer.end_block();
                 Some(None)
             })
         }
         Header(level, children) => {
-            let prefix = builder.header_prefix(level);
-            let min_width = max(builder.width(), 1 + prefix.len());
-            let sub_builder = builder.new_sub_renderer(min_width - prefix.len());
-            builder.push(sub_builder);
-            pending2(children, move |builder: &mut BuilderStack<R>, _| {
-                let sub_builder = builder.pop();
+            let prefix = renderer.header_prefix(level);
+            let min_width = max(renderer.width(), 1 + prefix.len());
+            let sub_builder = renderer.new_sub_renderer(min_width - prefix.len());
+            renderer.push(sub_builder);
+            pending2(children, move |renderer: &mut TextRenderer<D>, _| {
+                let sub_builder = renderer.pop();
 
-                builder.start_block();
-                builder.append_subrender(sub_builder, repeat(&prefix[..]));
-                builder.end_block();
+                renderer.start_block();
+                renderer.append_subrender(sub_builder, repeat(&prefix[..]));
+                renderer.end_block();
                 Some(None)
             })
         }
         Div(children) => {
-            builder.new_line();
-            pending2(children, |builder: &mut BuilderStack<R>, _| {
-                builder.new_line();
+            renderer.new_line();
+            pending2(children, |renderer: &mut TextRenderer<D>, _| {
+                renderer.new_line();
                 Some(None)
             })
         }
         Pre(children) => {
-            builder.new_line();
-            builder.start_pre();
-            pending2(children, |builder: &mut BuilderStack<R>, _| {
-                builder.new_line();
-                builder.end_pre();
+            renderer.new_line();
+            renderer.start_pre();
+            pending2(children, |renderer: &mut TextRenderer<D>, _| {
+                renderer.new_line();
+                renderer.end_pre();
                 Some(None)
             })
         }
         BlockQuote(children) => {
-            let prefix = builder.quote_prefix();
-            let sub_builder = builder.new_sub_renderer(builder.width() - prefix.len());
-            builder.push(sub_builder);
-            pending2(children, move |builder: &mut BuilderStack<R>, _| {
-                let sub_builder = builder.pop();
+            let prefix = renderer.quote_prefix();
+            let sub_builder = renderer.new_sub_renderer(renderer.width() - prefix.len());
+            renderer.push(sub_builder);
+            pending2(children, move |renderer: &mut TextRenderer<D>, _| {
+                let sub_builder = renderer.pop();
 
-                builder.start_block();
-                builder.append_subrender(sub_builder, repeat(&prefix[..]));
-                builder.end_block();
+                renderer.start_block();
+                renderer.append_subrender(sub_builder, repeat(&prefix[..]));
+                renderer.end_block();
                 Some(None)
             })
         }
         Ul(items) => {
-            builder.start_block();
+            renderer.start_block();
 
-            let prefix = builder.unordered_item_prefix();
+            let prefix = renderer.unordered_item_prefix();
             let prefix_len = prefix.len();
 
             TreeMapResult::PendingChildren {
                 children: items,
                 cons: Box::new(|_, _| Some(None)),
-                prefn: Some(Box::new(move |builder: &mut BuilderStack<R>, _| {
-                    let sub_builder = builder.new_sub_renderer(builder.width() - prefix_len);
-                    builder.push(sub_builder);
+                prefn: Some(Box::new(move |renderer: &mut TextRenderer<D>, _| {
+                    let sub_builder = renderer.new_sub_renderer(renderer.width() - prefix_len);
+                    renderer.push(sub_builder);
                 })),
-                postfn: Some(Box::new(move |builder: &mut BuilderStack<R>, _| {
-                    let sub_builder = builder.pop();
+                postfn: Some(Box::new(move |renderer: &mut TextRenderer<D>, _| {
+                    let sub_builder = renderer.pop();
 
                     let indent = " ".repeat(prefix.len());
 
-                    builder.append_subrender(
+                    renderer.append_subrender(
                         sub_builder,
                         once(&prefix[..]).chain(repeat(&indent[..])),
                     );
@@ -1317,7 +1284,7 @@ fn do_render_node<'a, 'b, T: Write, R: Renderer>(
             }
         }
         Ol(start, items) => {
-            builder.start_block();
+            renderer.start_block();
 
             let num_items = items.len();
 
@@ -1325,8 +1292,8 @@ fn do_render_node<'a, 'b, T: Write, R: Renderer>(
             let min_number = start;
             // Assumption: num_items can't overflow isize.
             let max_number = start + (num_items as i64) - 1;
-            let prefix_width_min = builder.ordered_item_prefix(min_number).len();
-            let prefix_width_max = builder.ordered_item_prefix(max_number).len();
+            let prefix_width_min = renderer.ordered_item_prefix(min_number).len();
+            let prefix_width_max = renderer.ordered_item_prefix(max_number).len();
             let prefix_width = max(prefix_width_min, prefix_width_max);
             let prefixn = format!("{: <width$}", "", width = prefix_width);
             let i: Cell<_> = Cell::new(start);
@@ -1334,16 +1301,16 @@ fn do_render_node<'a, 'b, T: Write, R: Renderer>(
             TreeMapResult::PendingChildren {
                 children: items,
                 cons: Box::new(|_, _| Some(None)),
-                prefn: Some(Box::new(move |builder: &mut BuilderStack<R>, _| {
-                    let sub_builder = builder.new_sub_renderer(builder.width() - prefix_width);
-                    builder.push(sub_builder);
+                prefn: Some(Box::new(move |renderer: &mut TextRenderer<D>, _| {
+                    let sub_builder = renderer.new_sub_renderer(renderer.width() - prefix_width);
+                    renderer.push(sub_builder);
                 })),
-                postfn: Some(Box::new(move |builder: &mut BuilderStack<R>, _| {
-                    let sub_builder = builder.pop();
-                    let prefix1 = builder.ordered_item_prefix(i.get());
+                postfn: Some(Box::new(move |renderer: &mut TextRenderer<D>, _| {
+                    let sub_builder = renderer.pop();
+                    let prefix1 = renderer.ordered_item_prefix(i.get());
                     let prefix1 = format!("{: <width$}", prefix1, width = prefix_width);
 
-                    builder.append_subrender(
+                    renderer.append_subrender(
                         sub_builder,
                         once(prefix1.as_str()).chain(repeat(prefixn.as_str())),
                     );
@@ -1352,7 +1319,7 @@ fn do_render_node<'a, 'b, T: Write, R: Renderer>(
             }
         }
         Dl(items) => {
-            builder.start_block();
+            renderer.start_block();
 
             TreeMapResult::PendingChildren {
                 children: items,
@@ -1362,43 +1329,43 @@ fn do_render_node<'a, 'b, T: Write, R: Renderer>(
             }
         }
         Dt(children) => {
-            builder.new_line();
-            builder.start_emphasis();
-            pending2(children, |builder: &mut BuilderStack<R>, _| {
-                builder.end_emphasis();
+            renderer.new_line();
+            renderer.start_emphasis();
+            pending2(children, |renderer: &mut TextRenderer<D>, _| {
+                renderer.end_emphasis();
                 Some(None)
             })
         }
         Dd(children) => {
-            let sub_builder = builder.new_sub_renderer(builder.width() - 2);
-            builder.push(sub_builder);
-            pending2(children, |builder: &mut BuilderStack<R>, _| {
-                let sub_builder = builder.pop();
-                builder.append_subrender(sub_builder, repeat("  "));
+            let sub_builder = renderer.new_sub_renderer(renderer.width() - 2);
+            renderer.push(sub_builder);
+            pending2(children, |renderer: &mut TextRenderer<D>, _| {
+                let sub_builder = renderer.pop();
+                renderer.append_subrender(sub_builder, repeat("  "));
                 Some(None)
             })
         }
         Break => {
-            builder.new_line_hard();
+            renderer.new_line_hard();
             Finished(None)
         }
-        Table(tab) => render_table_tree(builder.deref_mut(), tab, err_out),
-        TableRow(row, false) => render_table_row(builder.deref_mut(), row, err_out),
-        TableRow(row, true) => render_table_row_vert(builder.deref_mut(), row, err_out),
+        Table(tab) => render_table_tree(renderer, tab, err_out),
+        TableRow(row, false) => render_table_row(renderer, row, err_out),
+        TableRow(row, true) => render_table_row_vert(renderer, row, err_out),
         TableBody(_) => unimplemented!("Unexpected TableBody while rendering"),
-        TableCell(cell) => render_table_cell(builder.deref_mut(), cell, err_out),
+        TableCell(cell) => render_table_cell(renderer, cell, err_out),
         FragStart(fragname) => {
-            builder.record_frag_start(&fragname);
+            renderer.record_frag_start(&fragname);
             Finished(None)
         }
     }
 }
 
-fn render_table_tree<T: Write, R: Renderer>(
-    builder: &mut R,
+fn render_table_tree<T: Write, D: TextDecorator>(
+    renderer: &mut TextRenderer<D>,
     table: RenderTable,
     _err_out: &mut T,
-) -> TreeMapResult<'static, BuilderStack<R>, RenderNode, Option<R>> {
+) -> TreeMapResult<'static, TextRenderer<D>, RenderNode, Option<SubRenderer<D>>> {
     /* Now lay out the table. */
     let num_columns = table.num_columns;
 
@@ -1424,7 +1391,7 @@ fn render_table_tree<T: Write, R: Renderer>(
     let tot_size: usize = col_sizes.iter().map(|est| est.size).sum();
     let min_size: usize = col_sizes.iter().map(|est| est.min_width).sum::<usize>()
         + col_sizes.len().saturating_sub(1);
-    let width = builder.width();
+    let width = renderer.width();
 
     let vert_row = min_size > width;
 
@@ -1477,7 +1444,7 @@ fn render_table_tree<T: Write, R: Renderer>(
         }
     }
 
-    builder.start_block();
+    renderer.start_block();
 
     let table_width = if vert_row {
         width
@@ -1490,7 +1457,7 @@ fn render_table_tree<T: Write, R: Renderer>(
                 .saturating_sub(1)
     };
 
-    builder.add_horizontal_border_width(table_width);
+    renderer.add_horizontal_border_width(table_width);
 
     TreeMapResult::PendingChildren {
         children: table.into_rows(col_widths, vert_row),
@@ -1500,11 +1467,11 @@ fn render_table_tree<T: Write, R: Renderer>(
     }
 }
 
-fn render_table_row<T: Write, R: Renderer>(
-    _builder: &mut R,
+fn render_table_row<T: Write, D: TextDecorator>(
+    _renderer: &mut TextRenderer<D>,
     row: RenderTableRow,
     _err_out: &mut T,
-) -> TreeMapResult<'static, BuilderStack<R>, RenderNode, Option<R>> {
+) -> TreeMapResult<'static, TextRenderer<D>, RenderNode, Option<SubRenderer<D>>> {
     TreeMapResult::PendingChildren {
         children: row.into_cells(false),
         cons: Box::new(|builders, children| {
@@ -1514,23 +1481,23 @@ fn render_table_row<T: Write, R: Renderer>(
             }
             Some(None)
         }),
-        prefn: Some(Box::new(|builder: &mut BuilderStack<R>, node| {
+        prefn: Some(Box::new(|renderer: &mut TextRenderer<D>, node| {
             if let RenderNodeInfo::TableCell(ref cell) = node.info {
-                let sub_builder = builder.new_sub_renderer(cell.col_width.unwrap());
-                builder.push(sub_builder);
+                let sub_builder = renderer.new_sub_renderer(cell.col_width.unwrap());
+                renderer.push(sub_builder);
             } else {
                 panic!()
             }
         })),
-        postfn: Some(Box::new(|_builder: &mut BuilderStack<R>, _| {})),
+        postfn: Some(Box::new(|_renderer: &mut TextRenderer<D>, _| {})),
     }
 }
 
-fn render_table_row_vert<T: Write, R: Renderer>(
-    _builder: &mut R,
+fn render_table_row_vert<T: Write, D: TextDecorator>(
+    _renderer: &mut TextRenderer<D>,
     row: RenderTableRow,
     _err_out: &mut T,
-) -> TreeMapResult<'static, BuilderStack<R>, RenderNode, Option<R>> {
+) -> TreeMapResult<'static, TextRenderer<D>, RenderNode, Option<SubRenderer<D>>> {
     TreeMapResult::PendingChildren {
         children: row.into_cells(true),
         cons: Box::new(|builders, children| {
@@ -1538,25 +1505,25 @@ fn render_table_row_vert<T: Write, R: Renderer>(
             builders.append_vert_row(children);
             Some(None)
         }),
-        prefn: Some(Box::new(|builder: &mut BuilderStack<R>, node| {
+        prefn: Some(Box::new(|renderer: &mut TextRenderer<D>, node| {
             if let RenderNodeInfo::TableCell(ref cell) = node.info {
-                let sub_builder = builder.new_sub_renderer(cell.col_width.unwrap());
-                builder.push(sub_builder);
+                let sub_builder = renderer.new_sub_renderer(cell.col_width.unwrap());
+                renderer.push(sub_builder);
             } else {
                 panic!()
             }
         })),
-        postfn: Some(Box::new(|_builder: &mut BuilderStack<R>, _| {})),
+        postfn: Some(Box::new(|_renderer: &mut TextRenderer<D>, _| {})),
     }
 }
 
-fn render_table_cell<T: Write, R: Renderer>(
-    _builder: &mut R,
+fn render_table_cell<T: Write, D: TextDecorator>(
+    _renderer: &mut TextRenderer<D>,
     cell: RenderTableCell,
     _err_out: &mut T,
-) -> TreeMapResult<'static, BuilderStack<R>, RenderNode, Option<R>> {
-    pending2(cell.content, |builder: &mut BuilderStack<R>, _| {
-        let sub_builder = builder.pop();
+) -> TreeMapResult<'static, TextRenderer<D>, RenderNode, Option<SubRenderer<D>>> {
+    pending2(cell.content, |renderer: &mut TextRenderer<D>, _| {
+        let sub_builder = renderer.pop();
         Some(Some(sub_builder))
     })
 }
@@ -1571,7 +1538,7 @@ pub struct RenderTree(RenderNode);
 impl RenderTree {
     /// Render this document using the given `decorator` and wrap it to `width` columns.
     pub fn render<D: TextDecorator>(self, width: usize, decorator: D) -> RenderedText<D> {
-        let builder = TextRenderer::new(width, decorator);
+        let builder = SubRenderer::new(width, decorator);
         let builder = render_tree_to_string(builder, self.0, &mut Discard {});
         RenderedText(builder)
     }
@@ -1594,7 +1561,7 @@ impl RenderTree {
 }
 
 /// A rendered HTML document.
-pub struct RenderedText<D: TextDecorator>(TextRenderer<D>);
+pub struct RenderedText<D: TextDecorator>(SubRenderer<D>);
 
 impl<D: TextDecorator> RenderedText<D> {
     /// Convert the rendered HTML document to a string.

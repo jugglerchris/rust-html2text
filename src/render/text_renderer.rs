@@ -4,11 +4,73 @@
 //! into different text formats.
 
 use super::Renderer;
+use std::cell::Cell;
 use std::mem;
 use std::ops::Deref;
+use std::ops::DerefMut;
+use std::rc::Rc;
 use std::vec;
 use std::{collections::LinkedList, fmt::Debug};
 use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
+
+/// Context to use during tree parsing.
+/// This mainly gives access to a Renderer, but needs to be able to push
+/// new ones on for nested structures.
+#[derive(Clone, Debug)]
+pub struct TextRenderer<D: TextDecorator> {
+    subrender: Vec<SubRenderer<D>>,
+    links: Vec<String>,
+}
+
+impl<D: TextDecorator> Deref for TextRenderer<D> {
+    type Target = SubRenderer<D>;
+    fn deref(&self) -> &Self::Target {
+        self.subrender.last().expect("Underflow in renderer stack")
+    }
+}
+impl<D: TextDecorator> DerefMut for TextRenderer<D> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        self.subrender
+            .last_mut()
+            .expect("Underflow in renderer stack")
+    }
+}
+
+impl<D: TextDecorator> TextRenderer<D> {
+    /// Construct new stack of renderer
+    pub fn new(subrenderer: SubRenderer<D>) -> TextRenderer<D> {
+        TextRenderer {
+            subrender: vec![subrenderer],
+            links: Vec::new(),
+        }
+    }
+
+    // hack overloads start_link method otherwise coming from the Renderer trait
+    // impl on SubRenderer
+    /// Add link to global link collection
+    pub fn start_link(&mut self, target: &str) {
+        self.links.push(target.to_string());
+        self.subrender.last_mut().unwrap().start_link(target);
+    }
+
+    /// Push a new builder onto the stack
+    pub fn push(&mut self, builder: SubRenderer<D>) {
+        self.subrender.push(builder);
+    }
+
+    /// Pop off the top builder and return it.
+    /// Panics if empty
+    pub fn pop(&mut self) -> SubRenderer<D> {
+        self.subrender.pop().unwrap()
+    }
+
+    /// Pop off the only builder and return it.
+    /// panics if there aren't exactly 1 available.
+    pub fn into_inner(mut self) -> (SubRenderer<D>, Vec<String>) {
+        assert_eq!(self.subrender.len(), 1);
+        (self.subrender.pop().unwrap(), self.links)
+    }
+}
 
 /// A wrapper around a String with extra metadata.
 #[derive(Debug, Clone, PartialEq)]
@@ -534,7 +596,7 @@ pub trait TextDecorator {
 
     /// Finish with a document, and return extra lines (eg footnotes)
     /// to add to the rendered text.
-    fn finalise(&self) -> Vec<TaggedLine<Self::Annotation>>;
+    fn finalise(&mut self, links: Vec<String>) -> Vec<TaggedLine<Self::Annotation>>;
 }
 
 /// A space on a horizontal row.
@@ -716,7 +778,7 @@ impl<T: PartialEq + Eq + Clone + Debug + Default> RenderLine<T> {
 /// A renderer which just outputs plain text with
 /// annotations depending on a decorator.
 #[derive(Clone)]
-pub struct TextRenderer<D: TextDecorator> {
+pub struct SubRenderer<D: TextDecorator> {
     width: usize,
     lines: LinkedList<RenderLine<Vec<D::Annotation>>>,
     /// True at the end of a block, meaning we should add
@@ -730,9 +792,9 @@ pub struct TextRenderer<D: TextDecorator> {
     pre_depth: usize,
 }
 
-impl<D: TextDecorator + Debug> std::fmt::Debug for TextRenderer<D> {
+impl<D: TextDecorator + Debug> std::fmt::Debug for SubRenderer<D> {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        f.debug_struct("TextRenderer")
+        f.debug_struct("SubRenderer")
             .field("width", &self.width)
             .field("lines", &self.lines)
             .field("decorator", &self.decorator)
@@ -742,11 +804,16 @@ impl<D: TextDecorator + Debug> std::fmt::Debug for TextRenderer<D> {
     }
 }
 
-impl<D: TextDecorator> TextRenderer<D> {
-    /// Construct a new empty TextRenderer.
-    pub fn new(width: usize, decorator: D) -> TextRenderer<D> {
+impl<D: TextDecorator> SubRenderer<D> {
+    /// Render links as lines
+    pub fn finalise(&mut self, links: Vec<String>) -> Vec<TaggedLine<D::Annotation>> {
+        self.decorator.finalise(links)
+    }
+
+    /// Construct a new empty SubRenderer.
+    pub fn new(width: usize, decorator: D) -> SubRenderer<D> {
         html_trace!("new({})", width);
-        TextRenderer {
+        SubRenderer {
             width,
             lines: LinkedList::new(),
             at_block_end: false,
@@ -825,57 +892,56 @@ impl<D: TextDecorator> TextRenderer<D> {
         result
     }
 
+    /// Wrap links to width
+    pub fn fmt_links(&mut self, mut links: Vec<TaggedLine<D::Annotation>>) {
+        for line in links.drain(..) {
+            /* Hard wrap */
+            let mut pos = 0;
+            let mut wrapped_line = TaggedLine::new();
+            for ts in line.into_tagged_strings() {
+                // FIXME: should we percent-escape?  This is probably
+                // an invalid URL to start with.
+                let s = ts.s.replace('\n', " ");
+                let tag = vec![ts.tag];
+
+                let width = s.width();
+                if pos + width > self.width {
+                    // split the string and start a new line
+                    let mut buf = String::new();
+                    for c in s.chars() {
+                        let c_width = UnicodeWidthChar::width(c).unwrap_or(0);
+                        if pos + c_width > self.width {
+                            if !buf.is_empty() {
+                                wrapped_line.push_str(TaggedString {
+                                    s: buf,
+                                    tag: tag.clone(),
+                                });
+                                buf = String::new();
+                            }
+
+                            self.lines.push_back(RenderLine::Text(wrapped_line));
+                            wrapped_line = TaggedLine::new();
+                            pos = 0;
+                        }
+                        pos += c_width;
+                        buf.push(c);
+                    }
+                    wrapped_line.push_str(TaggedString { s: buf, tag });
+                } else {
+                    wrapped_line.push_str(TaggedString {
+                        s: s.to_owned(),
+                        tag,
+                    });
+                    pos += width;
+                }
+            }
+            self.lines.push_back(RenderLine::Text(wrapped_line));
+        }
+    }
+
     /// Returns a `Vec` of `TaggedLine`s with the rendered text.
     pub fn into_lines(mut self) -> LinkedList<RenderLine<Vec<D::Annotation>>> {
         self.flush_wrapping();
-        // And add the links
-        let mut trailer = self.decorator.finalise();
-        if !trailer.is_empty() {
-            self.start_block();
-            for line in trailer.drain(0..) {
-                /* Hard wrap */
-                let mut pos = 0;
-                let mut wrapped_line = TaggedLine::new();
-                for ts in line.into_tagged_strings() {
-                    // FIXME: should we percent-escape?  This is probably
-                    // an invalid URL to start with.
-                    let s = ts.s.replace('\n', " ");
-                    let tag = vec![ts.tag];
-
-                    let width = s.width();
-                    if pos + width > self.width {
-                        // split the string and start a new line
-                        let mut buf = String::new();
-                        for c in s.chars() {
-                            let c_width = UnicodeWidthChar::width(c).unwrap_or(0);
-                            if pos + c_width > self.width {
-                                if !buf.is_empty() {
-                                    wrapped_line.push_str(TaggedString {
-                                        s: buf,
-                                        tag: tag.clone(),
-                                    });
-                                    buf = String::new();
-                                }
-
-                                self.lines.push_back(RenderLine::Text(wrapped_line));
-                                wrapped_line = TaggedLine::new();
-                                pos = 0;
-                            }
-                            pos += c_width;
-                            buf.push(c);
-                        }
-                        wrapped_line.push_str(TaggedString { s: buf, tag });
-                    } else {
-                        wrapped_line.push_str(TaggedString {
-                            s: s.to_owned(),
-                            tag,
-                        });
-                        pos += width;
-                    }
-                }
-                self.lines.push_back(RenderLine::Text(wrapped_line));
-            }
-        }
         self.lines
     }
 
@@ -898,7 +964,7 @@ fn filter_text_strikeout(s: &str) -> Option<String> {
     Some(result)
 }
 
-impl<D: TextDecorator> Renderer for TextRenderer<D> {
+impl<D: TextDecorator> Renderer for SubRenderer<D> {
     fn add_empty_line(&mut self) {
         html_trace!("add_empty_line()");
         self.flush_all();
@@ -909,10 +975,7 @@ impl<D: TextDecorator> Renderer for TextRenderer<D> {
     }
 
     fn new_sub_renderer(&self, width: usize) -> Self {
-        TextRenderer::new(
-            width,
-            self.decorator.make_subblock_decorator(),
-        )
+        SubRenderer::new(width, self.decorator.make_subblock_decorator())
     }
 
     fn start_block(&mut self) {
@@ -1360,31 +1423,33 @@ impl<D: TextDecorator> Renderer for TextRenderer<D> {
     }
 }
 
-/// A decorator for use with `TextRenderer` which outputs plain UTF-8 text
+/// A decorator for use with `SubRenderer` which outputs plain UTF-8 text
 /// with no annotations.  Markup is rendered as text characters or footnotes.
 #[derive(Clone, Debug)]
 pub struct PlainDecorator {
-    links: Vec<String>,
+    nlinks: Rc<Cell<usize>>,
 }
 
 impl PlainDecorator {
     /// Create a new `PlainDecorator`.
     #[cfg_attr(feature = "clippy", allow(new_without_default_derive))]
     pub fn new() -> PlainDecorator {
-        PlainDecorator { links: Vec::new() }
+        PlainDecorator {
+            nlinks: Rc::new(Cell::new(0)),
+        }
     }
 }
 
 impl TextDecorator for PlainDecorator {
     type Annotation = ();
 
-    fn decorate_link_start(&mut self, url: &str) -> (String, Self::Annotation) {
-        self.links.push(url.to_string());
+    fn decorate_link_start(&mut self, _url: &str) -> (String, Self::Annotation) {
+        self.nlinks.set(self.nlinks.get() + 1);
         ("[".to_string(), ())
     }
 
     fn decorate_link_end(&mut self) -> String {
-        format!("][{}]", self.links.len())
+        format!("][{}]", self.nlinks.get())
     }
 
     fn decorate_em_start(&mut self) -> (String, Self::Annotation) {
@@ -1446,20 +1511,20 @@ impl TextDecorator for PlainDecorator {
         format!("{}. ", i)
     }
 
-    fn finalise(&self) -> Vec<TaggedLine<()>> {
-        self.links
-            .iter()
+    fn finalise(&mut self, links: Vec<String>) -> Vec<TaggedLine<()>> {
+        links
+            .into_iter()
             .enumerate()
             .map(|(idx, s)| TaggedLine::from_string(format!("[{}]: {}", idx + 1, s), &()))
             .collect()
     }
 
     fn make_subblock_decorator(&self) -> Self {
-        PlainDecorator::new()
+        self.clone()
     }
 }
 
-/// A decorator for use with `TextRenderer` which outputs plain UTF-8 text
+/// A decorator for use with `SubRenderer` which outputs plain UTF-8 text
 /// with no annotations or markup, emitting only the literal text.
 #[derive(Clone, Debug)]
 pub struct TrivialDecorator {}
@@ -1543,7 +1608,7 @@ impl TextDecorator for TrivialDecorator {
         "".to_string()
     }
 
-    fn finalise(&self) -> Vec<TaggedLine<()>> {
+    fn finalise(&mut self, _links: Vec<String>) -> Vec<TaggedLine<()>> {
         Vec::new()
     }
 
@@ -1664,7 +1729,7 @@ impl TextDecorator for RichDecorator {
         format!("{}. ", i)
     }
 
-    fn finalise(&self) -> Vec<TaggedLine<RichAnnotation>> {
+    fn finalise(&mut self, _links: Vec<String>) -> Vec<TaggedLine<RichAnnotation>> {
         Vec::new()
     }
 
