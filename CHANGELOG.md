@@ -9,6 +9,16 @@ Possible log types:
 - `[fixed]` for any bug fixes.
 - `[security]` to invite users to upgrade in case of vulnerabilities.
 
+### 0.6.0
+
+- [changed] Improve layout of tables thanks to sftse:
+  - Table column size estimates have been improved when the source HTML has a lot
+    of unnecessary whitespace.
+  - Move the URL footnotes out to the top level, also improving layout of tables
+    containing links.
+- [changed] Some APIs have slightly changed as part of the table improvements,
+  though most users should not be affeted.
+
 ### 0.5.1
 
 - [fixed] Some tables were rendered too wide.
