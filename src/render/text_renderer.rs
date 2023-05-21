@@ -4,11 +4,73 @@
 //! into different text formats.
 
 use super::Renderer;
+use std::cell::Cell;
 use std::mem;
 use std::ops::Deref;
+use std::ops::DerefMut;
+use std::rc::Rc;
 use std::vec;
 use std::{collections::LinkedList, fmt::Debug};
 use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
+
+/// Context to use during tree parsing.
+/// This mainly gives access to a Renderer, but needs to be able to push
+/// new ones on for nested structures.
+#[derive(Clone, Debug)]
+pub struct TextRenderer<D: TextDecorator> {
+    subrender: Vec<SubRenderer<D>>,
+    links: Vec<String>,
+}
+
+impl<D: TextDecorator> Deref for TextRenderer<D> {
+    type Target = SubRenderer<D>;
+    fn deref(&self) -> &Self::Target {
+        self.subrender.last().expect("Underflow in renderer stack")
+    }
+}
+impl<D: TextDecorator> DerefMut for TextRenderer<D> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        self.subrender
+            .last_mut()
+            .expect("Underflow in renderer stack")
+    }
+}
+
+impl<D: TextDecorator> TextRenderer<D> {
+    /// Construct new stack of renderer
+    pub fn new(subrenderer: SubRenderer<D>) -> TextRenderer<D> {
+        TextRenderer {
+            subrender: vec![subrenderer],
+            links: Vec::new(),
+        }
+    }
+
+    // hack overloads start_link method otherwise coming from the Renderer trait
+    // impl on SubRenderer
+    /// Add link to global link collection
+    pub fn start_link(&mut self, target: &str) {
+        self.links.push(target.to_string());
+        self.subrender.last_mut().unwrap().start_link(target);
+    }
+
+    /// Push a new builder onto the stack
+    pub fn push(&mut self, builder: SubRenderer<D>) {
+        self.subrender.push(builder);
+    }
+
+    /// Pop off the top builder and return it.
+    /// Panics if empty
+    pub fn pop(&mut self) -> SubRenderer<D> {
+        self.subrender.pop().unwrap()
+    }
+
+    /// Pop off the only builder and return it.
+    /// panics if there aren't exactly 1 available.
+    pub fn into_inner(mut self) -> (SubRenderer<D>, Vec<String>) {
+        assert_eq!(self.subrender.len(), 1);
+        (self.subrender.pop().unwrap(), self.links)
+    }
+}
 
 /// A wrapper around a String with extra metadata.
 #[derive(Debug, Clone, PartialEq)]
@@ -534,7 +596,7 @@ pub trait TextDecorator {
 
     /// Finish with a document, and return extra lines (eg footnotes)
     /// to add to the rendered text.
-    fn finalise(self) -> Vec<TaggedLine<Self::Annotation>>;
+    fn finalise(&mut self, links: Vec<String>) -> Vec<TaggedLine<Self::Annotation>>;
 }
 
 /// A space on a horizontal row.
@@ -716,23 +778,23 @@ impl<T: PartialEq + Eq + Clone + Debug + Default> RenderLine<T> {
 /// A renderer which just outputs plain text with
 /// annotations depending on a decorator.
 #[derive(Clone)]
-pub struct TextRenderer<D: TextDecorator> {
+pub struct SubRenderer<D: TextDecorator> {
     width: usize,
     lines: LinkedList<RenderLine<Vec<D::Annotation>>>,
     /// True at the end of a block, meaning we should add
     /// a blank line if any other text is added.
     at_block_end: bool,
     wrapping: Option<WrappedBlock<Vec<D::Annotation>>>,
-    decorator: Option<D>,
+    decorator: D,
     ann_stack: Vec<D::Annotation>,
     text_filter_stack: Vec<fn(&str) -> Option<String>>,
     /// The depth of <pre> block stacking.
     pre_depth: usize,
 }
 
-impl<D: TextDecorator + Debug> std::fmt::Debug for TextRenderer<D> {
+impl<D: TextDecorator + Debug> std::fmt::Debug for SubRenderer<D> {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        f.debug_struct("TextRenderer")
+        f.debug_struct("SubRenderer")
             .field("width", &self.width)
             .field("lines", &self.lines)
             .field("decorator", &self.decorator)
@@ -742,16 +804,21 @@ impl<D: TextDecorator + Debug> std::fmt::Debug for TextRenderer<D> {
     }
 }
 
-impl<D: TextDecorator> TextRenderer<D> {
-    /// Construct a new empty TextRenderer.
-    pub fn new(width: usize, decorator: D) -> TextRenderer<D> {
+impl<D: TextDecorator> SubRenderer<D> {
+    /// Render links as lines
+    pub fn finalise(&mut self, links: Vec<String>) -> Vec<TaggedLine<D::Annotation>> {
+        self.decorator.finalise(links)
+    }
+
+    /// Construct a new empty SubRenderer.
+    pub fn new(width: usize, decorator: D) -> SubRenderer<D> {
         html_trace!("new({})", width);
-        TextRenderer {
+        SubRenderer {
             width,
             lines: LinkedList::new(),
             at_block_end: false,
             wrapping: None,
-            decorator: Some(decorator),
+            decorator,
             ann_stack: Vec::new(),
             pre_depth: 0,
             text_filter_stack: Vec::new(),
@@ -825,57 +892,56 @@ impl<D: TextDecorator> TextRenderer<D> {
         result
     }
 
+    /// Wrap links to width
+    pub fn fmt_links(&mut self, mut links: Vec<TaggedLine<D::Annotation>>) {
+        for line in links.drain(..) {
+            /* Hard wrap */
+            let mut pos = 0;
+            let mut wrapped_line = TaggedLine::new();
+            for ts in line.into_tagged_strings() {
+                // FIXME: should we percent-escape?  This is probably
+                // an invalid URL to start with.
+                let s = ts.s.replace('\n', " ");
+                let tag = vec![ts.tag];
+
+                let width = s.width();
+                if pos + width > self.width {
+                    // split the string and start a new line
+                    let mut buf = String::new();
+                    for c in s.chars() {
+                        let c_width = UnicodeWidthChar::width(c).unwrap_or(0);
+                        if pos + c_width > self.width {
+                            if !buf.is_empty() {
+                                wrapped_line.push_str(TaggedString {
+                                    s: buf,
+                                    tag: tag.clone(),
+                                });
+                                buf = String::new();
+                            }
+
+                            self.lines.push_back(RenderLine::Text(wrapped_line));
+                            wrapped_line = TaggedLine::new();
+                            pos = 0;
+                        }
+                        pos += c_width;
+                        buf.push(c);
+                    }
+                    wrapped_line.push_str(TaggedString { s: buf, tag });
+                } else {
+                    wrapped_line.push_str(TaggedString {
+                        s: s.to_owned(),
+                        tag,
+                    });
+                    pos += width;
+                }
+            }
+            self.lines.push_back(RenderLine::Text(wrapped_line));
+        }
+    }
+
     /// Returns a `Vec` of `TaggedLine`s with the rendered text.
     pub fn into_lines(mut self) -> LinkedList<RenderLine<Vec<D::Annotation>>> {
         self.flush_wrapping();
-        // And add the links
-        let mut trailer = self.decorator.take().unwrap().finalise();
-        if !trailer.is_empty() {
-            self.start_block();
-            for line in trailer.drain(0..) {
-                /* Hard wrap */
-                let mut pos = 0;
-                let mut wrapped_line = TaggedLine::new();
-                for ts in line.into_tagged_strings() {
-                    // FIXME: should we percent-escape?  This is probably
-                    // an invalid URL to start with.
-                    let s = ts.s.replace('\n', " ");
-                    let tag = vec![ts.tag];
-
-                    let width = s.width();
-                    if pos + width > self.width {
-                        // split the string and start a new line
-                        let mut buf = String::new();
-                        for c in s.chars() {
-                            let c_width = UnicodeWidthChar::width(c).unwrap_or(0);
-                            if pos + c_width > self.width {
-                                if !buf.is_empty() {
-                                    wrapped_line.push_str(TaggedString {
-                                        s: buf,
-                                        tag: tag.clone(),
-                                    });
-                                    buf = String::new();
-                                }
-
-                                self.lines.push_back(RenderLine::Text(wrapped_line));
-                                wrapped_line = TaggedLine::new();
-                                pos = 0;
-                            }
-                            pos += c_width;
-                            buf.push(c);
-                        }
-                        wrapped_line.push_str(TaggedString { s: buf, tag });
-                    } else {
-                        wrapped_line.push_str(TaggedString {
-                            s: s.to_owned(),
-                            tag,
-                        });
-                        pos += width;
-                    }
-                }
-                self.lines.push_back(RenderLine::Text(wrapped_line));
-            }
-        }
         self.lines
     }
 
@@ -898,7 +964,7 @@ fn filter_text_strikeout(s: &str) -> Option<String> {
     Some(result)
 }
 
-impl<D: TextDecorator> Renderer for TextRenderer<D> {
+impl<D: TextDecorator> Renderer for SubRenderer<D> {
     fn add_empty_line(&mut self) {
         html_trace!("add_empty_line()");
         self.flush_all();
@@ -909,10 +975,7 @@ impl<D: TextDecorator> Renderer for TextRenderer<D> {
     }
 
     fn new_sub_renderer(&self, width: usize) -> Self {
-        TextRenderer::new(
-            width,
-            self.decorator.as_ref().unwrap().make_subblock_decorator(),
-        )
+        SubRenderer::new(width, self.decorator.make_subblock_decorator())
     }
 
     fn start_block(&mut self) {
@@ -1001,8 +1064,8 @@ impl<D: TextDecorator> Renderer for TextRenderer<D> {
         } else {
             let mut tag_first = self.ann_stack.clone();
             let mut tag_cont = self.ann_stack.clone();
-            tag_first.push(self.decorator.as_mut().unwrap().decorate_preformat_first());
-            tag_cont.push(self.decorator.as_mut().unwrap().decorate_preformat_cont());
+            tag_first.push(self.decorator.decorate_preformat_first());
+            tag_cont.push(self.decorator.decorate_preformat_cont());
             self.wrapping.as_mut().unwrap().add_preformatted_text(
                 filtered_text,
                 &tag_first,
@@ -1275,117 +1338,78 @@ impl<D: TextDecorator> Renderer for TextRenderer<D> {
     }
 
     fn start_link(&mut self, target: &str) {
-        if let Some((s, annotation)) = self
-            .decorator
-            .as_mut()
-            .map(|d| d.decorate_link_start(target))
-        {
-            self.ann_stack.push(annotation);
-            self.add_inline_text(&s);
-        }
+        let (s, annotation) = self.decorator.decorate_link_start(target);
+        self.ann_stack.push(annotation);
+        self.add_inline_text(&s);
     }
     fn end_link(&mut self) {
-        if let Some(s) = self.decorator.as_mut().map(|d| d.decorate_link_end()) {
-            self.add_inline_text(&s);
-            self.ann_stack.pop();
-        }
+        let s = self.decorator.decorate_link_end();
+        self.add_inline_text(&s);
+        self.ann_stack.pop();
     }
     fn start_emphasis(&mut self) {
-        if let Some((s, annotation)) = self.decorator.as_mut().map(|d| d.decorate_em_start()) {
-            self.ann_stack.push(annotation);
-            self.add_inline_text(&s);
-        }
+        let (s, annotation) = self.decorator.decorate_em_start();
+        self.ann_stack.push(annotation);
+        self.add_inline_text(&s);
     }
     fn end_emphasis(&mut self) {
-        if let Some(s) = self.decorator.as_mut().map(|d| d.decorate_em_end()) {
-            self.add_inline_text(&s);
-            self.ann_stack.pop();
-        }
+        let s = self.decorator.decorate_em_end();
+        self.add_inline_text(&s);
+        self.ann_stack.pop();
     }
     fn start_strong(&mut self) {
-        if let Some((s, annotation)) = self.decorator.as_mut().map(|d| d.decorate_strong_start()) {
-            self.ann_stack.push(annotation);
-            self.add_inline_text(&s);
-        }
+        let (s, annotation) = self.decorator.decorate_strong_start();
+        self.ann_stack.push(annotation);
+        self.add_inline_text(&s);
     }
     fn end_strong(&mut self) {
-        if let Some(s) = self.decorator.as_mut().map(|d| d.decorate_strong_end()) {
-            self.add_inline_text(&s);
-            self.ann_stack.pop();
-        }
+        let s = self.decorator.decorate_strong_end();
+        self.add_inline_text(&s);
+        self.ann_stack.pop();
     }
     fn start_strikeout(&mut self) {
-        if let Some((s, annotation)) = self
-            .decorator
-            .as_mut()
-            .map(|d| d.decorate_strikeout_start())
-        {
-            self.ann_stack.push(annotation);
-            self.add_inline_text(&s);
-        }
+        let (s, annotation) = self.decorator.decorate_strikeout_start();
+        self.ann_stack.push(annotation);
+        self.add_inline_text(&s);
         self.text_filter_stack.push(filter_text_strikeout);
     }
     fn end_strikeout(&mut self) {
         self.text_filter_stack.pop().unwrap();
-        if let Some(s) = self.decorator.as_mut().map(|d| d.decorate_strikeout_end()) {
-            self.add_inline_text(&s);
-            self.ann_stack.pop();
-        }
+        let s = self.decorator.decorate_strikeout_end();
+        self.add_inline_text(&s);
+        self.ann_stack.pop();
     }
     fn start_code(&mut self) {
-        if let Some((s, annotation)) = self.decorator.as_mut().map(|d| d.decorate_code_start()) {
-            self.ann_stack.push(annotation);
-            self.add_inline_text(&s);
-        }
+        let (s, annotation) = self.decorator.decorate_code_start();
+        self.ann_stack.push(annotation);
+        self.add_inline_text(&s);
     }
     fn end_code(&mut self) {
-        if let Some(s) = self.decorator.as_mut().map(|d| d.decorate_code_end()) {
-            self.add_inline_text(&s);
-            self.ann_stack.pop();
-        }
+        let s = self.decorator.decorate_code_end();
+        self.add_inline_text(&s);
+        self.ann_stack.pop();
     }
     fn add_image(&mut self, src: &str, title: &str) {
-        if let Some((s, tag)) = self
-            .decorator
-            .as_mut()
-            .map(|d| d.decorate_image(src, title))
-        {
-            self.ann_stack.push(tag);
-            self.add_inline_text(&s);
-            self.ann_stack.pop();
-        }
+        let (s, tag) = self.decorator.decorate_image(src, title);
+        self.ann_stack.push(tag);
+        self.add_inline_text(&s);
+        self.ann_stack.pop();
     }
 
     fn header_prefix(&mut self, level: usize) -> String {
-        if let Some(d) = self.decorator.as_mut() {
-            d.header_prefix(level)
-        } else {
-            "".to_owned()
-        }
+        self.decorator.header_prefix(level)
     }
 
     fn quote_prefix(&mut self) -> String {
-        if let Some(d) = self.decorator.as_mut() {
-            d.quote_prefix()
-        } else {
-            "".to_owned()
-        }
+        self.decorator.quote_prefix()
     }
 
     fn unordered_item_prefix(&mut self) -> String {
-        if let Some(d) = self.decorator.as_mut() {
-            d.unordered_item_prefix()
-        } else {
-            "".to_owned()
-        }
+        self.decorator.unordered_item_prefix()
     }
 
     fn ordered_item_prefix(&mut self, i: i64) -> String {
-        if let Some(d) = self.decorator.as_mut() {
-            d.ordered_item_prefix(i)
-        } else {
-            "".to_owned()
-        }
+        self.decorator.ordered_item_prefix(i)
     }
 
     fn record_frag_start(&mut self, fragname: &str) {
@@ -1399,31 +1423,33 @@ impl<D: TextDecorator> Renderer for TextRenderer<D> {
     }
 }
 
-/// A decorator for use with `TextRenderer` which outputs plain UTF-8 text
+/// A decorator for use with `SubRenderer` which outputs plain UTF-8 text
 /// with no annotations.  Markup is rendered as text characters or footnotes.
 #[derive(Clone, Debug)]
 pub struct PlainDecorator {
-    links: Vec<String>,
+    nlinks: Rc<Cell<usize>>,
 }
 
 impl PlainDecorator {
     /// Create a new `PlainDecorator`.
     #[cfg_attr(feature = "clippy", allow(new_without_default_derive))]
     pub fn new() -> PlainDecorator {
-        PlainDecorator { links: Vec::new() }
+        PlainDecorator {
+            nlinks: Rc::new(Cell::new(0)),
+        }
     }
 }
 
 impl TextDecorator for PlainDecorator {
     type Annotation = ();
 
-    fn decorate_link_start(&mut self, url: &str) -> (String, Self::Annotation) {
-        self.links.push(url.to_string());
+    fn decorate_link_start(&mut self, _url: &str) -> (String, Self::Annotation) {
+        self.nlinks.set(self.nlinks.get() + 1);
         ("[".to_string(), ())
     }
 
     fn decorate_link_end(&mut self) -> String {
-        format!("][{}]", self.links.len())
+        format!("][{}]", self.nlinks.get())
     }
 
     fn decorate_em_start(&mut self) -> (String, Self::Annotation) {
@@ -1485,8 +1511,8 @@ impl TextDecorator for PlainDecorator {
         format!("{}. ", i)
     }
 
-    fn finalise(self) -> Vec<TaggedLine<()>> {
-        self.links
+    fn finalise(&mut self, links: Vec<String>) -> Vec<TaggedLine<()>> {
+        links
             .into_iter()
             .enumerate()
             .map(|(idx, s)| TaggedLine::from_string(format!("[{}]: {}", idx + 1, s), &()))
@@ -1494,11 +1520,11 @@ impl TextDecorator for PlainDecorator {
     }
 
     fn make_subblock_decorator(&self) -> Self {
-        PlainDecorator::new()
+        self.clone()
     }
 }
 
-/// A decorator for use with `TextRenderer` which outputs plain UTF-8 text
+/// A decorator for use with `SubRenderer` which outputs plain UTF-8 text
 /// with no annotations or markup, emitting only the literal text.
 #[derive(Clone, Debug)]
 pub struct TrivialDecorator {}
@@ -1582,7 +1608,7 @@ impl TextDecorator for TrivialDecorator {
         "".to_string()
     }
 
-    fn finalise(self) -> Vec<TaggedLine<()>> {
+    fn finalise(&mut self, _links: Vec<String>) -> Vec<TaggedLine<()>> {
         Vec::new()
     }
 
@@ -1703,7 +1729,7 @@ impl TextDecorator for RichDecorator {
         format!("{}. ", i)
     }
 
-    fn finalise(self) -> Vec<TaggedLine<RichAnnotation>> {
+    fn finalise(&mut self, _links: Vec<String>) -> Vec<TaggedLine<RichAnnotation>> {
         Vec::new()
     }
 

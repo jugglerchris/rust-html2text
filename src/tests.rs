@@ -1173,7 +1173,7 @@ fn test_finalise() {
             format!("{}. ", i)
         }
 
-        fn finalise(self) -> Vec<TaggedLine<bool>> {
+        fn finalise(&mut self, _links: Vec<String>) -> Vec<TaggedLine<bool>> {
             vec![TaggedLine::from_string(String::new(), &true)]
         }
 
@@ -1396,4 +1396,28 @@ End.
     let decorator = crate::render::text_renderer::TrivialDecorator::new();
     let text = from_read_with_decorator(html.as_bytes(), usize::MAX, decorator.clone());
     assert_eq!(text, "Test.\n\n\nEnd.\n");
+}
+
+#[test]
+fn test_links_outside_table() {
+    let html = r#"
+<table>
+<tbody>
+<tr><td><a href="https://example.com/verylonglinks"><img src="http://www.twitter.com/img/icon_twitter.png" alt="Twitter"></a></td>
+    <td><a href="http://www.facebook.com/pages"><img src="http://www.facebook.com/icon_facebook.png" alt="Facebook"></a></td>
+        </tr>
+        </tbody>
+        </table>
+"#;
+    let text = from_read(html.as_bytes(), 80);
+    assert_eq!(
+        text,
+        "──────────────┬───────────────
+[[Twitter]][1]│[[Facebook]][2]
+──────────────┴───────────────
+
+[1]: https://example.com/verylonglinks
+[2]: http://www.facebook.com/pages
+"
+    );
 }
