@@ -499,9 +499,7 @@ impl<T: Clone + Eq + Debug + Default> WrappedBlock<T> {
                             }
                         }
                     }
-                    _ => {
-                        eprintln!("Got character: {:?}", c);
-                    }
+                    _ => {}
                 }
             }
             html_trace_quiet!("  Added char {:?}", c);
