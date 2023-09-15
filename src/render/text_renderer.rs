@@ -891,49 +891,21 @@ impl<D: TextDecorator> SubRenderer<D> {
     }
 
     /// Wrap links to width
-    pub fn fmt_links(&mut self, mut links: Vec<TaggedLine<D::Annotation>>) {
-        for line in links.drain(..) {
-            /* Hard wrap */
-            let mut pos = 0;
-            let mut wrapped_line = TaggedLine::new();
-            for ts in line.into_tagged_strings() {
+    pub fn fmt_links(&mut self, links: Vec<TaggedLine<D::Annotation>>) {
+        for link in links {
+            let mut line = TaggedLine::new();
+            for ts in link.into_tagged_strings() {
                 // FIXME: should we percent-escape?  This is probably
                 // an invalid URL to start with.
                 let s = ts.s.replace('\n', " ");
                 let tag = vec![ts.tag];
 
-                let width = s.width();
-                if pos + width > self.width {
-                    // split the string and start a new line
-                    let mut buf = String::new();
-                    for c in s.chars() {
-                        let c_width = UnicodeWidthChar::width(c).unwrap_or(0);
-                        if pos + c_width > self.width {
-                            if !buf.is_empty() {
-                                wrapped_line.push_str(TaggedString {
-                                    s: buf,
-                                    tag: tag.clone(),
-                                });
-                                buf = String::new();
-                            }
-
-                            self.lines.push_back(RenderLine::Text(wrapped_line));
-                            wrapped_line = TaggedLine::new();
-                            pos = 0;
-                        }
-                        pos += c_width;
-                        buf.push(c);
-                    }
-                    wrapped_line.push_str(TaggedString { s: buf, tag });
-                } else {
-                    wrapped_line.push_str(TaggedString {
-                        s: s.to_owned(),
-                        tag,
-                    });
-                    pos += width;
-                }
+                line.push_str(TaggedString {
+                    s: s.to_owned(),
+                    tag,
+                });
             }
-            self.lines.push_back(RenderLine::Text(wrapped_line));
+            self.lines.push_back(RenderLine::Text(line));
         }
     }
 

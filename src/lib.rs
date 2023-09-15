@@ -1129,11 +1129,11 @@ fn render_tree_to_string<T: Write, D: TextDecorator>(
         do_render_node(renderer, node, err_out)
     });
     let (mut renderer, links) = renderer.into_inner();
-    let lines = renderer.finalise(links);
+    let linklines = renderer.finalise(links);
     // And add the links
-    if !lines.is_empty() {
+    if !linklines.is_empty() {
         renderer.start_block();
-        renderer.fmt_links(lines);
+        renderer.fmt_links(linklines);
     }
     renderer
 }
