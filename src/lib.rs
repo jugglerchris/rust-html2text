@@ -1528,6 +1528,60 @@ fn render_table_cell<T: Write, D: TextDecorator>(
     })
 }
 
+pub mod config {
+    //! Configure the HTML to text translation using the `Config` type, which can be
+    //! constructed using one of the functions in this module.
+
+    use crate::render::text_renderer::{
+        PlainDecorator, RichDecorator, TaggedLine, TextDecorator
+    };
+    use super::parse;
+
+    /// Configure the HTML processing.
+    pub struct Config<D: TextDecorator> {
+        decorator: D,
+    }
+
+    impl<D: TextDecorator> Config<D> {
+        /// Reads HTML from `input`, and returns a `String` with text wrapped to
+        /// `width` columns.
+        pub fn string_from_read<R: std::io::Read>(self, input: R, width: usize) -> String {
+            parse(input).render(width, self.decorator).into_string()
+        }
+
+        /// Reads HTML from `input`, and returns text wrapped to `width` columns.
+        /// The text is returned as a `Vec<TaggedLine<_>>`; the annotations are vectors
+        /// of the provided text decorator's `Annotation`.  The "outer" annotation comes first in
+        /// the `Vec`.
+        pub fn lines_from_read<R: std::io::Read>(self, input: R, width: usize) -> Vec<TaggedLine<Vec<D::Annotation>>> {
+            parse(input)
+                .render(width, self.decorator)
+                .into_lines()
+        }
+    }
+
+    /// Return a Config initialized with a `RichDecorator`.
+    pub fn rich() -> Config<RichDecorator> {
+        Config {
+            decorator: RichDecorator::new()
+        }
+    }
+
+    /// Return a Config initialized with a `PlainDecorator`.
+    pub fn plain() -> Config<PlainDecorator> {
+        Config {
+            decorator: PlainDecorator::new()
+        }
+    }
+
+    /// Return a Config initialized with a custom decorator.
+    pub fn with_decorator<D: TextDecorator>(decorator: D) -> Config<D> {
+        Config {
+            decorator
+        }
+    }
+}
+
 /// The structure of an HTML document that can be rendered using a [`TextDecorator`][].
 ///
 /// [`TextDecorator`]: render/text_renderer/trait.TextDecorator.html
@@ -1604,7 +1658,8 @@ where
     R: io::Read,
     D: TextDecorator,
 {
-    parse(input).render(width, decorator).into_string()
+    config::with_decorator(decorator)
+           .string_from_read(input, width)
 }
 
 /// Reads HTML from `input`, and returns a `String` with text wrapped to
@@ -1613,8 +1668,8 @@ pub fn from_read<R>(input: R, width: usize) -> String
 where
     R: io::Read,
 {
-    let decorator = PlainDecorator::new();
-    from_read_with_decorator(input, width, decorator)
+    config::plain()
+           .string_from_read(input, width)
 }
 
 /// Reads HTML from `input`, and returns text wrapped to `width` columns.
@@ -1624,9 +1679,8 @@ pub fn from_read_rich<R>(input: R, width: usize) -> Vec<TaggedLine<Vec<RichAnnot
 where
     R: io::Read,
 {
-    parse(input)
-        .render(width, RichDecorator::new())
-        .into_lines()
+    config::rich()
+        .lines_from_read(input, width)
 }
 
 #[cfg(feature = "ansi_colours")]

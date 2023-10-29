@@ -6,15 +6,15 @@ orbs:
 jobs:
   build-stable:
     docker:
-      - image: cimg/rust:1.59
+      - image: cimg/rust:1.73
     steps:
       - checkout
       - run: cargo --version
       - run: cargo build
       - run: cargo test
-  build-1-56:
+  build-1-60:
     docker:
-      - image: cimg/rust:1.56
+      - image: cimg/rust:1.60
     steps:
       - checkout
       - run: cargo --version
@@ -54,5 +54,5 @@ workflows:
   build:
     jobs:
       - "build-stable"
-      - "build-1-56"
+      - "build-1-60"
       - "build-windows"
