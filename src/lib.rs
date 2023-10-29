@@ -1592,6 +1592,9 @@ pub struct RenderTree(RenderNode);
 impl RenderTree {
     /// Render this document using the given `decorator` and wrap it to `width` columns.
     pub fn render<D: TextDecorator>(self, width: usize, decorator: D) -> RenderedText<D> {
+        if width == 0 {
+            panic!("Error: width can not be zero");
+        }
         let builder = SubRenderer::new(width, decorator);
         let builder = render_tree_to_string(builder, self.0, &mut Discard {});
         RenderedText(builder)
