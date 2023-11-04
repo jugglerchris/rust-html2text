@@ -133,6 +133,78 @@ fn test_colspan() {
 }
 
 #[test]
+fn test_colspan_zero() {
+    test_html(
+        br##"
+   <table>
+     <tr>
+       <td>1</td>
+       <td>2</td>
+       <td>3</td>
+     </tr>
+     <tr>
+       <td colspan="2">12</td>
+       <td>3</td>
+     </tr>
+     <tr>
+       <td>1</td>
+       <td colspan="0">23</td>
+     </tr>
+   </table>
+"##,
+        r#"─┬─┬─
+1│2│3
+─┴─┼─
+12 │3
+─┬─┴─
+1│23 
+─┴───
+"#,
+        12,
+    );
+}
+
+#[test]
+fn test_colspan_large() {
+    test_html(
+        br##"
+   <table>
+     <tr>
+       <td>1</td>
+       <td>2</td>
+       <td>3</td>
+     </tr>
+     <tr>
+       <td colspan="2">12</td>
+       <td>3</td>
+     </tr>
+     <tr>
+       <td>1</td>
+       <td colspan="99">23</td>
+     </tr>
+   </table>
+"##,
+        r#"────────────
+1
+////////////
+2
+////////////
+3
+────────────
+12
+////////////
+3
+────────────
+1
+////////////
+23
+────────────
+"#,
+        12,
+    );
+}
+
+#[test]
 fn test_para() {
     assert_eq_str!(from_read(&b"<p>Hello</p>"[..], 10), "Hello\n");
 }
