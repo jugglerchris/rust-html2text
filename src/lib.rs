@@ -182,7 +182,7 @@ impl RenderTableRow {
     /// Count the number of cells in the row.
     /// Takes into account colspan.
     pub fn num_cells(&self) -> usize {
-        self.cells.iter().map(|cell| cell.colspan).sum()
+        self.cells.iter().map(|cell| cell.colspan.max(1)).sum()
     }
     /// Return an iterator over (column, &cell)s, which
     /// takes into account colspan.
@@ -644,7 +644,7 @@ fn tbody_to_render_tree<'a, 'b, T: Write>(
     _err_out: &'b mut T,
 ) -> TreeMapResult<'a, (), Handle, RenderNode> {
     pending(handle, |_, rowchildren| {
-        let rows = rowchildren
+        let mut rows = rowchildren
             .into_iter()
             .flat_map(|rownode| {
                 if let RenderNodeInfo::TableRow(row, _) = rownode.info {
@@ -654,7 +654,37 @@ fn tbody_to_render_tree<'a, 'b, T: Write>(
                     None
                 }
             })
-            .collect();
+            .collect::<Vec<_>>();
+
+        // Handle colspan=0 by replacing it.
+        // Get a list of (has_zero_colspan, sum_colspan)
+        let num_columns =
+            rows.iter()
+                .map(|row| {
+                    row.cells()
+                       // Treat the column as having colspan 1 for initial counting.
+                       .map(|cell| (cell.colspan == 0, cell.colspan.max(1)))
+                       .fold((false, 0), |a, b| {
+                           (a.0 || b.0, a.1 + b.1)
+                       })
+                })
+                .collect::<Vec<_>>();
+
+        let max_columns = num_columns.iter().map(|(_, span)| span).max().unwrap_or(&1);
+
+        for (i, &(has_zero, num_cols)) in num_columns.iter().enumerate() {
+            // Note this won't be sensible if more than one column has colspan=0,
+            // but that's not very well defined anyway.
+            if has_zero {
+                for cell in rows[i].cells_mut() {
+                    if cell.colspan == 0 {
+                        // +1 because we said it had 1 to start with
+                        cell.colspan = max_columns - num_cols + 1;
+                    }
+                }
+            }
+        }
+
         Some(RenderNode::new(RenderNodeInfo::TableBody(rows)))
     })
 }
@@ -1377,6 +1407,7 @@ fn render_table_tree<T: Write, D: TextDecorator>(
         for cell in row.cells() {
             // FIXME: get_size_estimate is still recursive.
             let mut estimate = cell.get_size_estimate();
+
             // If the cell has a colspan>1, then spread its size between the
             // columns.
             estimate.size /= cell.colspan;
@@ -1393,7 +1424,7 @@ fn render_table_tree<T: Write, D: TextDecorator>(
         + col_sizes.len().saturating_sub(1);
     let width = renderer.width();
 
-    let vert_row = min_size > width;
+    let vert_row = min_size > width || width == 0;
 
     let mut col_widths: Vec<usize> = if !vert_row {
         col_sizes

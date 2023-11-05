@@ -133,6 +133,78 @@ fn test_colspan() {
 }
 
 #[test]
+fn test_colspan_zero() {
+    test_html(
+        br##"
+   <table>
+     <tr>
+       <td>1</td>
+       <td>2</td>
+       <td>3</td>
+     </tr>
+     <tr>
+       <td colspan="2">12</td>
+       <td>3</td>
+     </tr>
+     <tr>
+       <td>1</td>
+       <td colspan="0">23</td>
+     </tr>
+   </table>
+"##,
+        r#"─┬─┬─
+1│2│3
+─┴─┼─
+12 │3
+─┬─┴─
+1│23 
+─┴───
+"#,
+        12,
+    );
+}
+
+#[test]
+fn test_colspan_large() {
+    test_html(
+        br##"
+   <table>
+     <tr>
+       <td>1</td>
+       <td>2</td>
+       <td>3</td>
+     </tr>
+     <tr>
+       <td colspan="2">12</td>
+       <td>3</td>
+     </tr>
+     <tr>
+       <td>1</td>
+       <td colspan="99">23</td>
+     </tr>
+   </table>
+"##,
+        r#"────────────
+1
+////////////
+2
+////////////
+3
+────────────
+12
+////////////
+3
+────────────
+1
+////////////
+23
+────────────
+"#,
+        12,
+    );
+}
+
+#[test]
 fn test_para() {
     assert_eq_str!(from_read(&b"<p>Hello</p>"[..], 10), "Hello\n");
 }
@@ -1257,6 +1329,68 @@ fn test_empty_cols() {
 ─┼─
 5│6
 ─┴─
+"#,
+        12,
+    );
+}
+
+#[test]
+fn test_empty_table() {
+    test_html(
+        br##"
+   <table></table>
+"##,
+        r#"
+"#,
+        12,
+    );
+}
+
+#[test]
+fn test_table_empty_single_row() {
+    test_html(
+        br##"
+   <table><tr></tr></table>
+"##,
+        r#"
+"#,
+        12,
+    );
+}
+
+#[test]
+fn test_table_empty_single_row_empty_cell() {
+    test_html(
+        br##"
+   <table><tr><td></td></tr></table>
+"##,
+        r#"
+"#,
+        12,
+    );
+}
+
+#[test]
+fn test_renderer_zero_width() {
+    test_html(
+        br##"<ul><li><table><tr><td>x</td></tr></table></li></ul>
+"##,
+// Unfortunately the "x" ends up not being rendered as it doesn't fit.
+        r#"* 
+  
+"#,
+        2,
+    );
+}
+
+#[test]
+fn test_ul_tiny_table() {
+    test_html(
+        br##"<ul><li><table><tr><td>x</td></tr></table></li></ul>
+"##,
+        r#"* ─
+  x
+  ─
 "#,
         12,
     );
