@@ -1335,6 +1335,68 @@ fn test_empty_cols() {
 }
 
 #[test]
+fn test_empty_table() {
+    test_html(
+        br##"
+   <table></table>
+"##,
+        r#"
+"#,
+        12,
+    );
+}
+
+#[test]
+fn test_table_empty_single_row() {
+    test_html(
+        br##"
+   <table><tr></tr></table>
+"##,
+        r#"
+"#,
+        12,
+    );
+}
+
+#[test]
+fn test_table_empty_single_row_empty_cell() {
+    test_html(
+        br##"
+   <table><tr><td></td></tr></table>
+"##,
+        r#"
+"#,
+        12,
+    );
+}
+
+#[test]
+fn test_renderer_zero_width() {
+    test_html(
+        br##"<ul><li><table><tr><td>x</td></tr></table></li></ul>
+"##,
+// Unfortunately the "x" ends up not being rendered as it doesn't fit.
+        r#"* 
+  
+"#,
+        2,
+    );
+}
+
+#[test]
+fn test_ul_tiny_table() {
+    test_html(
+        br##"<ul><li><table><tr><td>x</td></tr></table></li></ul>
+"##,
+        r#"* ─
+  x
+  ─
+"#,
+        12,
+    );
+}
+
+#[test]
 fn test_issue_54_oob() {
     test_html(
         br##"

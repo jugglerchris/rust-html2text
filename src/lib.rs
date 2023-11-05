@@ -1424,7 +1424,7 @@ fn render_table_tree<T: Write, D: TextDecorator>(
         + col_sizes.len().saturating_sub(1);
     let width = renderer.width();
 
-    let vert_row = min_size > width;
+    let vert_row = min_size > width || width == 0;
 
     let mut col_widths: Vec<usize> = if !vert_row {
         col_sizes
