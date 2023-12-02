@@ -19,7 +19,7 @@ fn default_colour_map(annotation: &RichAnnotation) -> (String, String) {
             format!("{}", termion::style::Underline),
             format!("{}", termion::style::Reset),
         ),
-        Image => (format!("{}", Fg(Blue)), format!("{}", Fg(Reset))),
+        Image(_) => (format!("{}", Fg(Blue)), format!("{}", Fg(Reset))),
         Emphasis => (
             format!("{}", termion::style::Bold),
             format!("{}", termion::style::Reset),
@@ -28,6 +28,10 @@ fn default_colour_map(annotation: &RichAnnotation) -> (String, String) {
         Strikeout => (format!("{}", Fg(LightBlack)), format!("{}", Fg(Reset))),
         Code => (format!("{}", Fg(Blue)), format!("{}", Fg(Reset))),
         Preformat(_) => (format!("{}", Fg(Blue)), format!("{}", Fg(Reset))),
+        Colour(c) => {
+            unimplemented!("Got colour {c}")
+        }
+        _ => ("".into(), "".into()),
     }
 }
 

@@ -1252,6 +1252,8 @@ fn test_finalise() {
         fn make_subblock_decorator(&self) -> Self {
             TestDecorator
         }
+
+        fn add_style(&mut self, _: &str) {}
     }
 
     assert_eq!(

@@ -563,8 +563,7 @@ fn precalc_size_estimate<'a>(node: &'a RenderNode) -> TreeMapResult<(), &'a Rend
         }
         TableRow(..) | TableBody(_) | TableCell(_) => unimplemented!(),
         #[cfg(feature = "css")]
-        Style(ref s) => {
-            dbg!(s);
+        Style(_) => {
             TreeMapResult::Nothing
         }
     }

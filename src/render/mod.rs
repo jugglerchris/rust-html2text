@@ -125,4 +125,7 @@ pub trait Renderer {
 
     /// Record the start of a named HTML fragment
     fn record_frag_start(&mut self, fragname: &str);
+
+    /// Add some CSS styling (handled by the decorator)
+    fn add_style(&mut self, style: &str);
 }

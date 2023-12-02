@@ -592,6 +592,9 @@ pub trait TextDecorator {
     /// for sub blocks.
     fn make_subblock_decorator(&self) -> Self;
 
+    /// Add some style (CSS) text
+    fn add_style(&mut self, style_text: &str);
+
     /// Finish with a document, and return extra lines (eg footnotes)
     /// to add to the rendered text.
     fn finalise(&mut self, links: Vec<String>) -> Vec<TaggedLine<Self::Annotation>>;
@@ -1419,6 +1422,10 @@ impl<D: TextDecorator> Renderer for SubRenderer<D> {
             .unwrap()
             .add_element(FragmentStart(fragname.to_string()));
     }
+
+    fn add_style(&mut self, style_text: &str) {
+        self.decorator.add_style(style_text);
+    }
 }
 
 /// A decorator for use with `SubRenderer` which outputs plain UTF-8 text
@@ -1520,6 +1527,8 @@ impl TextDecorator for PlainDecorator {
     fn make_subblock_decorator(&self) -> Self {
         self.clone()
     }
+
+    fn add_style(&mut self, _: &str) {}
 }
 
 /// A decorator for use with `SubRenderer` which outputs plain UTF-8 text
@@ -1613,6 +1622,8 @@ impl TextDecorator for TrivialDecorator {
     fn make_subblock_decorator(&self) -> Self {
         TrivialDecorator::new()
     }
+
+    fn add_style(&mut self, _: &str) {}
 }
 
 /// A decorator to generate rich text (styled) rather than
@@ -1623,6 +1634,7 @@ pub struct RichDecorator {}
 /// Annotation type for "rich" text.  Text is associated with a set of
 /// these.
 #[derive(PartialEq, Eq, Clone, Debug)]
+#[non_exhaustive]
 pub enum RichAnnotation {
     /// Normal text.
     Default,
@@ -1640,6 +1652,8 @@ pub enum RichAnnotation {
     Code,
     /// Preformatted; true if a continuation line for an overly-long line.
     Preformat(bool),
+    /// Colour information
+    Colour(String),
 }
 
 impl Default for RichAnnotation {
@@ -1733,5 +1747,12 @@ impl TextDecorator for RichDecorator {
 
     fn make_subblock_decorator(&self) -> Self {
         RichDecorator::new()
+    }
+
+    fn add_style(&mut self, style: &str) {
+        #[cfg(feature = "css")]
+        {
+            eprintln!("Adding style: [{style}]");
+        }
     }
 }
