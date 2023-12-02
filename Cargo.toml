@@ -23,8 +23,9 @@ backtrace = { version = "0.3", optional=true }
 [features]
 html_trace = []
 html_trace_bt = ["backtrace"]
-default = []
+default = ["css"]
 ansi_colours = []
+css = []
 
 [[example]]
 name = "html2term"

@@ -81,6 +81,8 @@ use std::cmp::{max, min};
 use std::io;
 use std::io::Write;
 use std::iter::{once, repeat};
+#[allow(unused)] // Only needed for some features.
+use std::ops::Deref;
 
 /// A dummy writer which does nothing
 struct Discard {}
@@ -303,6 +305,7 @@ impl RenderTable {
 
 /// The node-specific information distilled from the DOM.
 #[derive(Clone, Debug)]
+#[non_exhaustive]
 pub enum RenderNodeInfo {
     /// Some text.
     Text(String),
@@ -354,6 +357,9 @@ pub enum RenderNodeInfo {
     TableCell(RenderTableCell),
     /// Start of a named HTML fragment
     FragStart(String),
+    #[cfg(feature = "css")]
+    /// Style information (CSS)
+    Style(String),
 }
 
 /// Common fields from a node.
@@ -456,6 +462,8 @@ impl RenderNode {
             Table(ref t) => t.get_size_estimate(),
             TableRow(..) | TableBody(_) | TableCell(_) => unimplemented!(),
             FragStart(_) => Default::default(),
+            #[cfg(feature = "css")]
+            Style(_) => Default::default(),
         };
         self.size_estimate.set(Some(estimate));
         estimate
@@ -494,6 +502,8 @@ impl RenderNode {
             Table(ref _t) => false,
             TableRow(..) | TableBody(_) | TableCell(_) => false,
             FragStart(_) => true,
+            #[cfg(feature = "css")]
+            Style(_) => true,
         }
     }
 }
@@ -552,6 +562,11 @@ fn precalc_size_estimate<'a>(node: &'a RenderNode) -> TreeMapResult<(), &'a Rend
             }
         }
         TableRow(..) | TableBody(_) | TableCell(_) => unimplemented!(),
+        #[cfg(feature = "css")]
+        Style(ref s) => {
+            dbg!(s);
+            TreeMapResult::Nothing
+        }
     }
 }
 
@@ -968,9 +983,23 @@ fn process_dom_node<'a, 'b, T: Write>(
                 | expanded_name!(html "meta")
                 | expanded_name!(html "hr")
                 | expanded_name!(html "script")
-                | expanded_name!(html "style")
                 | expanded_name!(html "head") => {
                     /* Ignore the head and its children */
+                    Nothing
+                }
+                #[cfg(feature = "css")]
+                expanded_name!(html "style") => {
+                    let mut result = String::new();
+                    // Assume just a flat text node
+                    for child in handle.children.borrow().iter() {
+                        if let markup5ever_rcdom::NodeData::Text { ref contents } = child.data {
+                            result += &String::from(contents.borrow().deref());
+                        }
+                    }
+                    Finished(RenderNode::new(Style(result)))
+                }
+                #[cfg(not(feature = "css"))]
+                expanded_name!(html "style") => {
                     Nothing
                 }
                 expanded_name!(html "a") => {
@@ -1386,6 +1415,10 @@ fn do_render_node<'a, 'b, T: Write, D: TextDecorator>(
         TableCell(cell) => render_table_cell(renderer, cell, err_out),
         FragStart(fragname) => {
             renderer.record_frag_start(&fragname);
+            Finished(None)
+        }
+        #[cfg(feature = "css")]
+        Style(_) => {
             Finished(None)
         }
     }
