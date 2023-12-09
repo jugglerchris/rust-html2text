@@ -62,7 +62,6 @@ pub mod render;
 #[cfg(feature = "css")]
 pub mod css;
 
-use lightningcss::values::color::CssColor;
 use render::text_renderer::{
     PlainDecorator, RenderLine, RichAnnotation, RichDecorator, SubRenderer, TaggedLine,
     TextDecorator, TextRenderer,
@@ -81,7 +80,12 @@ use markup5ever_rcdom::{
 };
 use std::cell::Cell;
 use std::cmp::{max, min};
+
+#[cfg(feature = "css")]
+use lightningcss::values::color::CssColor;
+#[cfg(feature = "css")]
 use std::convert::TryFrom;
+
 use std::io;
 use std::io::Write;
 use std::iter::{once, repeat};
@@ -99,6 +103,7 @@ pub struct Colour {
     pub b: u8,
 }
 
+#[cfg(feature = "css")]
 impl TryFrom<&CssColor> for Colour {
     type Error = ();
 
@@ -493,7 +498,6 @@ impl RenderNode {
             Table(ref t) => t.get_size_estimate(),
             TableRow(..) | TableBody(_) | TableCell(_) => unimplemented!(),
             FragStart(_) => Default::default(),
-            #[cfg(feature = "css")]
             Coloured(_, ref v) => v
                 .iter()
                 .map(RenderNode::get_size_estimate)
@@ -536,7 +540,6 @@ impl RenderNode {
             Table(ref _t) => false,
             TableRow(..) | TableBody(_) | TableCell(_) => false,
             FragStart(_) => true,
-            #[cfg(feature = "css")]
             Coloured(_, ref v) => v.is_empty(),
         }
     }
@@ -596,7 +599,6 @@ fn precalc_size_estimate<'a>(node: &'a RenderNode) -> TreeMapResult<(), &'a Rend
             }
         }
         TableRow(..) | TableBody(_) | TableCell(_) => unimplemented!(),
-        #[cfg(feature = "css")]
         Coloured(_, ref v) => TreeMapResult::PendingChildren {
             children: v.iter().collect(),
             cons: Box::new(move |_, _cs| {
@@ -1010,6 +1012,7 @@ fn prepend_marker(prefix: RenderNode, mut orig: RenderNode) -> RenderNode {
 fn process_dom_node<'a, 'b, 'c, T: Write>(
     handle: Handle,
     err_out: &'b mut T,
+    #[allow(unused)] // Used with css feature
     context: &'c mut HtmlContext,
 ) -> TreeMapResult<'a, HtmlContext, Handle, RenderNode> {
     use RenderNodeInfo::*;
@@ -1040,7 +1043,6 @@ fn process_dom_node<'a, 'b, 'c, T: Write>(
                     Nothing
                 }
                 expanded_name!(html "span") => {
-                    let mut classes = Vec::new();
                     #[cfg(not(feature = "css"))]
                     {
                         /* process children, but don't add anything */
@@ -1048,6 +1050,7 @@ fn process_dom_node<'a, 'b, 'c, T: Write>(
                     }
                     #[cfg(feature = "css")]
                     {
+                        let mut classes = Vec::new();
                         let borrowed = attrs.borrow();
                         for attr in borrowed.iter() {
                             if &attr.name.local == "class" {
@@ -1486,7 +1489,6 @@ fn do_render_node<'a, 'b, T: Write, D: TextDecorator>(
             renderer.record_frag_start(&fragname);
             Finished(None)
         }
-        #[cfg(feature = "css")]
         Coloured(colour, children) => {
             renderer.push_colour(colour);
             pending2(children, |renderer: &mut TextRenderer<D>, _| {

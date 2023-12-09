@@ -24,7 +24,7 @@ lightningcss = { version = "1.0.0-alpha.51", optional=true }
 [features]
 html_trace = []
 html_trace_bt = ["backtrace"]
-default = ["css"]
+default = []
 ansi_colours = []
 css = ["dep:lightningcss"]
 
