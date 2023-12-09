@@ -61,14 +61,16 @@ impl<D: TextDecorator> TextRenderer<D> {
     /// Pop off the top builder and return it.
     /// Panics if empty
     pub fn pop(&mut self) -> SubRenderer<D> {
-        self.subrender.pop().unwrap()
+        self.subrender.pop().expect("Attempt to pop a subrender from empty stack")
     }
 
     /// Pop off the only builder and return it.
     /// panics if there aren't exactly 1 available.
     pub fn into_inner(mut self) -> (SubRenderer<D>, Vec<String>) {
         assert_eq!(self.subrender.len(), 1);
-        (self.subrender.pop().unwrap(), self.links)
+        (self.subrender.pop().expect(
+                "Attempt to pop a subrenderer from an empty stack"),
+        self.links)
     }
 }
 
@@ -1372,7 +1374,7 @@ impl<D: TextDecorator> Renderer for SubRenderer<D> {
         self.text_filter_stack.push(filter_text_strikeout);
     }
     fn end_strikeout(&mut self) {
-        self.text_filter_stack.pop().unwrap();
+        self.text_filter_stack.pop().expect("end_strikeout() called without a corresponding start_strokeout()");
         let s = self.decorator.decorate_strikeout_end();
         self.add_inline_text(&s);
         self.ann_stack.pop();
