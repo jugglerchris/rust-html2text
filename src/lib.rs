@@ -1058,9 +1058,7 @@ fn process_dom_node<'a, 'b, 'c, T: Write>(
                         }
                         let mut colour = None;
                         for class in classes {
-                            dbg!(&class);
                             if let Some(c) = context.style_data.colours.get(&class) {
-                                dbg!(c);
                                 colour = Some(c);
                                 break;
                             }

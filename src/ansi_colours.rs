@@ -23,7 +23,7 @@ pub fn from_read_coloured<R, FMap>(
 ) -> Result<String, std::fmt::Error>
 where
     R: io::Read,
-    FMap: Fn(&RichAnnotation) -> (String, String),
+    FMap: Fn(&[RichAnnotation]) -> (String, String),
 {
     let lines = parse(input)
         .render(width, RichDecorator::new())
@@ -32,14 +32,7 @@ where
     let mut result = String::new();
     for line in lines {
         for ts in line.tagged_strings() {
-            let mut start = String::new();
-            let mut finish = String::new();
-            dbg!(&ts.tag);
-            for ann in &ts.tag {
-                let (s, f) = colour_map(ann);
-                start.push_str(&s);
-                finish.push_str(&f);
-            }
+            let (start, finish) = colour_map(&ts.tag);
             write!(result, "{}{}{}", start, ts.s, finish)?;
         }
         result.push('\n');
