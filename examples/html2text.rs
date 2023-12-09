@@ -27,9 +27,12 @@ fn default_colour_map(annotation: &RichAnnotation) -> (String, String) {
         Strong => (format!("{}", Fg(LightYellow)), format!("{}", Fg(Reset))),
         Strikeout => (format!("{}", Fg(LightBlack)), format!("{}", Fg(Reset))),
         Code => (format!("{}", Fg(Blue)), format!("{}", Fg(Reset))),
-        Preformat(_) => (format!("{}", Fg(Blue)), format!("{}", Fg(Reset))),
+        Preformat(_) => ("".into(), "".into()), //(format!("{}", Fg(Blue)), format!("{}", Fg(Reset))),
         Colour(c) => {
-            unimplemented!("Got colour {c}")
+            (
+                format!("{}", Fg(Rgb(c.r, c.g, c.b))),
+                format!("{}", Fg(Reset))
+            )
         }
         _ => ("".into(), "".into()),
     }

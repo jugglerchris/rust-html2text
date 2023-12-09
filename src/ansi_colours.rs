@@ -34,6 +34,7 @@ where
         for ts in line.tagged_strings() {
             let mut start = String::new();
             let mut finish = String::new();
+            dbg!(&ts.tag);
             for ann in &ts.tag {
                 let (s, f) = colour_map(ann);
                 start.push_str(&s);

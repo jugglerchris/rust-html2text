@@ -1,6 +1,8 @@
 //! Module containing the `Renderer` interface for constructing a
 //! particular text output.
 
+use crate::Colour;
+
 pub mod text_renderer;
 
 /// A type which is a backend for HTML to text rendering.
@@ -126,6 +128,9 @@ pub trait Renderer {
     /// Record the start of a named HTML fragment
     fn record_frag_start(&mut self, fragname: &str);
 
-    /// Add some CSS styling (handled by the decorator)
-    fn add_style(&mut self, style: &str);
+    /// Push some CSS classes
+    fn push_colour(&mut self, colour: Colour);
+
+    /// Pop the last CSS classes pushed
+    fn pop_colour(&mut self);
 }

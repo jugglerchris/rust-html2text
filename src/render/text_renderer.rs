@@ -3,6 +3,8 @@
 //! This module implements helpers and concrete types for rendering from HTML
 //! into different text formats.
 
+use crate::Colour;
+
 use super::Renderer;
 use std::cell::Cell;
 use std::mem;
@@ -592,8 +594,15 @@ pub trait TextDecorator {
     /// for sub blocks.
     fn make_subblock_decorator(&self) -> Self;
 
-    /// Add some style (CSS) text
-    fn add_style(&mut self, style_text: &str);
+    /// Return an annotation corresponding to adding colour, or none.
+    fn push_colour(&mut self, _: Colour) -> Option<Self::Annotation> {
+        None
+    }
+
+    /// Pop the last colour pushed if we pushed one.
+    fn pop_colour(&mut self) -> bool {
+        false
+    }
 
     /// Finish with a document, and return extra lines (eg footnotes)
     /// to add to the rendered text.
@@ -1423,8 +1432,16 @@ impl<D: TextDecorator> Renderer for SubRenderer<D> {
             .add_element(FragmentStart(fragname.to_string()));
     }
 
-    fn add_style(&mut self, style_text: &str) {
-        self.decorator.add_style(style_text);
+    fn push_colour(&mut self, colour: Colour) {
+        if let Some(ann) = self.decorator.push_colour(colour) {
+            self.ann_stack.push(ann);
+        }
+    }
+
+    fn pop_colour(&mut self) {
+        if self.decorator.pop_colour() {
+            self.ann_stack.pop();
+        }
     }
 }
 
@@ -1527,8 +1544,6 @@ impl TextDecorator for PlainDecorator {
     fn make_subblock_decorator(&self) -> Self {
         self.clone()
     }
-
-    fn add_style(&mut self, _: &str) {}
 }
 
 /// A decorator for use with `SubRenderer` which outputs plain UTF-8 text
@@ -1622,14 +1637,12 @@ impl TextDecorator for TrivialDecorator {
     fn make_subblock_decorator(&self) -> Self {
         TrivialDecorator::new()
     }
-
-    fn add_style(&mut self, _: &str) {}
 }
 
 /// A decorator to generate rich text (styled) rather than
 /// pure text output.
 #[derive(Clone, Debug)]
-pub struct RichDecorator {}
+pub struct RichDecorator { }
 
 /// Annotation type for "rich" text.  Text is associated with a set of
 /// these.
@@ -1653,7 +1666,7 @@ pub enum RichAnnotation {
     /// Preformatted; true if a continuation line for an overly-long line.
     Preformat(bool),
     /// Colour information
-    Colour(String),
+    Colour(crate::Colour),
 }
 
 impl Default for RichAnnotation {
@@ -1666,7 +1679,7 @@ impl RichDecorator {
     /// Create a new `RichDecorator`.
     #[cfg_attr(feature = "clippy", allow(new_without_default_derive))]
     pub fn new() -> RichDecorator {
-        RichDecorator {}
+        RichDecorator { }
     }
 }
 
@@ -1749,10 +1762,11 @@ impl TextDecorator for RichDecorator {
         RichDecorator::new()
     }
 
-    fn add_style(&mut self, style: &str) {
-        #[cfg(feature = "css")]
-        {
-            eprintln!("Adding style: [{style}]");
-        }
+    fn push_colour(&mut self, colour: Colour) -> Option<Self::Annotation> {
+        Some(RichAnnotation::Colour(colour))
+    }
+
+    fn pop_colour(&mut self) -> bool {
+        true
     }
 }
