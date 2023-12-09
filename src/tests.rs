@@ -1,3 +1,5 @@
+use crate::{config, Error};
+
 use super::render::text_renderer::{RichAnnotation, TaggedLine, TrivialDecorator};
 use super::{from_read, from_read_with_decorator, parse, TextDecorator};
 
@@ -12,6 +14,18 @@ macro_rules! assert_eq_str {
 }
 fn test_html(input: &[u8], expected: &str, width: usize) {
     assert_eq_str!(from_read(input, width), expected);
+}
+fn test_html_err(input: &[u8], expected: Error, width: usize) {
+    let result = config::plain()
+        .string_from_read(input, width);
+    match result {
+        Err(e) => {
+            assert_eq!(e, expected);
+        }
+        Ok(text) => {
+            panic!("Expected error, got: [[{}]]", text);
+        }
+    }
 }
 
 fn test_html_decorator<D>(input: &[u8], expected: &str, width: usize, decorator: D)
@@ -981,7 +995,7 @@ hi, world
 #[test]
 fn test_header_width() {
     //0 size
-    test_html(
+    test_html_err(
         br##"
         <h2>
             <table>
@@ -989,21 +1003,11 @@ fn test_header_width() {
             </table>
         </h2>
 "##,
-        r#"## ### A
-## ### n
-## ### y
-## ### t
-## ### h
-## ### i
-## ### n
-## ### g
-## 
-## 
-"#,
+        Error::TooNarrow,
         7,
     );
     //Underflow
-    test_html(
+    test_html_err(
         br##"
         <h2>
             <table>
@@ -1011,17 +1015,7 @@ fn test_header_width() {
             </table>
         </h2>
 "##,
-        r#"## ### A
-## ### n
-## ### y
-## ### t
-## ### h
-## ### i
-## ### n
-## ### g
-## 
-## 
-"#,
+        Error::TooNarrow,
         5,
     );
 }
@@ -1106,29 +1100,42 @@ fn test_s() {
 fn test_multi_parse() {
     let html: &[u8] = b"one two three four five six seven eight nine ten eleven twelve thirteen \
                         fourteen fifteen sixteen seventeen";
-    let tree = parse(html);
+    let tree = parse(html).unwrap();
     assert_eq!(
         "one two three four five six seven eight nine ten eleven twelve thirteen fourteen\n\
          fifteen sixteen seventeen\n",
-        tree.clone().render_plain(80).into_string()
+        tree.clone()
+            .render_plain(80)
+            .unwrap()
+            .into_string()
     );
     assert_eq!(
         "one two three four five six seven eight nine ten eleven twelve\n\
          thirteen fourteen fifteen sixteen seventeen\n",
-        tree.clone().render_plain(70).into_string()
+        tree.clone()
+            .render_plain(70)
+            .unwrap()
+            .into_string()
     );
     assert_eq!(
         "one two three four five six seven eight nine ten\n\
          eleven twelve thirteen fourteen fifteen sixteen\n\
          seventeen\n",
-        tree.clone().render_plain(50).into_string()
+        tree.clone()
+            .render_plain(50)
+            .unwrap()
+            .into_string()
     );
 }
 
 #[test]
 fn test_read_rich() {
     let html: &[u8] = b"<strong>bold</strong>";
-    let lines = parse(html).render_rich(80).into_lines();
+    let lines = parse(html)
+        .unwrap()
+        .render_rich(80)
+        .unwrap()
+        .into_lines();
     let tag = vec![RichAnnotation::Strong];
     let line = TaggedLine::from_string("*bold*".to_owned(), &tag);
     assert_eq!(vec![line], lines);
@@ -1137,7 +1144,11 @@ fn test_read_rich() {
 #[test]
 fn test_read_custom() {
     let html: &[u8] = b"<strong>bold</strong>";
-    let lines = parse(html).render(80, TrivialDecorator::new()).into_lines();
+    let lines = parse(html)
+        .unwrap()
+        .render(80, TrivialDecorator::new())
+        .unwrap()
+        .into_lines();
     let tag = vec![()];
     let line = TaggedLine::from_string("bold".to_owned(), &tag);
     assert_eq!(vec![line], lines);
@@ -1148,7 +1159,9 @@ fn test_pre_rich() {
     use RichAnnotation::*;
     assert_eq!(
         crate::parse("<pre>test</pre>".as_bytes())
+            .unwrap()
             .render_rich(100)
+            .unwrap()
             .into_lines(),
         [TaggedLine::from_string(
             "test".into(),
@@ -1158,7 +1171,9 @@ fn test_pre_rich() {
 
     assert_eq!(
         crate::parse("<pre>testlong</pre>".as_bytes())
+            .unwrap()
             .render_rich(4)
+            .unwrap()
             .into_lines(),
         [
             TaggedLine::from_string("test".into(), &vec![Preformat(false)]),
@@ -1256,7 +1271,9 @@ fn test_finalise() {
 
     assert_eq!(
         crate::parse("test".as_bytes())
+            .unwrap()
             .render(80, TestDecorator)
+            .unwrap()
             .into_lines(),
         vec![
             TaggedLine::from_string("test".to_owned(), &Vec::new()),
@@ -1372,13 +1389,10 @@ fn test_table_empty_single_row_empty_cell() {
 
 #[test]
 fn test_renderer_zero_width() {
-    test_html(
+    test_html_err(
         br##"<ul><li><table><tr><td>x</td></tr></table></li></ul>
 "##,
-// Unfortunately the "x" ends up not being rendered as it doesn't fit.
-        r#"* 
-  
-"#,
+        Error::TooNarrow,
         2,
     );
 }
@@ -1554,4 +1568,24 @@ fn test_links_outside_table() {
 [2]: http://www.facebook.com/pages
 "
     );
+}
+
+#[test]
+fn test_narrow_width_nested() {
+    use crate::Error;
+    // Check different things which cause narrowing
+    for html in [
+        r#"<h1>Hi</h1>"#,
+        r#"<blockquote>Hi</blockquote>"#,
+        r#"<ul><li>Hi</li></ul>"#,
+        r#"<ol><li>Hi</li></ul>"#,
+        r#"<dl><dt>Foo</dt><dd>Definition of foo</dd></dl>"#,
+    ] {
+        let result = config::plain().string_from_read(html.as_bytes(), 1);
+        if let Err(Error::TooNarrow) = result {
+            // ok
+        } else {
+            panic!("Expected too narrow, got: {:?}", result);
+        }
+    }
 }

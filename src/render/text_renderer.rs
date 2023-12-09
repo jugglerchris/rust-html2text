@@ -974,8 +974,11 @@ impl<D: TextDecorator> Renderer for SubRenderer<D> {
         html_trace_quiet!("add_empty_line: new lines: {:?}", self.lines);
     }
 
-    fn new_sub_renderer(&self, width: usize) -> Self {
-        SubRenderer::new(width, self.decorator.make_subblock_decorator())
+    fn new_sub_renderer(&self, width: usize) -> crate::Result<Self> {
+        if width < 1 {
+            return Err(crate::Error::TooNarrow);
+        }
+        Ok(SubRenderer::new(width, self.decorator.make_subblock_decorator()))
     }
 
     fn start_block(&mut self) {

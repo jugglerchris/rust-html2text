@@ -9,7 +9,7 @@ pub trait Renderer {
     fn add_empty_line(&mut self);
 
     /// Create a sub-renderer for nested blocks.
-    fn new_sub_renderer(&self, width: usize) -> Self;
+    fn new_sub_renderer(&self, width: usize) -> crate::Result<Self> where Self: Sized;
 
     /// Start a new block.
     fn start_block(&mut self);

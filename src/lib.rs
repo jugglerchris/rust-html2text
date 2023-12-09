@@ -82,6 +82,20 @@ use std::io;
 use std::io::Write;
 use std::iter::{once, repeat};
 
+/// Errors from reading or rendering HTML
+#[derive(thiserror::Error, Debug, Eq, PartialEq)]
+#[non_exhaustive]
+pub enum Error {
+    /// The output width was too narrow to render to.
+    #[error("Output width not wide enough.")]
+    TooNarrow,
+    /// An general error was encountered.
+    #[error("Unknown failure")]
+    Fail,
+}
+
+type Result<T> = std::result::Result<T, Error>;
+
 /// A dummy writer which does nothing
 struct Discard {}
 impl Write for Discard {
@@ -498,12 +512,12 @@ impl RenderNode {
     }
 }
 
-fn precalc_size_estimate<'a>(node: &'a RenderNode) -> TreeMapResult<(), &'a RenderNode, ()> {
+fn precalc_size_estimate<'a>(node: &'a RenderNode) -> Result<TreeMapResult<(), &'a RenderNode, ()>> {
     use RenderNodeInfo::*;
     if node.size_estimate.get().is_some() {
-        return TreeMapResult::Nothing;
+        return Ok(TreeMapResult::Nothing);
     }
-    match node.info {
+    Ok(match node.info {
         Text(_) | Img(_, _) | Break | FragStart(_) => {
             let _ = node.get_size_estimate();
             TreeMapResult::Nothing
@@ -552,30 +566,29 @@ fn precalc_size_estimate<'a>(node: &'a RenderNode) -> TreeMapResult<(), &'a Rend
             }
         }
         TableRow(..) | TableBody(_) | TableCell(_) => unimplemented!(),
-    }
+    })
 }
 
 /// Make a Vec of RenderNodes from the children of a node.
-fn children_to_render_nodes<T: Write>(handle: Handle, err_out: &mut T) -> Vec<RenderNode> {
+fn children_to_render_nodes<T: Write>(handle: Handle, err_out: &mut T) -> Result<Vec<RenderNode>> {
     /* process children, but don't add anything */
-    let children = handle
+    handle
         .children
         .borrow()
         .iter()
-        .flat_map(|ch| dom_to_render_tree(ch.clone(), err_out))
-        .collect();
-    children
+        .flat_map(|ch| dom_to_render_tree(ch.clone(), err_out).transpose())
+        .collect()
 }
 
 /// Make a Vec of RenderNodes from the <li> children of a node.
-fn list_children_to_render_nodes<T: Write>(handle: Handle, err_out: &mut T) -> Vec<RenderNode> {
+fn list_children_to_render_nodes<T: Write>(handle: Handle, err_out: &mut T) -> Result<Vec<RenderNode>> {
     let mut children = Vec::new();
 
     for child in handle.children.borrow().iter() {
         match child.data {
             Element { ref name, .. } => match name.expanded() {
                 expanded_name!(html "li") => {
-                    let li_children = children_to_render_nodes(child.clone(), err_out);
+                    let li_children = children_to_render_nodes(child.clone(), err_out)?;
                     children.push(RenderNode::new(RenderNodeInfo::Block(li_children)));
                 }
                 _ => {}
@@ -586,25 +599,25 @@ fn list_children_to_render_nodes<T: Write>(handle: Handle, err_out: &mut T) -> V
             }
         }
     }
-    children
+    Ok(children)
 }
 
 /// Make a Vec of DtElements from the <dt> and <dd> children of a node.
 fn desc_list_children_to_render_nodes<T: Write>(
     handle: Handle,
     err_out: &mut T,
-) -> Vec<RenderNode> {
+) -> Result<Vec<RenderNode>> {
     let mut children = Vec::new();
 
     for child in handle.children.borrow().iter() {
         match child.data {
             Element { ref name, .. } => match name.expanded() {
                 expanded_name!(html "dt") => {
-                    let dt_children = children_to_render_nodes(child.clone(), err_out);
+                    let dt_children = children_to_render_nodes(child.clone(), err_out)?;
                     children.push(RenderNode::new(RenderNodeInfo::Dt(dt_children)));
                 }
                 expanded_name!(html "dd") => {
-                    let dd_children = children_to_render_nodes(child.clone(), err_out);
+                    let dd_children = children_to_render_nodes(child.clone(), err_out)?;
                     children.push(RenderNode::new(RenderNodeInfo::Dd(dd_children)));
                 }
                 _ => {}
@@ -615,7 +628,7 @@ fn desc_list_children_to_render_nodes<T: Write>(
             }
         }
     }
-    children
+    Ok(children)
 }
 
 /// Convert a table into a RenderNode
@@ -748,7 +761,7 @@ fn td_to_render_tree<'a, 'b, T: Write>(
 type ResultReducer<'a, C, R> = dyn Fn(&mut C, Vec<R>) -> Option<R> + 'a;
 
 /// A closure to call before processing a child node.
-type ChildPreFn<C, N> = dyn Fn(&mut C, &N);
+type ChildPreFn<C, N> = dyn Fn(&mut C, &N) -> Result<()>;
 
 /// A closure to call after processing a child node,
 /// before adding the result to the processed results
@@ -771,9 +784,9 @@ enum TreeMapResult<'a, C, N, R> {
     Nothing,
 }
 
-fn tree_map_reduce<'a, C, N, R, M>(context: &mut C, top: N, mut process_node: M) -> Option<R>
+fn tree_map_reduce<'a, C, N, R, M>(context: &mut C, top: N, mut process_node: M) -> Result<Option<R>>
 where
-    M: for<'c> FnMut(&'c mut C, N) -> TreeMapResult<'a, C, N, R>,
+    M: for<'c> FnMut(&'c mut C, N) -> Result<TreeMapResult<'a, C, N, R>>,
 {
     /// A node partially decoded, waiting for its children to
     /// be processed.
@@ -807,8 +820,9 @@ where
                 .unwrap()
                 .prefn
                 .as_ref()
-                .map(|ref f| f(context, &h));
-            match process_node(context, h) {
+                .map(|ref f| f(context, &h))
+                .transpose()?;
+            match process_node(context, h)? {
                 TreeMapResult::Finished(result) => {
                     pending_stack
                         .last_mut()
@@ -844,12 +858,12 @@ where
                     parent.children.push(node);
                 } else {
                     // Finished the whole stack!
-                    break Some(node);
+                    break Ok(Some(node));
                 }
             } else {
                 /* Finished the stack, and have nothing */
                 if pending_stack.is_empty() {
-                    break None;
+                    break Ok(None);
                 }
             }
         }
@@ -857,7 +871,7 @@ where
 }
 
 /// Convert a DOM tree or subtree into a render tree.
-pub fn dom_to_render_tree<T: Write>(handle: Handle, err_out: &mut T) -> Option<RenderNode> {
+pub fn dom_to_render_tree<T: Write>(handle: Handle, err_out: &mut T) -> Result<Option<RenderNode>> {
     html_trace!("### dom_to_render_tree: HTML: {:?}", handle);
     let result = tree_map_reduce(&mut (), handle, |_, handle| {
         process_dom_node(handle, err_out)
@@ -944,11 +958,11 @@ fn prepend_marker(prefix: RenderNode, mut orig: RenderNode) -> RenderNode {
 fn process_dom_node<'a, 'b, T: Write>(
     handle: Handle,
     err_out: &'b mut T,
-) -> TreeMapResult<'a, (), Handle, RenderNode> {
+) -> Result<TreeMapResult<'a, (), Handle, RenderNode>> {
     use RenderNodeInfo::*;
     use TreeMapResult::*;
 
-    match handle.clone().data {
+    Ok(match handle.clone().data {
         Document => pending(handle, |&mut (), cs| Some(RenderNode::new(Container(cs)))),
         Comment { .. } => Nothing,
         Element {
@@ -1068,7 +1082,7 @@ fn process_dom_node<'a, 'b, T: Write>(
                     pending(handle, |_, cs| Some(RenderNode::new(BlockQuote(cs))))
                 }
                 expanded_name!(html "ul") => Finished(RenderNode::new(Ul(
-                    list_children_to_render_nodes(handle.clone(), err_out),
+                    list_children_to_render_nodes(handle.clone(), err_out)?,
                 ))),
                 expanded_name!(html "ol") => {
                     let borrowed = attrs.borrow();
@@ -1082,11 +1096,11 @@ fn process_dom_node<'a, 'b, T: Write>(
 
                     Finished(RenderNode::new(Ol(
                         start,
-                        list_children_to_render_nodes(handle.clone(), err_out),
+                        list_children_to_render_nodes(handle.clone(), err_out)?,
                     )))
                 }
                 expanded_name!(html "dl") => Finished(RenderNode::new(Dl(
-                    desc_list_children_to_render_nodes(handle.clone(), err_out),
+                    desc_list_children_to_render_nodes(handle.clone(), err_out)?,
                 ))),
                 _ => {
                     html_trace!("Unhandled element: {:?}\n", name.local);
@@ -1143,21 +1157,21 @@ fn process_dom_node<'a, 'b, T: Write>(
             write!(err_out, "Unhandled node type.\n").unwrap();
             Nothing
         }
-    }
+    })
 }
 
 fn render_tree_to_string<T: Write, D: TextDecorator>(
     renderer: SubRenderer<D>,
     tree: RenderNode,
     err_out: &mut T,
-) -> SubRenderer<D> {
+) -> Result<SubRenderer<D>> {
     /* Phase 1: get size estimates. */
-    tree_map_reduce(&mut (), &tree, |_, node| precalc_size_estimate(&node));
+    tree_map_reduce(&mut (), &tree, |_, node| precalc_size_estimate(&node))?;
     /* Phase 2: actually render. */
     let mut renderer = TextRenderer::new(renderer);
     tree_map_reduce(&mut renderer, tree, |renderer, node| {
         do_render_node(renderer, node, err_out)
-    });
+    })?;
     let (mut renderer, links) = renderer.into_inner();
     let lines = renderer.finalise(links);
     // And add the links
@@ -1165,7 +1179,7 @@ fn render_tree_to_string<T: Write, D: TextDecorator>(
         renderer.start_block();
         renderer.fmt_links(lines);
     }
-    renderer
+    Ok(renderer)
 }
 
 fn pending2<
@@ -1189,11 +1203,11 @@ fn do_render_node<'a, 'b, T: Write, D: TextDecorator>(
     renderer: &mut TextRenderer<D>,
     tree: RenderNode,
     err_out: &'b mut T,
-) -> TreeMapResult<'static, TextRenderer<D>, RenderNode, Option<SubRenderer<D>>> {
+) -> Result<TreeMapResult<'static, TextRenderer<D>, RenderNode, Option<SubRenderer<D>>>> {
     html_trace!("do_render_node({:?}", tree);
     use RenderNodeInfo::*;
     use TreeMapResult::*;
-    match tree.info {
+    Ok(match tree.info {
         Text(ref tstr) => {
             renderer.add_inline_text(tstr);
             Finished(None)
@@ -1247,8 +1261,7 @@ fn do_render_node<'a, 'b, T: Write, D: TextDecorator>(
         }
         Header(level, children) => {
             let prefix = renderer.header_prefix(level);
-            let min_width = max(renderer.width(), 1 + prefix.len());
-            let sub_builder = renderer.new_sub_renderer(min_width - prefix.len());
+            let sub_builder = renderer.new_sub_renderer(renderer.width().checked_sub(prefix.len()).ok_or(Error::TooNarrow)?)?;
             renderer.push(sub_builder);
             pending2(children, move |renderer: &mut TextRenderer<D>, _| {
                 let sub_builder = renderer.pop();
@@ -1277,7 +1290,7 @@ fn do_render_node<'a, 'b, T: Write, D: TextDecorator>(
         }
         BlockQuote(children) => {
             let prefix = renderer.quote_prefix();
-            let sub_builder = renderer.new_sub_renderer(renderer.width() - prefix.len());
+            let sub_builder = renderer.new_sub_renderer(renderer.width().checked_sub(prefix.len()).ok_or(Error::TooNarrow)?)?;
             renderer.push(sub_builder);
             pending2(children, move |renderer: &mut TextRenderer<D>, _| {
                 let sub_builder = renderer.pop();
@@ -1298,8 +1311,9 @@ fn do_render_node<'a, 'b, T: Write, D: TextDecorator>(
                 children: items,
                 cons: Box::new(|_, _| Some(None)),
                 prefn: Some(Box::new(move |renderer: &mut TextRenderer<D>, _| {
-                    let sub_builder = renderer.new_sub_renderer(renderer.width() - prefix_len);
+                    let sub_builder = renderer.new_sub_renderer(renderer.width().checked_sub(prefix_len).ok_or(Error::TooNarrow)?)?;
                     renderer.push(sub_builder);
+                    Ok(())
                 })),
                 postfn: Some(Box::new(move |renderer: &mut TextRenderer<D>, _| {
                     let sub_builder = renderer.pop();
@@ -1332,8 +1346,9 @@ fn do_render_node<'a, 'b, T: Write, D: TextDecorator>(
                 children: items,
                 cons: Box::new(|_, _| Some(None)),
                 prefn: Some(Box::new(move |renderer: &mut TextRenderer<D>, _| {
-                    let sub_builder = renderer.new_sub_renderer(renderer.width() - prefix_width);
+                    let sub_builder = renderer.new_sub_renderer(renderer.width().checked_sub(prefix_width).ok_or(Error::TooNarrow)?)?;
                     renderer.push(sub_builder);
+                    Ok(())
                 })),
                 postfn: Some(Box::new(move |renderer: &mut TextRenderer<D>, _| {
                     let sub_builder = renderer.pop();
@@ -1367,7 +1382,7 @@ fn do_render_node<'a, 'b, T: Write, D: TextDecorator>(
             })
         }
         Dd(children) => {
-            let sub_builder = renderer.new_sub_renderer(renderer.width() - 2);
+            let sub_builder = renderer.new_sub_renderer(renderer.width().checked_sub(2).ok_or(Error::TooNarrow)?)?;
             renderer.push(sub_builder);
             pending2(children, |renderer: &mut TextRenderer<D>, _| {
                 let sub_builder = renderer.pop();
@@ -1388,7 +1403,7 @@ fn do_render_node<'a, 'b, T: Write, D: TextDecorator>(
             renderer.record_frag_start(&fragname);
             Finished(None)
         }
-    }
+    })
 }
 
 fn render_table_tree<T: Write, D: TextDecorator>(
@@ -1493,7 +1508,7 @@ fn render_table_tree<T: Write, D: TextDecorator>(
     TreeMapResult::PendingChildren {
         children: table.into_rows(col_widths, vert_row),
         cons: Box::new(|_, _| Some(None)),
-        prefn: Some(Box::new(|_, _| {})),
+        prefn: Some(Box::new(|_, _| {Ok(())})),
         postfn: Some(Box::new(|_, _| {})),
     }
 }
@@ -1514,8 +1529,9 @@ fn render_table_row<T: Write, D: TextDecorator>(
         }),
         prefn: Some(Box::new(|renderer: &mut TextRenderer<D>, node| {
             if let RenderNodeInfo::TableCell(ref cell) = node.info {
-                let sub_builder = renderer.new_sub_renderer(cell.col_width.unwrap());
+                let sub_builder = renderer.new_sub_renderer(cell.col_width.unwrap())?;
                 renderer.push(sub_builder);
+                Ok(())
             } else {
                 panic!()
             }
@@ -1538,10 +1554,11 @@ fn render_table_row_vert<T: Write, D: TextDecorator>(
         }),
         prefn: Some(Box::new(|renderer: &mut TextRenderer<D>, node| {
             if let RenderNodeInfo::TableCell(ref cell) = node.info {
-                let sub_builder = renderer.new_sub_renderer(cell.col_width.unwrap());
+                let sub_builder = renderer.new_sub_renderer(cell.col_width.unwrap())?;
                 renderer.push(sub_builder);
+                Ok(())
             } else {
-                panic!()
+                Err(Error::Fail)
             }
         })),
         postfn: Some(Box::new(|_renderer: &mut TextRenderer<D>, _| {})),
@@ -1563,9 +1580,9 @@ pub mod config {
     //! Configure the HTML to text translation using the `Config` type, which can be
     //! constructed using one of the functions in this module.
 
-    use crate::render::text_renderer::{
+    use crate::{render::text_renderer::{
         PlainDecorator, RichDecorator, TaggedLine, TextDecorator
-    };
+    }, Result};
     use super::parse;
 
     /// Configure the HTML processing.
@@ -1576,18 +1593,18 @@ pub mod config {
     impl<D: TextDecorator> Config<D> {
         /// Reads HTML from `input`, and returns a `String` with text wrapped to
         /// `width` columns.
-        pub fn string_from_read<R: std::io::Read>(self, input: R, width: usize) -> String {
-            parse(input).render(width, self.decorator).into_string()
+        pub fn string_from_read<R: std::io::Read>(self, input: R, width: usize) -> Result<String> {
+            Ok(parse(input)?.render(width, self.decorator)?.into_string())
         }
 
         /// Reads HTML from `input`, and returns text wrapped to `width` columns.
         /// The text is returned as a `Vec<TaggedLine<_>>`; the annotations are vectors
         /// of the provided text decorator's `Annotation`.  The "outer" annotation comes first in
         /// the `Vec`.
-        pub fn lines_from_read<R: std::io::Read>(self, input: R, width: usize) -> Vec<TaggedLine<Vec<D::Annotation>>> {
-            parse(input)
-                .render(width, self.decorator)
-                .into_lines()
+        pub fn lines_from_read<R: std::io::Read>(self, input: R, width: usize) -> Result<Vec<TaggedLine<Vec<D::Annotation>>>> {
+            Ok(parse(input)?
+                .render(width, self.decorator)?
+                .into_lines())
         }
     }
 
@@ -1622,20 +1639,20 @@ pub struct RenderTree(RenderNode);
 
 impl RenderTree {
     /// Render this document using the given `decorator` and wrap it to `width` columns.
-    pub fn render<D: TextDecorator>(self, width: usize, decorator: D) -> RenderedText<D> {
+    pub fn render<D: TextDecorator>(self, width: usize, decorator: D) -> Result<RenderedText<D>> {
         if width == 0 {
-            panic!("Error: width can not be zero");
+            return Err(Error::TooNarrow);
         }
         let builder = SubRenderer::new(width, decorator);
-        let builder = render_tree_to_string(builder, self.0, &mut Discard {});
-        RenderedText(builder)
+        let builder = render_tree_to_string(builder, self.0, &mut Discard {})?;
+        Ok(RenderedText(builder))
     }
 
     /// Render this document as plain text using the [`PlainDecorator`][] and wrap it to `width`
     /// columns.
     ///
     /// [`PlainDecorator`]: render/text_renderer/struct.PlainDecorator.html
-    pub fn render_plain(self, width: usize) -> RenderedText<PlainDecorator> {
+    pub fn render_plain(self, width: usize) -> Result<RenderedText<PlainDecorator>> {
         self.render(width, PlainDecorator::new())
     }
 
@@ -1643,7 +1660,7 @@ impl RenderTree {
     /// columns.
     ///
     /// [`RichDecorator`]: render/text_renderer/struct.RichDecorator.html
-    pub fn render_rich(self, width: usize) -> RenderedText<RichDecorator> {
+    pub fn render_rich(self, width: usize) -> Result<RenderedText<RichDecorator>> {
         self.render(width, RichDecorator::new())
     }
 }
@@ -1669,7 +1686,7 @@ impl<D: TextDecorator> RenderedText<D> {
 }
 
 /// Reads and parses HTML from `input` and prepares a render tree.
-pub fn parse(mut input: impl io::Read) -> RenderTree {
+pub fn parse(mut input: impl io::Read) -> Result<RenderTree> {
     let opts = ParseOpts {
         tree_builder: TreeBuilderOpts {
             drop_doctype: true,
@@ -1681,8 +1698,9 @@ pub fn parse(mut input: impl io::Read) -> RenderTree {
         .from_utf8()
         .read_from(&mut input)
         .unwrap();
-    let render_tree = dom_to_render_tree(dom.document.clone(), &mut Discard {}).unwrap();
-    RenderTree(render_tree)
+    let render_tree = dom_to_render_tree(dom.document.clone(), &mut Discard {})?
+        .ok_or(Error::Fail)?;
+    Ok(RenderTree(render_tree))
 }
 
 /// Reads HTML from `input`, decorates it using `decorator`, and
@@ -1694,6 +1712,7 @@ where
 {
     config::with_decorator(decorator)
            .string_from_read(input, width)
+           .expect("Failed to convert to HTML")
 }
 
 /// Reads HTML from `input`, and returns a `String` with text wrapped to
@@ -1704,6 +1723,7 @@ where
 {
     config::plain()
            .string_from_read(input, width)
+           .expect("Failed to convert to HTML")
 }
 
 /// Reads HTML from `input`, and returns text wrapped to `width` columns.
@@ -1715,6 +1735,7 @@ where
 {
     config::rich()
         .lines_from_read(input, width)
+        .expect("Failed to convert to HTML")
 }
 
 #[cfg(feature = "ansi_colours")]
