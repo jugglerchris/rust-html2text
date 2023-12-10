@@ -10,7 +10,7 @@ use html2text::render::text_renderer::RichAnnotation;
 use termion;
 
 #[cfg(feature = "ansi_colours")]
-fn default_colour_map(annotations: &[RichAnnotation]) -> (String, String) {
+fn default_colour_map(annotations: &[RichAnnotation], s: &str) -> String {
     use termion::color::*;
     use RichAnnotation::*;
     // Explicit CSS colours override any other colours
@@ -68,7 +68,12 @@ fn default_colour_map(annotations: &[RichAnnotation]) -> (String, String) {
     }
     // Reverse the finish sequences
     finish.reverse();
-    (start.join(""), finish.join(""))
+    let mut result = start.join("");
+    result.push_str(s);
+    for s in finish {
+        result.push_str(&s);
+    }
+    result
 }
 
 fn translate<R>(input: R, width: usize, literal: bool, _use_colour: bool) -> String
