@@ -107,7 +107,7 @@ pub struct Colour {
 impl TryFrom<&CssColor> for Colour {
     type Error = ();
 
-    fn try_from(value: &CssColor) -> Result<Self, Self::Error> {
+    fn try_from(value: &CssColor) -> std::result::Result<Self, Self::Error> {
         match value {
             CssColor::RGBA(rgba) => {
                 Ok(Colour {
@@ -131,6 +131,9 @@ pub enum Error {
     /// An general error was encountered.
     #[error("Unknown failure")]
     Fail,
+    /// A formatting error happened
+    #[error("Formatting error")]
+    FmtError(#[from] std::fmt::Error),
 }
 
 type Result<T> = std::result::Result<T, Error>;
@@ -938,7 +941,7 @@ pub fn dom_to_render_tree<T: Write>(handle: Handle, err_out: &mut T) -> Result<O
     let mut context = HtmlContext::default();
     #[cfg(feature = "css")]
     {
-        context.style_data = css::dom_to_stylesheet(handle.clone(), err_out);
+        context.style_data = css::dom_to_stylesheet(handle.clone(), err_out)?;
     }
 
     let result = tree_map_reduce(&mut context, handle, |context, handle| {
@@ -1080,10 +1083,10 @@ fn process_dom_node<'a, 'b, 'c, T: Write>(
                             }
                         }
                         if let Some(Ok(colour)) = colour.map(TryFrom::try_from) {
-                            pending(handle, move |_, cs| Some(RenderNode::new(Coloured(colour, vec![RenderNode::new(Container(cs))]))))
+                            pending(handle, move |_, cs| Ok(Some(RenderNode::new(Coloured(colour, vec![RenderNode::new(Container(cs))])))))
                         } else {
                             /* process children, but don't add anything */
-                            pending(handle, |_, cs| Some(RenderNode::new(Container(cs))))
+                            pending(handle, |_, cs| Ok(Some(RenderNode::new(Container(cs)))))
                         }
                     }
                 }

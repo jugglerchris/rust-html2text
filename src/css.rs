@@ -6,7 +6,7 @@ use lightningcss::{stylesheet::{
     ParserOptions, StyleSheet
 }, rules::CssRule, properties::Property, values::color::CssColor};
 
-use crate::{TreeMapResult, markup5ever_rcdom::{Handle, NodeData::{Comment, Document, Element, self}}, tree_map_reduce};
+use crate::{Result, TreeMapResult, markup5ever_rcdom::{Handle, NodeData::{Comment, Document, Element, self}}, tree_map_reduce};
 
 /// Stylesheet data which can be used while building the render tree.
 #[derive(Clone, Default, Debug)]
@@ -51,7 +51,7 @@ impl StyleData {
 
 fn pending<'a, F>(handle: Handle, f: F) -> TreeMapResult<'a, (), Handle, Vec<String>>
 where
-    for<'r> F: Fn(&'r mut (), Vec<Vec<String>>) -> Option<Vec<String>> + 'static,
+    for<'r> F: Fn(&'r mut (), Vec<Vec<String>>) -> Result<Option<Vec<String>>> + 'static,
 {
     TreeMapResult::PendingChildren {
         children: handle.children.borrow().clone(),
@@ -82,7 +82,7 @@ fn extract_style_nodes<'a, 'b, T: Write>(
     use TreeMapResult::*;
 
     match handle.clone().data {
-        Document => pending(handle, |&mut (), cs| Some(combine_vecs(cs))),
+        Document => pending(handle, |&mut (), cs| Ok(Some(combine_vecs(cs)))),
         Comment { .. } => Nothing,
         Element {
             ref name,
@@ -101,7 +101,7 @@ fn extract_style_nodes<'a, 'b, T: Write>(
                 }
                 _ => {
                     html_trace!("Unhandled element: {:?}\n", name.local);
-                    pending(handle, |_, cs| Some(combine_vecs(cs)))
+                    pending(handle, |_, cs| Ok(Some(combine_vecs(cs))))
                     //None
                 }
             }
@@ -118,10 +118,10 @@ fn extract_style_nodes<'a, 'b, T: Write>(
 }
 
 /// Extract stylesheet data from document.
-pub fn dom_to_stylesheet<T: Write>(handle: Handle, err_out: &mut T) -> StyleData {
+pub fn dom_to_stylesheet<T: Write>(handle: Handle, err_out: &mut T) -> Result<StyleData> {
     let styles = tree_map_reduce(&mut (), handle, |_, handle| {
-        extract_style_nodes(handle, err_out)
-    });
+        Ok(extract_style_nodes(handle, err_out))
+    })?;
 
     let mut result = StyleData::default();
     if let Some(styles) = styles {
@@ -129,6 +129,6 @@ pub fn dom_to_stylesheet<T: Write>(handle: Handle, err_out: &mut T) -> StyleData
             result.add_css(&css);
         }
     }
-    result
+    Ok(result)
 }
 
