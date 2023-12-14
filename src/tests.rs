@@ -1,3 +1,5 @@
+use crate::{config, Error};
+
 use super::render::text_renderer::{RichAnnotation, TaggedLine, TrivialDecorator};
 use super::{from_read, from_read_with_decorator, parse, TextDecorator};
 
@@ -12,6 +14,18 @@ macro_rules! assert_eq_str {
 }
 fn test_html(input: &[u8], expected: &str, width: usize) {
     assert_eq_str!(from_read(input, width), expected);
+}
+fn test_html_err(input: &[u8], expected: Error, width: usize) {
+    let result = config::plain()
+        .string_from_read(input, width);
+    match result {
+        Err(e) => {
+            assert_eq!(e, expected);
+        }
+        Ok(text) => {
+            panic!("Expected error, got: [[{}]]", text);
+        }
+    }
 }
 
 fn test_html_decorator<D>(input: &[u8], expected: &str, width: usize, decorator: D)
@@ -981,7 +995,7 @@ hi, world
 #[test]
 fn test_header_width() {
     //0 size
-    test_html(
+    test_html_err(
         br##"
         <h2>
             <table>
@@ -989,21 +1003,11 @@ fn test_header_width() {
             </table>
         </h2>
 "##,
-        r#"## ### A
-## ### n
-## ### y
-## ### t
-## ### h
-## ### i
-## ### n
-## ### g
-## 
-## 
-"#,
+        Error::TooNarrow,
         7,
     );
     //Underflow
-    test_html(
+    test_html_err(
         br##"
         <h2>
             <table>
@@ -1011,17 +1015,7 @@ fn test_header_width() {
             </table>
         </h2>
 "##,
-        r#"## ### A
-## ### n
-## ### y
-## ### t
-## ### h
-## ### i
-## ### n
-## ### g
-## 
-## 
-"#,
+        Error::TooNarrow,
         5,
     );
 }
@@ -1106,29 +1100,46 @@ fn test_s() {
 fn test_multi_parse() {
     let html: &[u8] = b"one two three four five six seven eight nine ten eleven twelve thirteen \
                         fourteen fifteen sixteen seventeen";
-    let tree = parse(html);
+    let tree = parse(html).unwrap();
     assert_eq!(
         "one two three four five six seven eight nine ten eleven twelve thirteen fourteen\n\
          fifteen sixteen seventeen\n",
-        tree.clone().render_plain(80).into_string()
+        tree.clone()
+            .render_plain(80)
+            .unwrap()
+            .into_string()
+            .unwrap()
     );
     assert_eq!(
         "one two three four five six seven eight nine ten eleven twelve\n\
          thirteen fourteen fifteen sixteen seventeen\n",
-        tree.clone().render_plain(70).into_string()
+        tree.clone()
+            .render_plain(70)
+            .unwrap()
+            .into_string()
+            .unwrap()
     );
     assert_eq!(
         "one two three four five six seven eight nine ten\n\
          eleven twelve thirteen fourteen fifteen sixteen\n\
          seventeen\n",
-        tree.clone().render_plain(50).into_string()
+        tree.clone()
+            .render_plain(50)
+            .unwrap()
+            .into_string()
+            .unwrap()
     );
 }
 
 #[test]
 fn test_read_rich() {
     let html: &[u8] = b"<strong>bold</strong>";
-    let lines = parse(html).render_rich(80).into_lines();
+    let lines = parse(html)
+        .unwrap()
+        .render_rich(80)
+        .unwrap()
+        .into_lines()
+        .unwrap();
     let tag = vec![RichAnnotation::Strong];
     let line = TaggedLine::from_string("*bold*".to_owned(), &tag);
     assert_eq!(vec![line], lines);
@@ -1137,7 +1148,12 @@ fn test_read_rich() {
 #[test]
 fn test_read_custom() {
     let html: &[u8] = b"<strong>bold</strong>";
-    let lines = parse(html).render(80, TrivialDecorator::new()).into_lines();
+    let lines = parse(html)
+        .unwrap()
+        .render(80, TrivialDecorator::new())
+        .unwrap()
+        .into_lines()
+        .unwrap();
     let tag = vec![()];
     let line = TaggedLine::from_string("bold".to_owned(), &tag);
     assert_eq!(vec![line], lines);
@@ -1148,8 +1164,11 @@ fn test_pre_rich() {
     use RichAnnotation::*;
     assert_eq!(
         crate::parse("<pre>test</pre>".as_bytes())
+            .unwrap()
             .render_rich(100)
-            .into_lines(),
+            .unwrap()
+            .into_lines()
+            .unwrap(),
         [TaggedLine::from_string(
             "test".into(),
             &vec![Preformat(false)]
@@ -1158,8 +1177,11 @@ fn test_pre_rich() {
 
     assert_eq!(
         crate::parse("<pre>testlong</pre>".as_bytes())
+            .unwrap()
             .render_rich(4)
-            .into_lines(),
+            .unwrap()
+            .into_lines()
+            .unwrap(),
         [
             TaggedLine::from_string("test".into(), &vec![Preformat(false)]),
             TaggedLine::from_string("long".into(), &vec![Preformat(true)])
@@ -1256,8 +1278,11 @@ fn test_finalise() {
 
     assert_eq!(
         crate::parse("test".as_bytes())
+            .unwrap()
             .render(80, TestDecorator)
-            .into_lines(),
+            .unwrap()
+            .into_lines()
+            .unwrap(),
         vec![
             TaggedLine::from_string("test".to_owned(), &Vec::new()),
             TaggedLine::new(),
@@ -1372,13 +1397,10 @@ fn test_table_empty_single_row_empty_cell() {
 
 #[test]
 fn test_renderer_zero_width() {
-    test_html(
+    test_html_err(
         br##"<ul><li><table><tr><td>x</td></tr></table></li></ul>
 "##,
-// Unfortunately the "x" ends up not being rendered as it doesn't fit.
-        r#"* 
-  
-"#,
+        Error::TooNarrow,
         2,
     );
 }
@@ -1554,4 +1576,32 @@ fn test_links_outside_table() {
 [2]: http://www.facebook.com/pages
 "
     );
+}
+
+#[test]
+fn test_narrow_width_nested() {
+    use crate::Error;
+    // Check different things which cause narrowing
+    for html in [
+        r#"<h1>Hi</h1>"#,
+        r#"<blockquote>Hi</blockquote>"#,
+        r#"<ul><li>Hi</li></ul>"#,
+        r#"<ol><li>Hi</li></ul>"#,
+        r#"<dl><dt>Foo</dt><dd>Definition of foo</dd></dl>"#,
+    ] {
+        let result = config::plain().string_from_read(html.as_bytes(), 1);
+        if let Err(Error::TooNarrow) = result {
+            // ok
+        } else {
+            panic!("Expected too narrow, got: {:?}", result);
+        }
+    }
+}
+
+#[test]
+fn test_issue_93_x() {
+    let data=[60, 116, 97, 98, 108, 101, 62, 60, 116, 114, 62, 60, 116, 100, 62, 120, 105, 60, 48, 62, 0, 0, 0, 60, 116, 97, 98, 108, 101, 62, 58, 58, 58, 62, 58, 62, 62, 62, 58, 60, 112, 32, 32, 32, 32, 32, 32, 32, 71, 87, 85, 78, 16, 16, 62, 60, 15, 16, 16, 16, 16, 16, 16, 15, 38, 16, 16, 16, 15, 1, 16, 16, 16, 16, 16, 16, 162, 111, 107, 99, 91, 112, 57, 64, 94, 100, 60, 111, 108, 47, 62, 127, 60, 108, 73, 62, 125, 109, 121, 102, 99, 122, 110, 102, 114, 98, 60, 97, 32, 104, 114, 101, 102, 61, 98, 111, 103, 32, 105, 100, 61, 100, 62, 60, 111, 15, 15, 15, 15, 15, 15, 15, 39, 15, 15, 15, 106, 102, 59, 99, 32, 32, 32, 86, 102, 122, 110, 104, 93, 108, 71, 114, 117, 110, 100, 96, 121, 57, 60, 107, 116, 109, 247, 62, 60, 32, 60, 122, 98, 99, 98, 97, 32, 119, 127, 127, 62, 60, 112, 62, 121, 116, 60, 47, 116, 100, 62, 62, 60, 111, 98, 62, 123, 110, 109, 97, 101, 105, 119, 60, 112, 101, 101, 122, 102, 63, 120, 97, 62, 60, 101, 62, 60, 120, 109, 112, 32, 28, 52, 55, 50, 50, 49, 52, 185, 150, 99, 62, 255, 112, 76, 85, 60, 112, 62, 73, 100, 116, 116, 60, 75, 50, 73, 116, 120, 110, 127, 255, 118, 32, 42, 40, 49, 33, 112, 32, 36, 107, 57, 60, 5, 163, 62, 49, 55, 32, 33, 118, 99, 63, 60, 109, 107, 43, 119, 100, 62, 60, 104, 58, 101, 163, 163, 163, 163, 220, 220, 220, 220, 220, 220, 220, 220, 220, 220, 220, 220, 1, 107, 117, 107, 108, 44, 102, 58, 60, 116, 101, 97, 106, 98, 59, 60, 115, 109, 52, 58, 115, 98, 62, 232, 110, 114, 32, 60, 117, 93, 120, 112, 119, 111, 59, 98, 120, 61, 206, 19, 61, 206, 19, 59, 1, 110, 102, 60, 115, 0, 242, 64, 203, 8, 111, 50, 59, 121, 122, 32, 42, 35, 32, 37, 101, 120, 104, 121, 0, 242, 59, 63, 121, 231, 130, 130, 130, 170, 170, 1, 32, 0, 0, 0, 28, 134, 200, 90, 119, 48, 60, 111, 108, 118, 119, 116, 113, 59, 100, 60, 117, 43, 110, 99, 9, 216, 157, 137, 216, 157, 246, 167, 62, 60, 104, 61, 43, 28, 134, 200, 105, 119, 48, 60, 122, 110, 0, 242, 61, 61, 114, 231, 130, 130, 130, 170, 170, 170, 233, 222, 222, 162, 163, 163, 163, 163, 163, 163, 163, 85, 100, 116, 99, 61, 60, 163, 163, 163, 163, 163, 220, 220, 1, 109, 112, 105, 10, 59, 105, 220, 215, 10, 59, 122, 100, 100, 121, 97, 43, 43, 43, 102, 122, 100, 60, 62, 114, 116, 122, 115, 61, 60, 115, 101, 62, 215, 215, 215, 215, 215, 98, 59, 60, 109, 120, 57, 60, 97, 102, 113, 229, 43, 43, 43, 43, 43, 43, 43, 43, 43, 35, 43, 43, 101, 58, 60, 116, 98, 101, 107, 98, 43, 43, 43, 43, 43, 43, 43, 43, 43, 43, 43, 43, 43, 43, 43, 43, 43, 43, 43, 43, 43, 43, 43, 43, 43, 43, 43, 43, 43, 43, 43, 43, 98, 99, 62, 60, 112, 102, 59, 124, 107, 111, 97, 98, 108, 118, 60, 116, 102, 101, 104, 97, 62, 60, 255, 127, 46, 60, 116, 101, 62, 60, 105, 102, 63, 116, 116, 60, 47, 116, 101, 62, 62, 60, 115, 98, 62, 123, 109, 108, 97, 100, 119, 118, 60, 111, 99, 97, 103, 99, 62, 60, 255, 127, 46, 60, 103, 99, 62, 60, 116, 98, 63, 60, 101, 62, 60, 109, 109, 231, 130, 130, 130, 213, 213, 213, 233, 222, 222, 59, 101, 103, 58, 60, 100, 111, 61, 65, 114, 104, 60, 47, 101, 109, 62, 60, 99, 99, 172, 97, 97, 58, 60, 119, 99, 64, 126, 118, 104, 100, 100, 107, 105, 60, 120, 98, 255, 255, 255, 0, 60, 255, 127, 46, 60, 113, 127];
+    let _local0 = crate::parse(&data[..]).unwrap();
+    let d1 = TrivialDecorator::new();
+    let _local1 = crate::RenderTree::render(_local0, 1, d1);
 }
