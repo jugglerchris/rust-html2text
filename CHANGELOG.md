@@ -9,6 +9,19 @@ Possible log types:
 - `[fixed]` for any bug fixes.
 - `[security]` to invite users to upgrade in case of vulnerabilities.
 
+### 0.7.0
+
+- [changed] Remove some noisy stderr output when encoutering control chars
+  (thanks sftse)
+- [added] A builder-based config API.
+- [changed] Updated MSRV to 1.60
+- [fixed] Fixed #88: panic when a width of zero passed in (thanks bingen13)
+- [fixed] Fixed #90: Fixed a divide-by-zero panic with colspan=0 (thanks mtorromeo)
+- [added] Add very basic CSS colour support (under the css feature flag)
+- [changed] Overhauled error handling.  Internally (and in the lower level
+  API) errors (mainly "TooNarrow") are passed around with `Result`.  Fixed
+  some panics and infinite loops.  (Thanks WIZeaz for fuzzing)
+
 ### 0.6.0
 
 - [changed] Improve layout of tables thanks to sftse:

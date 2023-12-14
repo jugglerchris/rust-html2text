@@ -14,7 +14,12 @@ The project aims to do a reasonable job of rendering reasonable HTML in a
 terminal or other places where HTML needs to be converted to text (for
 example the text/plain fallback in HTML e-mails).
 
+With features (see below) some CSS/colour support is available.
+
 ## Examples
+
+The simple functions like `from_read()` return formatted text (in various
+formats including plain text).
 
 ```rust
 use html2text::from_read;
@@ -26,6 +31,29 @@ let html = b"
        </ul>";
 assert_eq!(from_read(&html[..], 20),
            "\
+* Item one
+* Item two
+* Item three
+");
+```
+
+A lower level API gives a bit more control.  This give the same result (except for
+returning errors as Result instead of panicking):
+
+```rust
+use html2text::config;
+
+let html = b"
+       <ul>
+         <li>Item one</li>
+         <li>Item two</li>
+         <li>Item three</li>
+       </ul>";
+
+assert_eq!(
+    config::plain()
+           .string_from_read(html, 20),
+    Ok("\
 * Item one
 * Item two
 * Item three
@@ -56,3 +84,7 @@ $ cargo run --example html2term foo.html
 
 Note that this example takes the HTML file as a parameter so that it can
 read keys from stdin.
+
+## Cargo Features
+
+
