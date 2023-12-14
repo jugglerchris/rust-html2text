@@ -20,26 +20,19 @@ pub fn from_read_coloured<R, FMap>(
     input: R,
     width: usize,
     colour_map: FMap,
-) -> Result<String, std::fmt::Error>
+) -> Result<String, crate::Error>
 where
     R: io::Read,
-    FMap: Fn(&RichAnnotation) -> (String, String),
+    FMap: Fn(&[RichAnnotation], &str) -> String,
 {
-    let lines = parse(input)
-        .render(width, RichDecorator::new())
-        .into_lines();
+    let lines = parse(input)?
+        .render(width, RichDecorator::new())?
+        .into_lines()?;
 
     let mut result = String::new();
     for line in lines {
         for ts in line.tagged_strings() {
-            let mut start = String::new();
-            let mut finish = String::new();
-            for ann in &ts.tag {
-                let (s, f) = colour_map(ann);
-                start.push_str(&s);
-                finish.push_str(&f);
-            }
-            write!(result, "{}{}{}", start, ts.s, finish)?;
+            write!(result, "{}", colour_map(&ts.tag, &ts.s))?;
         }
         result.push('\n');
     }

@@ -59,6 +59,8 @@ extern crate unicode_width;
 mod macros;
 
 pub mod render;
+#[cfg(feature = "css")]
+pub mod css;
 
 use render::text_renderer::{
     PlainDecorator, RenderLine, RichAnnotation, RichDecorator, SubRenderer, TaggedLine,
@@ -78,9 +80,46 @@ use markup5ever_rcdom::{
 };
 use std::cell::Cell;
 use std::cmp::{max, min};
+
+#[cfg(feature = "css")]
+use lightningcss::values::color::CssColor;
+#[cfg(feature = "css")]
+use std::convert::TryFrom;
+
 use std::io;
 use std::io::Write;
 use std::iter::{once, repeat};
+#[allow(unused)] // Only needed for some features.
+use std::ops::Deref;
+
+/// An RGB colour value
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub struct Colour {
+    /// Red value
+    pub r: u8,
+    /// Green value
+    pub g: u8,
+    /// Blue value
+    pub b: u8,
+}
+
+#[cfg(feature = "css")]
+impl TryFrom<&CssColor> for Colour {
+    type Error = ();
+
+    fn try_from(value: &CssColor) -> std::result::Result<Self, Self::Error> {
+        match value {
+            CssColor::RGBA(rgba) => {
+                Ok(Colour {
+                    r: rgba.red,
+                    g: rgba.green,
+                    b: rgba.blue,
+                })
+            }
+            _ => Err(()),
+        }
+    }
+}
 
 /// Errors from reading or rendering HTML
 #[derive(thiserror::Error, Debug, Eq, PartialEq)]
@@ -92,6 +131,9 @@ pub enum Error {
     /// An general error was encountered.
     #[error("Unknown failure")]
     Fail,
+    /// A formatting error happened
+    #[error("Formatting error")]
+    FmtError(#[from] std::fmt::Error),
 }
 
 type Result<T> = std::result::Result<T, Error>;
@@ -317,6 +359,7 @@ impl RenderTable {
 
 /// The node-specific information distilled from the DOM.
 #[derive(Clone, Debug)]
+#[non_exhaustive]
 pub enum RenderNodeInfo {
     /// Some text.
     Text(String),
@@ -368,6 +411,8 @@ pub enum RenderNodeInfo {
     TableCell(RenderTableCell),
     /// Start of a named HTML fragment
     FragStart(String),
+    /// A region with classes
+    Coloured(Colour, Vec<RenderNode>),
 }
 
 /// Common fields from a node.
@@ -470,6 +515,10 @@ impl RenderNode {
             Table(ref t) => t.get_size_estimate(),
             TableRow(..) | TableBody(_) | TableCell(_) => unimplemented!(),
             FragStart(_) => Default::default(),
+            Coloured(_, ref v) => v
+                .iter()
+                .map(RenderNode::get_size_estimate)
+                .fold(Default::default(), SizeEstimate::add),
         };
         self.size_estimate.set(Some(estimate));
         estimate
@@ -508,6 +557,7 @@ impl RenderNode {
             Table(ref _t) => false,
             TableRow(..) | TableBody(_) | TableCell(_) => false,
             FragStart(_) => true,
+            Coloured(_, ref v) => v.is_empty(),
         }
     }
 }
@@ -566,6 +616,15 @@ fn precalc_size_estimate<'a>(node: &'a RenderNode) -> Result<TreeMapResult<(), &
             }
         }
         TableRow(..) | TableBody(_) | TableCell(_) => unimplemented!(),
+        Coloured(_, ref v) => TreeMapResult::PendingChildren {
+            children: v.iter().collect(),
+            cons: Box::new(move |_, _cs| {
+                node.get_size_estimate();
+                Ok(None)
+            }),
+            prefn: None,
+            postfn: None,
+        },
     })
 }
 
@@ -635,7 +694,7 @@ fn desc_list_children_to_render_nodes<T: Write>(
 fn table_to_render_tree<'a, 'b, T: Write>(
     handle: Handle,
     _err_out: &'b mut T,
-) -> TreeMapResult<'a, (), Handle, RenderNode> {
+) -> TreeMapResult<'a, HtmlContext, Handle, RenderNode> {
     pending(handle, |_, rowset| {
         let mut rows = vec![];
         for bodynode in rowset {
@@ -655,7 +714,7 @@ fn table_to_render_tree<'a, 'b, T: Write>(
 fn tbody_to_render_tree<'a, 'b, T: Write>(
     handle: Handle,
     _err_out: &'b mut T,
-) -> TreeMapResult<'a, (), Handle, RenderNode> {
+) -> TreeMapResult<'a, HtmlContext, Handle, RenderNode> {
     pending(handle, |_, rowchildren| {
         let mut rows = rowchildren
             .into_iter()
@@ -706,7 +765,7 @@ fn tbody_to_render_tree<'a, 'b, T: Write>(
 fn tr_to_render_tree<'a, 'b, T: Write>(
     handle: Handle,
     _err_out: &'b mut T,
-) -> TreeMapResult<'a, (), Handle, RenderNode> {
+) -> TreeMapResult<'a, HtmlContext, Handle, RenderNode> {
     pending(handle, |_, cellnodes| {
         let cells = cellnodes
             .into_iter()
@@ -733,7 +792,7 @@ fn tr_to_render_tree<'a, 'b, T: Write>(
 fn td_to_render_tree<'a, 'b, T: Write>(
     handle: Handle,
     _err_out: &'b mut T,
-) -> TreeMapResult<'a, (), Handle, RenderNode> {
+) -> TreeMapResult<'a, HtmlContext, Handle, RenderNode> {
     let mut colspan = 1;
     if let Element { ref attrs, .. } = handle.data {
         for attr in attrs.borrow().iter() {
@@ -870,21 +929,32 @@ where
     }
 }
 
+#[derive(Default, Debug)]
+struct HtmlContext {
+    #[cfg(feature = "css")]
+    style_data: css::StyleData,
+}
+
 /// Convert a DOM tree or subtree into a render tree.
 pub fn dom_to_render_tree<T: Write>(handle: Handle, err_out: &mut T) -> Result<Option<RenderNode>> {
     html_trace!("### dom_to_render_tree: HTML: {:?}", handle);
-    let result = tree_map_reduce(&mut (), handle, |_, handle| {
-        process_dom_node(handle, err_out)
+    let mut context = HtmlContext::default();
+    #[cfg(feature = "css")]
+    {
+        context.style_data = css::dom_to_stylesheet(handle.clone(), err_out)?;
+    }
+
+    let result = tree_map_reduce(&mut context, handle, |context, handle| {
+        process_dom_node(handle, err_out, context)
     });
 
     html_trace!("### dom_to_render_tree: out= {:#?}", result);
     result
 }
 
-fn pending<'a, F>(handle: Handle, f: F) -> TreeMapResult<'a, (), Handle, RenderNode>
+fn pending<'a, F>(handle: Handle, f: F) -> TreeMapResult<'a, HtmlContext, Handle, RenderNode>
 where
-    //for<'a> F: Fn(&'a mut C, Vec<RenderNode>) -> Option<RenderNode>+'static
-    for<'r> F: Fn(&'r mut (), std::vec::Vec<RenderNode>) -> Result<Option<RenderNode>> + 'static,
+    for<'r> F: Fn(&'r mut HtmlContext, std::vec::Vec<RenderNode>) -> Result<Option<RenderNode>> + 'static,
 {
     TreeMapResult::PendingChildren {
         children: handle.children.borrow().clone(),
@@ -955,15 +1025,17 @@ fn prepend_marker(prefix: RenderNode, mut orig: RenderNode) -> RenderNode {
     orig
 }
 
-fn process_dom_node<'a, 'b, T: Write>(
+fn process_dom_node<'a, 'b, 'c, T: Write>(
     handle: Handle,
     err_out: &'b mut T,
-) -> Result<TreeMapResult<'a, (), Handle, RenderNode>> {
+    #[allow(unused)] // Used with css feature
+    context: &'c mut HtmlContext,
+) -> Result<TreeMapResult<'a, HtmlContext, Handle, RenderNode>> {
     use RenderNodeInfo::*;
     use TreeMapResult::*;
 
     Ok(match handle.clone().data {
-        Document => pending(handle, |&mut (), cs| Ok(Some(RenderNode::new(Container(cs))))),
+        Document => pending(handle, |_context, cs| Ok(Some(RenderNode::new(Container(cs))))),
         Comment { .. } => Nothing,
         Element {
             ref name,
@@ -973,7 +1045,6 @@ fn process_dom_node<'a, 'b, T: Write>(
             let mut frag_from_name_attr = false;
             let result = match name.expanded() {
                 expanded_name!(html "html")
-                | expanded_name!(html "span")
                 | expanded_name!(html "body") => {
                     /* process children, but don't add anything */
                     pending(handle, |_, cs| Ok(Some(RenderNode::new(Container(cs)))))
@@ -986,6 +1057,38 @@ fn process_dom_node<'a, 'b, T: Write>(
                 | expanded_name!(html "head") => {
                     /* Ignore the head and its children */
                     Nothing
+                }
+                expanded_name!(html "span") => {
+                    #[cfg(not(feature = "css"))]
+                    {
+                        /* process children, but don't add anything */
+                        pending(handle, |_, cs| Ok(Some(RenderNode::new(Container(cs)))))
+                    }
+                    #[cfg(feature = "css")]
+                    {
+                        let mut classes = Vec::new();
+                        let borrowed = attrs.borrow();
+                        for attr in borrowed.iter() {
+                            if &attr.name.local == "class" {
+                                for class in attr.value.split_whitespace() {
+                                    classes.push(class.to_string());
+                                }
+                            }
+                        }
+                        let mut colour = None;
+                        for class in classes {
+                            if let Some(c) = context.style_data.colours.get(&class) {
+                                colour = Some(c);
+                                break;
+                            }
+                        }
+                        if let Some(Ok(colour)) = colour.map(TryFrom::try_from) {
+                            pending(handle, move |_, cs| Ok(Some(RenderNode::new(Coloured(colour, vec![RenderNode::new(Container(cs))])))))
+                        } else {
+                            /* process children, but don't add anything */
+                            pending(handle, |_, cs| Ok(Some(RenderNode::new(Container(cs)))))
+                        }
+                    }
                 }
                 expanded_name!(html "a") => {
                     let borrowed = attrs.borrow();
@@ -1404,6 +1507,13 @@ fn do_render_node<'a, 'b, T: Write, D: TextDecorator>(
         FragStart(fragname) => {
             renderer.record_frag_start(&fragname);
             Finished(None)
+        }
+        Coloured(colour, children) => {
+            renderer.push_colour(colour);
+            pending2(children, |renderer: &mut TextRenderer<D>, _| {
+                renderer.pop_colour();
+                Ok(Some(None))
+            })
         }
     })
 }

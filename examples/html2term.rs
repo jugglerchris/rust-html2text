@@ -65,6 +65,8 @@ mod top {
                         style.push_str(&format!("{}", termion::color::Fg(termion::color::Magenta)));
                     }
                 }
+                // Ignore unhandled annotations
+                _ => {}
             }
         }
         style

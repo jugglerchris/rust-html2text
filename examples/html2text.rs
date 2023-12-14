@@ -10,25 +10,70 @@ use html2text::render::text_renderer::RichAnnotation;
 use termion;
 
 #[cfg(feature = "ansi_colours")]
-fn default_colour_map(annotation: &RichAnnotation) -> (String, String) {
+fn default_colour_map(annotations: &[RichAnnotation], s: &str) -> String {
     use termion::color::*;
     use RichAnnotation::*;
-    match annotation {
-        Default => ("".into(), "".into()),
-        Link(_) => (
-            format!("{}", termion::style::Underline),
-            format!("{}", termion::style::Reset),
-        ),
-        Image => (format!("{}", Fg(Blue)), format!("{}", Fg(Reset))),
-        Emphasis => (
-            format!("{}", termion::style::Bold),
-            format!("{}", termion::style::Reset),
-        ),
-        Strong => (format!("{}", Fg(LightYellow)), format!("{}", Fg(Reset))),
-        Strikeout => (format!("{}", Fg(LightBlack)), format!("{}", Fg(Reset))),
-        Code => (format!("{}", Fg(Blue)), format!("{}", Fg(Reset))),
-        Preformat(_) => (format!("{}", Fg(Blue)), format!("{}", Fg(Reset))),
+    // Explicit CSS colours override any other colours
+    let mut have_explicit_colour = false;
+    let mut start = Vec::new();
+    let mut finish = Vec::new();
+    for annotation in annotations.iter() {
+        match annotation {
+            Default => {}
+            Link(_) => {
+                start.push(format!("{}", termion::style::Underline));
+                finish.push(format!("{}", termion::style::Reset));
+            }
+            Image(_) => {
+                if !have_explicit_colour {
+                    start.push(format!("{}", Fg(Blue)));
+                    finish.push(format!("{}", Fg(Reset)));
+                }
+            }
+            Emphasis => {
+                start.push(format!("{}", termion::style::Bold));
+                finish.push(format!("{}", termion::style::Reset));
+            }
+            Strong => {
+                if !have_explicit_colour {
+                    start.push(format!("{}", Fg(LightYellow)));
+                    finish.push(format!("{}", Fg(Reset)));
+                }
+            }
+            Strikeout => {
+                if !have_explicit_colour {
+                    start.push(format!("{}", Fg(LightBlack)));
+                    finish.push(format!("{}", Fg(Reset)));
+                }
+            }
+            Code => {
+                if !have_explicit_colour {
+                    start.push(format!("{}", Fg(Blue)));
+                    finish.push(format!("{}", Fg(Reset)));
+                }
+            }
+            Preformat(_) => {
+                if !have_explicit_colour {
+                    start.push(format!("{}", Fg(Blue)));
+                    finish.push(format!("{}", Fg(Reset)));
+                }
+            }
+            Colour(c) => {
+                start.push(format!("{}", Fg(Rgb(c.r, c.g, c.b))));
+                finish.push(format!("{}", Fg(Reset)));
+                have_explicit_colour = true;
+            }
+            _ => {}
+        }
     }
+    // Reverse the finish sequences
+    finish.reverse();
+    let mut result = start.join("");
+    result.push_str(s);
+    for s in finish {
+        result.push_str(&s);
+    }
+    result
 }
 
 fn translate<R>(input: R, width: usize, literal: bool, _use_colour: bool) -> String

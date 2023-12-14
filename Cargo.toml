@@ -20,12 +20,14 @@ xml5ever = "0.17"
 unicode-width = "0.1.5"
 backtrace = { version = "0.3", optional=true }
 thiserror = "1.0.50"
+lightningcss = { version = "1.0.0-alpha.51", optional=true }
 
 [features]
 html_trace = []
 html_trace_bt = ["backtrace"]
 default = []
 ansi_colours = []
+css = ["dep:lightningcss"]
 
 [[example]]
 name = "html2term"
