@@ -4,9 +4,12 @@ use argparse::{ArgumentParser, Store, StoreOption, StoreTrue};
 use std::io;
 use std::io::Write;
 
+#[cfg(unix)]
 use html2text::render::text_renderer::RichAnnotation;
+#[cfg(unix)]
 use termion;
 
+#[cfg(unix)]
 fn default_colour_map(annotations: &[RichAnnotation], s: &str) -> String {
     use termion::color::*;
     use RichAnnotation::*;
@@ -73,12 +76,15 @@ fn default_colour_map(annotations: &[RichAnnotation], s: &str) -> String {
     result
 }
 
-fn translate<R>(input: R, width: usize, literal: bool, use_colour: bool) -> String
+fn translate<R>(input: R, width: usize, literal: bool, _use_colour: bool) -> String
 where
     R: io::Read,
 {
-    if use_colour {
-        return html2text::from_read_coloured(input, width, default_colour_map).unwrap();
+    #[cfg(unix)]
+    {
+        if _use_colour {
+            return html2text::from_read_coloured(input, width, default_colour_map).unwrap();
+        }
     }
     if literal {
         let decorator = html2text::render::text_renderer::TrivialDecorator::new();
@@ -118,6 +124,7 @@ fn main() {
             StoreTrue,
             "Output only literal text (no decorations)",
         );
+        #[cfg(unix)]
         ap.refer(&mut use_colour)
             .add_option(&["--colour"], StoreTrue, "Use ANSI terminal colours");
         ap.parse_args_or_exit();
