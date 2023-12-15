@@ -87,4 +87,27 @@ read keys from stdin.
 
 ## Cargo Features
 
+|Feature| Description|
+|-------|------------|
+|css    | Limited handling of CSS, adding Coloured nodes to the render tree. |
+|html\_trace| Add verbose internal logging (not recommended) |
+|html\_trace\_bt| Add backtraces to the verbose internal logging |
 
+### CSS support
+
+When the `css` feature is enabled, some simple CSS handling is done.
+
+* The contents of \<style\> elements are parsed and some colour rules are extracted
+* Some simplified selector matching is done: currently `<span class="foo">` with
+  CSS rules similar to `.foo { color:#123456; }`.  This will add `Coloured(...)` nodes
+  to the render tree when matching.
+
+The CSS handling is expected to improve in future (PRs welcome), but not to a full-
+blown browser style system, which would be overkill for terminal output.
+
+There are two ways to make use of the colours:
+* Use `from_read_rich()` or one of its variants.  One of the annotations you may get
+  back is `Colour(..)`.
+* Use `from_read_coloured()`.  This is similar to `from_read()`, but you provide
+  a function to add terminal colours (or other styling) based on the same
+  RichAnnotations.  See examples/html2text.rs for an example using termion.

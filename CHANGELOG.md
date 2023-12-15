@@ -18,6 +18,7 @@ Possible log types:
 - [fixed] Fixed #88: panic when a width of zero passed in (thanks bingen13)
 - [fixed] Fixed #90: Fixed a divide-by-zero panic with colspan=0 (thanks mtorromeo)
 - [added] Add very basic CSS colour support (under the css feature flag)
+- [changed] Removed ansi\_colours feature (from\_read\_coloured is always available)
 - [changed] Overhauled error handling.  Internally (and in the lower level
   API) errors (mainly "TooNarrow") are passed around with `Result`.  Fixed
   some panics and infinite loops.  (Thanks WIZeaz for fuzzing)
