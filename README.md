@@ -14,7 +14,12 @@ The project aims to do a reasonable job of rendering reasonable HTML in a
 terminal or other places where HTML needs to be converted to text (for
 example the text/plain fallback in HTML e-mails).
 
+With features (see below) some CSS/colour support is available.
+
 ## Examples
+
+The simple functions like `from_read()` return formatted text (in various
+formats including plain text).
 
 ```rust
 use html2text::from_read;
@@ -26,6 +31,29 @@ let html = b"
        </ul>";
 assert_eq!(from_read(&html[..], 20),
            "\
+* Item one
+* Item two
+* Item three
+");
+```
+
+A lower level API gives a bit more control.  This give the same result (except for
+returning errors as Result instead of panicking):
+
+```rust
+use html2text::config;
+
+let html = b"
+       <ul>
+         <li>Item one</li>
+         <li>Item two</li>
+         <li>Item three</li>
+       </ul>";
+
+assert_eq!(
+    config::plain()
+           .string_from_read(html, 20),
+    Ok("\
 * Item one
 * Item two
 * Item three
@@ -56,3 +84,30 @@ $ cargo run --example html2term foo.html
 
 Note that this example takes the HTML file as a parameter so that it can
 read keys from stdin.
+
+## Cargo Features
+
+|Feature| Description|
+|-------|------------|
+|css    | Limited handling of CSS, adding Coloured nodes to the render tree. |
+|html\_trace| Add verbose internal logging (not recommended) |
+|html\_trace\_bt| Add backtraces to the verbose internal logging |
+
+### CSS support
+
+When the `css` feature is enabled, some simple CSS handling is done.
+
+* The contents of \<style\> elements are parsed and some colour rules are extracted
+* Some simplified selector matching is done: currently `<span class="foo">` with
+  CSS rules similar to `.foo { color:#123456; }`.  This will add `Coloured(...)` nodes
+  to the render tree when matching.
+
+The CSS handling is expected to improve in future (PRs welcome), but not to a full-
+blown browser style system, which would be overkill for terminal output.
+
+There are two ways to make use of the colours:
+* Use `from_read_rich()` or one of its variants.  One of the annotations you may get
+  back is `Colour(..)`.
+* Use `from_read_coloured()`.  This is similar to `from_read()`, but you provide
+  a function to add terminal colours (or other styling) based on the same
+  RichAnnotations.  See examples/html2text.rs for an example using termion.
