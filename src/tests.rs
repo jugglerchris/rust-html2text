@@ -28,6 +28,14 @@ fn test_html_err(input: &[u8], expected: Error, width: usize) {
     }
 }
 
+#[cfg(feature = "css")]
+fn test_html_style(input: &[u8], style: &str, expected: &str, width: usize) {
+    let result = config::plain()
+        .add_css(style)
+        .string_from_read(input, width).unwrap();
+    assert_eq_str!(result, expected);
+}
+
 fn test_html_decorator<D>(input: &[u8], expected: &str, width: usize, decorator: D)
 where
     D: TextDecorator,
@@ -1604,4 +1612,31 @@ fn test_issue_93_x() {
     let _local0 = crate::parse(&data[..]).unwrap();
     let d1 = TrivialDecorator::new();
     let _local1 = crate::RenderTree::render(_local0, 1, d1);
+}
+
+#[cfg(feature = "css")]
+#[test]
+fn test_disp_none() {
+    test_html(br#"
+      <style>
+          .hide { display: none; }
+      </style>
+    <p>Hello</p>
+    <p class="hide">Ignore</p>
+    <p>There</p>"#,
+    r#"Hello
+
+There
+"#, 20);
+
+    // Same as above, but style supplied separately.
+    test_html_style(br#"
+    <p>Hello</p>
+    <p class="hide">Ignore</p>
+    <p>There</p>"#,
+    " .hide { display: none; }",
+    r#"Hello
+
+There
+"#, 20);
 }

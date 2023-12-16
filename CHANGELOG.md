@@ -9,6 +9,12 @@ Possible log types:
 - `[fixed]` for any bug fixes.
 - `[security]` to invite users to upgrade in case of vulnerabilities.
 
+### 0.7.1
+
+- [added] Now recognised CSS `display:none`
+- [added] Can now add extra CSS rules via `Config::add_css`.
+- [changed] StyleData::coloured is no longer public.
+
 ### 0.7.0
 
 - [changed] Remove some noisy stderr output when encoutering control chars
