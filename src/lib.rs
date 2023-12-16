@@ -1721,7 +1721,9 @@ pub mod config {
 
     use crate::{render::text_renderer::{
         PlainDecorator, RichDecorator, TaggedLine, TextDecorator, RichAnnotation
-    }, Result, css::StyleData, RenderTree, HtmlContext};
+    }, Result, RenderTree, HtmlContext};
+    #[cfg(feature = "css")]
+    use crate::css::StyleData;
 
     /// Configure the HTML processing.
     pub struct Config<D: TextDecorator> {
@@ -1802,6 +1804,7 @@ pub mod config {
     pub fn rich() -> Config<RichDecorator> {
         Config {
             decorator: RichDecorator::new(),
+            #[cfg(feature = "css")]
             style: Default::default()
         }
     }
@@ -1810,6 +1813,7 @@ pub mod config {
     pub fn plain() -> Config<PlainDecorator> {
         Config {
             decorator: PlainDecorator::new(),
+            #[cfg(feature = "css")]
             style: Default::default()
         }
     }
@@ -1818,6 +1822,7 @@ pub mod config {
     pub fn with_decorator<D: TextDecorator>(decorator: D) -> Config<D> {
         Config {
             decorator,
+            #[cfg(feature = "css")]
             style: Default::default()
         }
     }
