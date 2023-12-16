@@ -12,7 +12,8 @@ use crate::{Result, TreeMapResult, markup5ever_rcdom::{Handle, NodeData::{Commen
 #[derive(Clone, Default, Debug)]
 pub struct StyleData {
     /// Map from classes to colours
-    pub colours: HashMap<String, CssColor>,
+    pub(crate) colours: HashMap<String, CssColor>,
+    pub(crate) display: HashMap<String, lightningcss::properties::display::Display>,
 }
 
 impl StyleData {
@@ -39,6 +40,19 @@ impl StyleData {
                                     }
                                 }
                             }
+                            Property::Display(disp) => {
+                                for selector in &style.selectors.0 {
+                                    for item in selector.iter() {
+                                        use lightningcss::selector::Component;
+                                        match item {
+                                            Component::Class(c) => { 
+                                                self.display.insert(c.0.to_string(), disp.clone());
+                                            }
+                                            _ => {  }
+                                        }
+                                    }
+                                }
+                            }
                             _ => (),
                         }
                     }
@@ -46,6 +60,13 @@ impl StyleData {
                 _ => (),
             }
         }
+    }
+
+    /// Merge style data from other into this one.
+    /// Data on other takes precedence.
+    pub fn merge(&mut self, other: Self) {
+        self.colours.extend(other.colours);
+        self.display.extend(other.display);
     }
 }
 

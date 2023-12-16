@@ -935,13 +935,17 @@ struct HtmlContext {
     style_data: css::StyleData,
 }
 
-/// Convert a DOM tree or subtree into a render tree.
-pub fn dom_to_render_tree<T: Write>(handle: Handle, err_out: &mut T) -> Result<Option<RenderNode>> {
+fn dom_to_render_tree_with_context<T: Write>(
+    handle: Handle,
+    err_out: &mut T,
+    mut context: HtmlContext)
+-> Result<Option<RenderNode>> {
     html_trace!("### dom_to_render_tree: HTML: {:?}", handle);
-    let mut context = HtmlContext::default();
     #[cfg(feature = "css")]
     {
-        context.style_data = css::dom_to_stylesheet(handle.clone(), err_out)?;
+        let mut doc_style_data = css::dom_to_stylesheet(handle.clone(), err_out)?;
+        doc_style_data.merge(context.style_data);
+        context.style_data = doc_style_data;
     }
 
     let result = tree_map_reduce(&mut context, handle, |context, handle| {
@@ -950,6 +954,11 @@ pub fn dom_to_render_tree<T: Write>(handle: Handle, err_out: &mut T) -> Result<O
 
     html_trace!("### dom_to_render_tree: out= {:#?}", result);
     result
+}
+
+/// Convert a DOM tree or subtree into a render tree.
+pub fn dom_to_render_tree<T: Write>(handle: Handle, err_out: &mut T) -> Result<Option<RenderNode>> {
+    dom_to_render_tree_with_context(handle, err_out, Default::default())
 }
 
 fn pending<'a, F>(handle: Handle, f: F) -> TreeMapResult<'a, HtmlContext, Handle, RenderNode>
@@ -1043,6 +1052,33 @@ fn process_dom_node<'a, 'b, 'c, T: Write>(
             ..
         } => {
             let mut frag_from_name_attr = false;
+
+            #[cfg(feature = "css")]
+            let classes = {
+                let mut classes = Vec::new();
+                let borrowed = attrs.borrow();
+                for attr in borrowed.iter() {
+                    if &attr.name.local == "class" {
+                        for class in attr.value.split_whitespace() {
+                            classes.push(class.to_string());
+                        }
+                    }
+                }
+                classes
+            };
+            #[cfg(feature = "css")]
+            for class in &classes {
+                if let Some(disp) = context.style_data.display.get(class) {
+                    use lightningcss::properties::display;
+                    match disp {
+                        display::Display::Keyword(display::DisplayKeyword::None) => {
+                            // Hide display: none
+                            return Ok(Nothing);
+                        }
+                        _ => {}
+                    }
+                }
+            }
             let result = match name.expanded() {
                 expanded_name!(html "html")
                 | expanded_name!(html "body") => {
@@ -1066,15 +1102,6 @@ fn process_dom_node<'a, 'b, 'c, T: Write>(
                     }
                     #[cfg(feature = "css")]
                     {
-                        let mut classes = Vec::new();
-                        let borrowed = attrs.borrow();
-                        for attr in borrowed.iter() {
-                            if &attr.name.local == "class" {
-                                for class in attr.value.split_whitespace() {
-                                    classes.push(class.to_string());
-                                }
-                            }
-                        }
                         let mut colour = None;
                         for class in classes {
                             if let Some(c) = context.style_data.colours.get(&class) {
@@ -1693,51 +1720,105 @@ pub mod config {
     //! constructed using one of the functions in this module.
 
     use crate::{render::text_renderer::{
-        PlainDecorator, RichDecorator, TaggedLine, TextDecorator
-    }, Result};
-    use super::parse;
+        PlainDecorator, RichDecorator, TaggedLine, TextDecorator, RichAnnotation
+    }, Result, css::StyleData, RenderTree, HtmlContext};
 
     /// Configure the HTML processing.
     pub struct Config<D: TextDecorator> {
         decorator: D,
+
+        #[cfg(feature = "css")]
+        style: StyleData,
     }
 
     impl<D: TextDecorator> Config<D> {
-        /// Reads HTML from `input`, and returns a `String` with text wrapped to
-        /// `width` columns.
-        pub fn string_from_read<R: std::io::Read>(self, input: R, width: usize) -> Result<String> {
-            Ok(parse(input)?.render(width, self.decorator)?.into_string()?)
+        /// Parse with context.
+        fn do_parse<R: std::io::Read>(&mut self, input: R) -> Result<RenderTree> {
+            super::parse_with_context(
+                input,
+                HtmlContext {
+                    #[cfg(feature = "css")]
+                    style_data: std::mem::take(&mut self.style),
+                })
         }
 
+        /// Reads HTML from `input`, and returns a `String` with text wrapped to
+        /// `width` columns.
+        pub fn string_from_read<R: std::io::Read>(mut self, input: R, width: usize) -> Result<String> {
+            Ok(self.do_parse(input)?.render(width, self.decorator)?.into_string()?)
+        }
         /// Reads HTML from `input`, and returns text wrapped to `width` columns.
         /// The text is returned as a `Vec<TaggedLine<_>>`; the annotations are vectors
         /// of the provided text decorator's `Annotation`.  The "outer" annotation comes first in
         /// the `Vec`.
-        pub fn lines_from_read<R: std::io::Read>(self, input: R, width: usize) -> Result<Vec<TaggedLine<Vec<D::Annotation>>>> {
-            Ok(parse(input)?
+        pub fn lines_from_read<R: std::io::Read>(mut self, input: R, width: usize) -> Result<Vec<TaggedLine<Vec<D::Annotation>>>> {
+            Ok(self.do_parse(input)?
                 .render(width, self.decorator)?
                 .into_lines()?)
+        }
+
+        #[cfg(feature = "css")]
+        /// Add some CSS rules which will be used (if supported) with any
+        /// HTML processed.
+        pub fn add_css(mut self, css: &str) -> Self {
+            self.style.add_css(css);
+            self
+        }
+    }
+
+    impl Config<RichDecorator> {
+        /// Return coloured text.  `colour_map` is a function which takes
+        /// a list of `RichAnnotation` and some text, and returns the text
+        /// with any terminal escapes desired to indicate those annotations
+        /// (such as colour).
+        pub fn coloured<R, FMap>(
+            mut self,
+            input: R,
+            width: usize,
+            colour_map: FMap,
+        ) -> Result<String>
+        where
+            R: std::io::Read,
+            FMap: Fn(&[RichAnnotation], &str) -> String,
+        {
+            use std::fmt::Write;
+
+            let lines = self.do_parse(input)?
+                .render(width, self.decorator)?
+                .into_lines()?;
+
+            let mut result = String::new();
+            for line in lines {
+                for ts in line.tagged_strings() {
+                    write!(result, "{}", colour_map(&ts.tag, &ts.s))?;
+                }
+                result.push('\n');
+            }
+            Ok(result)
         }
     }
 
     /// Return a Config initialized with a `RichDecorator`.
     pub fn rich() -> Config<RichDecorator> {
         Config {
-            decorator: RichDecorator::new()
+            decorator: RichDecorator::new(),
+            style: Default::default()
         }
     }
 
     /// Return a Config initialized with a `PlainDecorator`.
     pub fn plain() -> Config<PlainDecorator> {
         Config {
-            decorator: PlainDecorator::new()
+            decorator: PlainDecorator::new(),
+            style: Default::default()
         }
     }
 
     /// Return a Config initialized with a custom decorator.
     pub fn with_decorator<D: TextDecorator>(decorator: D) -> Config<D> {
         Config {
-            decorator
+            decorator,
+            style: Default::default()
         }
     }
 }
@@ -1797,8 +1878,9 @@ impl<D: TextDecorator> RenderedText<D> {
     }
 }
 
-/// Reads and parses HTML from `input` and prepares a render tree.
-pub fn parse(mut input: impl io::Read) -> Result<RenderTree> {
+fn parse_with_context(mut input: impl io::Read,
+                      context: HtmlContext,
+                      ) -> Result<RenderTree> {
     let opts = ParseOpts {
         tree_builder: TreeBuilderOpts {
             drop_doctype: true,
@@ -1810,9 +1892,14 @@ pub fn parse(mut input: impl io::Read) -> Result<RenderTree> {
         .from_utf8()
         .read_from(&mut input)
         .unwrap();
-    let render_tree = dom_to_render_tree(dom.document.clone(), &mut Discard {})?
+    let render_tree = dom_to_render_tree_with_context(dom.document.clone(), &mut Discard {}, context)?
         .ok_or(Error::Fail)?;
     Ok(RenderTree(render_tree))
+}
+
+/// Reads and parses HTML from `input` and prepares a render tree.
+pub fn parse(input: impl io::Read) -> Result<RenderTree> {
+    parse_with_context(input, Default::default())
 }
 
 /// Reads HTML from `input`, decorates it using `decorator`, and
