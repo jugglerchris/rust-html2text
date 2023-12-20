@@ -1056,10 +1056,14 @@ fn process_dom_node<'a, 'b, 'c, T: Write>(
             let mut frag_from_name_attr = false;
 
             #[cfg(feature = "css")]
+            let mut css_colour = None;
+            #[cfg(feature = "css")]
             {
                 for style in context.style_data.matching_rules(&handle) {
-                    match style {
-                        css::Style::Colour(_) => todo!(),
+                    match dbg!(style) {
+                        css::Style::Colour(col) => {
+                            css_colour = Some(col);
+                        }
                         css::Style::DisplayNone => {
                             return Ok(Nothing);
                         }
@@ -1089,16 +1093,7 @@ fn process_dom_node<'a, 'b, 'c, T: Write>(
                     }
                     #[cfg(feature = "css")]
                     {
-                        let mut colour: Option<Colour> = None;
-                        /*
-                        for class in classes {
-                            if let Some(c) = context.style_data.colours.get(&class) {
-                                colour = Some(c);
-                                break;
-                            }
-                        }
-                        */
-                        if let Some(Ok(colour)) = colour.map(TryFrom::try_from) {
+                        if let Some(Ok(colour)) = css_colour.as_ref().map(TryFrom::try_from) {
                             pending(handle, move |_, cs| Ok(Some(RenderNode::new(Coloured(colour, vec![RenderNode::new(Container(cs))])))))
                         } else {
                             /* process children, but don't add anything */

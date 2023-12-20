@@ -7,7 +7,6 @@ use lightningcss::{stylesheet::{
     ParserOptions, StyleSheet
 }, rules::CssRule, properties::{Property, display::{self, DisplayKeyword}}, values::color::CssColor};
 
-use crate::markup5ever_rcdom::Node;
 use crate::{Result, TreeMapResult, markup5ever_rcdom::{Handle, NodeData::{Comment, Document, Element, self}}, tree_map_reduce};
 
 #[derive(Debug, Clone)]
@@ -16,6 +15,7 @@ enum SelectorComponent {
     Element(String),
     Star,
     CombChild,
+    CombDescendant,
 }
 
 #[derive(Debug, Clone)]
@@ -25,69 +25,85 @@ struct Selector {
 }
 
 impl Selector {
-    fn matches(&self, node: &Handle) -> bool {
-        let mut node = node.clone();
-        eprintln!("matches {:?}", self.components);
-        'comp: for comp in &self.components {
-            match comp {
-                SelectorComponent::Class(class) => {
-                    match &node.data {
-                        Document |
-                        NodeData::Doctype { .. } |
-                        NodeData::Text { .. } |
-                        Comment { .. } |
-                        NodeData::ProcessingInstruction { .. } => {
-                            return false;
-                        }
-                        Element { attrs, .. } => {
-                            let attrs = attrs.borrow();
-                            for attr in attrs.iter() {
-                                if &attr.name.local == "class" {
-                                    for cls in attr.value.split_whitespace() {
-                                        if cls == class {
-                                            continue 'comp;
+    fn do_matches(comps: &[SelectorComponent], node: &Handle) -> bool {
+        match comps.first() {
+            None => return true,
+            Some(comp) => {
+                match comp {
+                    SelectorComponent::Class(class) => {
+                        match &node.data {
+                            Document |
+                                NodeData::Doctype { .. } |
+                                NodeData::Text { .. } |
+                                Comment { .. } |
+                                NodeData::ProcessingInstruction { .. } => {
+                                    return false;
+                                }
+                            Element { attrs, .. } => {
+                                let attrs = attrs.borrow();
+                                for attr in attrs.iter() {
+                                    if &attr.name.local == "class" {
+                                        for cls in attr.value.split_whitespace() {
+                                            if cls == class {
+                                                return Self::do_matches(&comps[1..], node);
+                                            }
                                         }
                                     }
                                 }
-                            }
-                            return false;
-                        }
-                    }
-                }
-                SelectorComponent::Element(name) => {
-                    match &node.data {
-                        Element { name: eltname, .. } => {
-                            if name == eltname.expanded().local.deref() {
-                                continue 'comp;
-                            } else {
                                 return false;
                             }
                         }
-                        _ => {
-                            return false;
+                    }
+                    SelectorComponent::Element(name) => {
+                        match &node.data {
+                            Element { name: eltname, .. } => {
+                                if name == eltname.expanded().local.deref() {
+                                    return Self::do_matches(&comps[1..], node);
+                                } else {
+                                    return false;
+                                }
+                            }
+                            _ => {
+                                return false;
+                            }
                         }
                     }
-                }
-                SelectorComponent::Star => {
-                    continue 'comp;
-                }
-                SelectorComponent::CombChild => {
-                    if let Some(parent) = node.parent.take() {
-                        let parent_handle = parent.upgrade();
-                        node.parent.set(Some(parent));
-                        if let Some(ph) = parent_handle {
-                            node = ph;
-                            continue 'comp;
+                    SelectorComponent::Star => {
+                        return Self::do_matches(&comps[1..], node);
+                    }
+                    SelectorComponent::CombChild => {
+                        if let Some(parent) = node.parent.take() {
+                            let parent_handle = parent.upgrade();
+                            node.parent.set(Some(parent));
+                            if let Some(ph) = parent_handle {
+                                return Self::do_matches(&comps[1..], &ph);
+                            } else {
+                                return false;
+                            }
                         } else {
                             return false;
                         }
-                    } else {
-                        return false;
+                    }
+                    SelectorComponent::CombDescendant => {
+                        if let Some(parent) = node.parent.take() {
+                            let parent_handle = parent.upgrade();
+                            node.parent.set(Some(parent));
+                            if let Some(ph) = parent_handle {
+                                return Self::do_matches(&comps[1..], &ph) ||
+                                    Self::do_matches(comps, &ph);
+                            } else {
+                                return false;
+                            }
+                        } else {
+                            return false;
+                        }
                     }
                 }
             }
         }
-        true
+    }
+    fn matches(&self, node: &Handle) -> bool {
+        Self::do_matches(&self.components, node)
     }
 }
 
@@ -124,7 +140,11 @@ impl<'r, 'i> TryFrom<&'r lightningcss::selector::Selector<'i>> for Selector {
                     Combinator::Child => {
                         components.push(SelectorComponent::CombChild);
                     }
+                    Combinator::Descendant => {
+                        components.push(SelectorComponent::CombDescendant);
+                    }
                     _ => {
+                        eprintln!("Unknown combinator {:?}", comb);
                         return Err(());
                     }
                 }
@@ -193,42 +213,6 @@ impl StyleData {
                                     continue;
                                 }
                             }
-                            /*
-                                for selector in &style.selectors.0 {
-                                    dbg!(selector);
-                                    let mut si = selector.iter();
-                                    loop {
-                                        while let Some(item) = si.next() {
-                                            dbg!(item);
-                                            match item {
-                                                Component::Class(id) => {
-                                                    eprintln!("Class {id}");
-                                                    eprintln!("Class {id}");
-                                                }
-                                                Component::Combinator(comp) => {
-                                                    eprintln!("Combinator {comp:?}");
-                                                }
-                                                Component::LocalName(name) => {
-                                                    eprintln!("LocalName {name:?}");
-                                                }
-                                                Component::Any(foo, bar) => {
-                                                    eprintln!("Any {foo:?} {bar:?}");
-                                                }
-                                                Component::ExplicitUniversalType => {
-                                                    eprintln!("ExplicitUniversalType");
-                                                }
-                                                _ => {}
-                                            }
-                                        }
-                                        if let Some(comb) = si.next_sequence() {
-                                            dbg!(comb);
-                                            continue;
-                                        } else {
-                                            break;
-                                        }
-                                    }
-                                }
-                                */
                         }
                     }
                 }
@@ -245,7 +229,7 @@ impl StyleData {
 
     pub(crate) fn matching_rules(&self, handle: &Handle) -> Vec<Style> {
         let mut result = Vec::new();
-        'r: for rule in &self.rules {
+        for rule in &self.rules {
             if rule.selector.matches(handle) {
                 result.extend(rule.styles.iter().cloned());
             }
