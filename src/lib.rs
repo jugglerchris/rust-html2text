@@ -933,6 +933,8 @@ where
 struct HtmlContext {
     #[cfg(feature = "css")]
     style_data: css::StyleData,
+    #[cfg(feature = "css")]
+    ignore_doc_css: bool,
 }
 
 fn dom_to_render_tree_with_context<T: Write>(
@@ -942,7 +944,7 @@ fn dom_to_render_tree_with_context<T: Write>(
 -> Result<Option<RenderNode>> {
     html_trace!("### dom_to_render_tree: HTML: {:?}", handle);
     #[cfg(feature = "css")]
-    {
+    if !context.ignore_doc_css {
         let mut doc_style_data = css::dom_to_stylesheet(handle.clone(), err_out)?;
         doc_style_data.merge(context.style_data);
         context.style_data = doc_style_data;
@@ -1054,31 +1056,16 @@ fn process_dom_node<'a, 'b, 'c, T: Write>(
             let mut frag_from_name_attr = false;
 
             #[cfg(feature = "css")]
-            let classes = {
-                let mut classes = Vec::new();
-                let borrowed = attrs.borrow();
-                for attr in borrowed.iter() {
-                    if &attr.name.local == "class" {
-                        for class in attr.value.split_whitespace() {
-                            classes.push(class.to_string());
-                        }
-                    }
-                }
-                classes
-            };
-            #[cfg(feature = "css")]
-            for class in &classes {
-                if let Some(disp) = context.style_data.display.get(class) {
-                    use lightningcss::properties::display;
-                    match disp {
-                        display::Display::Keyword(display::DisplayKeyword::None) => {
-                            // Hide display: none
+            {
+                for style in context.style_data.matching_rules(&handle) {
+                    match style {
+                        css::Style::Colour(_) => todo!(),
+                        css::Style::DisplayNone => {
                             return Ok(Nothing);
                         }
-                        _ => {}
                     }
                 }
-            }
+            };
             let result = match name.expanded() {
                 expanded_name!(html "html")
                 | expanded_name!(html "body") => {
@@ -1102,13 +1089,15 @@ fn process_dom_node<'a, 'b, 'c, T: Write>(
                     }
                     #[cfg(feature = "css")]
                     {
-                        let mut colour = None;
+                        let mut colour: Option<Colour> = None;
+                        /*
                         for class in classes {
                             if let Some(c) = context.style_data.colours.get(&class) {
                                 colour = Some(c);
                                 break;
                             }
                         }
+                        */
                         if let Some(Ok(colour)) = colour.map(TryFrom::try_from) {
                             pending(handle, move |_, cs| Ok(Some(RenderNode::new(Coloured(colour, vec![RenderNode::new(Container(cs))])))))
                         } else {
@@ -1731,6 +1720,8 @@ pub mod config {
 
         #[cfg(feature = "css")]
         style: StyleData,
+        #[cfg(feature = "css")]
+        ignore_doc_css: bool,
     }
 
     impl<D: TextDecorator> Config<D> {
@@ -1741,6 +1732,8 @@ pub mod config {
                 HtmlContext {
                     #[cfg(feature = "css")]
                     style_data: std::mem::take(&mut self.style),
+                    #[cfg(feature = "css")]
+                    ignore_doc_css: self.ignore_doc_css,
                 })
         }
 
@@ -1764,6 +1757,17 @@ pub mod config {
         /// HTML processed.
         pub fn add_css(mut self, css: &str) -> Self {
             self.style.add_css(css);
+            self
+        }
+
+        /// Ignore any CSS in the HTML document.  Styling added with
+        /// `add_css` is still used.
+        /// Has no effect (but is harmless) without the css feature.
+        pub fn ignore_doc_css(mut self) -> Self {
+            #[cfg(feature = "css")]
+            {
+                self.ignore_doc_css = true;
+            }
             self
         }
     }
@@ -1805,7 +1809,9 @@ pub mod config {
         Config {
             decorator: RichDecorator::new(),
             #[cfg(feature = "css")]
-            style: Default::default()
+            style: Default::default(),
+            #[cfg(feature = "css")]
+            ignore_doc_css: false,
         }
     }
 
@@ -1814,7 +1820,9 @@ pub mod config {
         Config {
             decorator: PlainDecorator::new(),
             #[cfg(feature = "css")]
-            style: Default::default()
+            style: Default::default(),
+            #[cfg(feature = "css")]
+            ignore_doc_css: false,
         }
     }
 
@@ -1823,7 +1831,9 @@ pub mod config {
         Config {
             decorator,
             #[cfg(feature = "css")]
-            style: Default::default()
+            style: Default::default(),
+            #[cfg(feature = "css")]
+            ignore_doc_css: false,
         }
     }
 }

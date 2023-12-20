@@ -13,7 +13,8 @@ macro_rules! assert_eq_str {
     };
 }
 fn test_html(input: &[u8], expected: &str, width: usize) {
-    assert_eq_str!(from_read(input, width), expected);
+    let output = from_read(input, width);
+    assert_eq_str!(output, expected);
 }
 fn test_html_err(input: &[u8], expected: Error, width: usize) {
     let result = config::plain()
@@ -1615,28 +1616,79 @@ fn test_issue_93_x() {
 }
 
 #[cfg(feature = "css")]
-#[test]
-fn test_disp_none() {
-    test_html(br#"
-      <style>
-          .hide { display: none; }
-      </style>
-    <p>Hello</p>
-    <p class="hide">Ignore</p>
-    <p>There</p>"#,
-    r#"Hello
+mod css_tests {
+    use super::{test_html, test_html_style};
+
+    #[test]
+    fn test_disp_none() {
+        test_html(br#"
+          <style>
+              .hide { display: none; }
+          </style>
+        <p>Hello</p>
+        <p class="hide">Ignore</p>
+        <p>There</p>"#,
+        r#"Hello
 
 There
 "#, 20);
 
-    // Same as above, but style supplied separately.
-    test_html_style(br#"
-    <p>Hello</p>
-    <p class="hide">Ignore</p>
-    <p>There</p>"#,
-    " .hide { display: none; }",
-    r#"Hello
+        // Same as above, but style supplied separately.
+        test_html_style(br#"
+        <p>Hello</p>
+        <p class="hide">Ignore</p>
+        <p>There</p>"#,
+        " .hide { display: none; }",
+        r#"Hello
 
 There
 "#, 20);
+    }
+
+    #[test]
+    fn test_selector_elementname()
+    {
+        test_html(br#"
+          <style>
+              div { display: none; }
+          </style>
+        <p>Hello</p>
+        <div>Ignore</div>
+        <p>There</p>"#,
+        r#"Hello
+
+There
+"#, 20);
+    }
+
+    #[test]
+    fn test_selector_aoc()
+    {
+        test_html(br#"
+          <style>
+              .someclass > * > span > span {
+                  display: none;
+              }
+          </style>
+        <p>Hello</p>
+        <div class="someclass">Ok
+        <p>
+         <span>Span1<span>Span2</span></span>
+        </p>
+        <div>
+         <span>Span1<span>Span2</span></span>
+        </div>
+        </div>
+        <p>There</p>"#,
+        r#"Hello
+
+Ok
+
+Span1
+
+Span1
+
+There
+"#, 20);
+    }
 }
