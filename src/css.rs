@@ -130,7 +130,7 @@ impl<'r, 'i> TryFrom<&'r lightningcss::selector::Selector<'i>> for Selector {
                         components.push(SelectorComponent::Star);
                     }
                     _ => {
-                        eprintln!("Unknown component {:?}", item);
+                        html_trace!("Unknown component {:?}", item);
                         return Err(());
                     }
                 }
@@ -144,7 +144,7 @@ impl<'r, 'i> TryFrom<&'r lightningcss::selector::Selector<'i>> for Selector {
                         components.push(SelectorComponent::CombDescendant);
                     }
                     _ => {
-                        eprintln!("Unknown combinator {:?}", comb);
+                        html_trace!("Unknown combinator {:?}", comb);
                         return Err(());
                     }
                 }
@@ -181,7 +181,7 @@ impl StyleData {
     /// and the relevant and supported features extracted.
     pub fn add_css(&mut self, css: &str) {
         let ss = StyleSheet::parse(css, ParserOptions::default()).unwrap();
-        eprintln!("add css [[{css}]]");
+        html_trace!("add css [[{css}]]");
 
         for rule in &ss.rules.0 {
             match rule {

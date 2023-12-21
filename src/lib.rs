@@ -1060,7 +1060,7 @@ fn process_dom_node<'a, 'b, 'c, T: Write>(
             #[cfg(feature = "css")]
             {
                 for style in context.style_data.matching_rules(&handle) {
-                    match dbg!(style) {
+                    match style {
                         css::Style::Colour(col) => {
                             css_colour = Some(col);
                         }
