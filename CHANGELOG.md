@@ -9,6 +9,12 @@ Possible log types:
 - `[fixed]` for any bug fixes.
 - `[security]` to invite users to upgrade in case of vulnerabilities.
 
+### 0.8.0
+
+- [added] CSS: Support more extensive selectors
+- [changed] CSS handling defaults to off; use `Config::use_doc_css()`
+  or `Config::add_css` to use CSS.
+
 ### 0.7.1
 
 - [added] Now recognised CSS `display:none`

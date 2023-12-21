@@ -16,6 +16,13 @@ fn test_html(input: &[u8], expected: &str, width: usize) {
     let output = from_read(input, width);
     assert_eq_str!(output, expected);
 }
+#[cfg(feature = "css")]
+fn test_html_css(input: &[u8], expected: &str, width: usize) {
+    let result = config::plain()
+        .use_doc_css()
+        .string_from_read(input, width).unwrap();
+    assert_eq_str!(result, expected);
+}
 fn test_html_err(input: &[u8], expected: Error, width: usize) {
     let result = config::plain()
         .string_from_read(input, width);
@@ -1617,11 +1624,11 @@ fn test_issue_93_x() {
 
 #[cfg(feature = "css")]
 mod css_tests {
-    use super::{test_html, test_html_style};
+    use super::{test_html_css, test_html_style};
 
     #[test]
     fn test_disp_none() {
-        test_html(br#"
+        test_html_css(br#"
           <style>
               .hide { display: none; }
           </style>
@@ -1648,7 +1655,7 @@ There
     #[test]
     fn test_selector_elementname()
     {
-        test_html(br#"
+        test_html_css(br#"
           <style>
               div { display: none; }
           </style>
@@ -1664,7 +1671,7 @@ There
     #[test]
     fn test_selector_aoc()
     {
-        test_html(br#"
+        test_html_css(br#"
           <style>
               .someclass > * > span > span {
                   display: none;

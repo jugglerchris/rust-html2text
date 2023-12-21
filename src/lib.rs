@@ -934,7 +934,7 @@ struct HtmlContext {
     #[cfg(feature = "css")]
     style_data: css::StyleData,
     #[cfg(feature = "css")]
-    ignore_doc_css: bool,
+    use_doc_css: bool,
 }
 
 fn dom_to_render_tree_with_context<T: Write>(
@@ -944,7 +944,7 @@ fn dom_to_render_tree_with_context<T: Write>(
 -> Result<Option<RenderNode>> {
     html_trace!("### dom_to_render_tree: HTML: {:?}", handle);
     #[cfg(feature = "css")]
-    if !context.ignore_doc_css {
+    if context.use_doc_css {
         let mut doc_style_data = css::dom_to_stylesheet(handle.clone(), err_out)?;
         doc_style_data.merge(context.style_data);
         context.style_data = doc_style_data;
@@ -1716,7 +1716,7 @@ pub mod config {
         #[cfg(feature = "css")]
         style: StyleData,
         #[cfg(feature = "css")]
-        ignore_doc_css: bool,
+        use_doc_css: bool,
     }
 
     impl<D: TextDecorator> Config<D> {
@@ -1728,7 +1728,7 @@ pub mod config {
                     #[cfg(feature = "css")]
                     style_data: std::mem::take(&mut self.style),
                     #[cfg(feature = "css")]
-                    ignore_doc_css: self.ignore_doc_css,
+                    use_doc_css: self.use_doc_css,
                 })
         }
 
@@ -1755,13 +1755,11 @@ pub mod config {
             self
         }
 
-        /// Ignore any CSS in the HTML document.  Styling added with
-        /// `add_css` is still used.
-        /// Has no effect (but is harmless) without the css feature.
-        pub fn ignore_doc_css(mut self) -> Self {
-            #[cfg(feature = "css")]
+        #[cfg(feature = "css")]
+        /// Parse CSS from any <style> elements and use supported rules.
+        pub fn use_doc_css(mut self) -> Self {
             {
-                self.ignore_doc_css = true;
+                self.use_doc_css = true;
             }
             self
         }
@@ -1806,7 +1804,7 @@ pub mod config {
             #[cfg(feature = "css")]
             style: Default::default(),
             #[cfg(feature = "css")]
-            ignore_doc_css: false,
+            use_doc_css: false,
         }
     }
 
@@ -1817,7 +1815,7 @@ pub mod config {
             #[cfg(feature = "css")]
             style: Default::default(),
             #[cfg(feature = "css")]
-            ignore_doc_css: false,
+            use_doc_css: false,
         }
     }
 
@@ -1828,7 +1826,7 @@ pub mod config {
             #[cfg(feature = "css")]
             style: Default::default(),
             #[cfg(feature = "css")]
-            ignore_doc_css: false,
+            use_doc_css: false,
         }
     }
 }
