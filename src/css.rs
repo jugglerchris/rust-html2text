@@ -1,19 +1,179 @@
 //! Some basic CSS support.
-use std::{collections::HashMap, io::Write};
+use std::io::Write;
+use std::convert::TryFrom;
 use std::ops::Deref;
 
 use lightningcss::{stylesheet::{
     ParserOptions, StyleSheet
-}, rules::CssRule, properties::Property, values::color::CssColor};
+}, rules::CssRule, properties::{Property, display::{self, DisplayKeyword}}, values::color::CssColor};
 
 use crate::{Result, TreeMapResult, markup5ever_rcdom::{Handle, NodeData::{Comment, Document, Element, self}}, tree_map_reduce};
+
+#[derive(Debug, Clone)]
+enum SelectorComponent {
+    Class(String),
+    Element(String),
+    Star,
+    CombChild,
+    CombDescendant,
+}
+
+#[derive(Debug, Clone)]
+struct Selector {
+    // List of components, right first so we match from the leaf.
+    components: Vec<SelectorComponent>,
+}
+
+impl Selector {
+    fn do_matches(comps: &[SelectorComponent], node: &Handle) -> bool {
+        match comps.first() {
+            None => return true,
+            Some(comp) => {
+                match comp {
+                    SelectorComponent::Class(class) => {
+                        match &node.data {
+                            Document |
+                                NodeData::Doctype { .. } |
+                                NodeData::Text { .. } |
+                                Comment { .. } |
+                                NodeData::ProcessingInstruction { .. } => {
+                                    return false;
+                                }
+                            Element { attrs, .. } => {
+                                let attrs = attrs.borrow();
+                                for attr in attrs.iter() {
+                                    if &attr.name.local == "class" {
+                                        for cls in attr.value.split_whitespace() {
+                                            if cls == class {
+                                                return Self::do_matches(&comps[1..], node);
+                                            }
+                                        }
+                                    }
+                                }
+                                return false;
+                            }
+                        }
+                    }
+                    SelectorComponent::Element(name) => {
+                        match &node.data {
+                            Element { name: eltname, .. } => {
+                                if name == eltname.expanded().local.deref() {
+                                    return Self::do_matches(&comps[1..], node);
+                                } else {
+                                    return false;
+                                }
+                            }
+                            _ => {
+                                return false;
+                            }
+                        }
+                    }
+                    SelectorComponent::Star => {
+                        return Self::do_matches(&comps[1..], node);
+                    }
+                    SelectorComponent::CombChild => {
+                        if let Some(parent) = node.parent.take() {
+                            let parent_handle = parent.upgrade();
+                            node.parent.set(Some(parent));
+                            if let Some(ph) = parent_handle {
+                                return Self::do_matches(&comps[1..], &ph);
+                            } else {
+                                return false;
+                            }
+                        } else {
+                            return false;
+                        }
+                    }
+                    SelectorComponent::CombDescendant => {
+                        if let Some(parent) = node.parent.take() {
+                            let parent_handle = parent.upgrade();
+                            node.parent.set(Some(parent));
+                            if let Some(ph) = parent_handle {
+                                return Self::do_matches(&comps[1..], &ph) ||
+                                    Self::do_matches(comps, &ph);
+                            } else {
+                                return false;
+                            }
+                        } else {
+                            return false;
+                        }
+                    }
+                }
+            }
+        }
+    }
+    fn matches(&self, node: &Handle) -> bool {
+        Self::do_matches(&self.components, node)
+    }
+}
+
+impl<'r, 'i> TryFrom<&'r lightningcss::selector::Selector<'i>> for Selector {
+    type Error = ();
+
+    fn try_from(selector: &'r lightningcss::selector::Selector<'i>) -> std::result::Result<Self, Self::Error> {
+        let mut components = Vec::new();
+
+        use lightningcss::selector::Component;
+        use lightningcss::selector::Combinator;
+
+        let mut si = selector.iter();
+        loop {
+            while let Some(item) = si.next() {
+                match item {
+                    Component::Class(id) => {
+                        components.push(SelectorComponent::Class(String::from(id.deref())));
+                    }
+                    Component::LocalName(name) => {
+                        components.push(SelectorComponent::Element(String::from(name.lower_name.deref())));
+                    }
+                    Component::ExplicitUniversalType => {
+                        components.push(SelectorComponent::Star);
+                    }
+                    _ => {
+                        html_trace!("Unknown component {:?}", item);
+                        return Err(());
+                    }
+                }
+            }
+            if let Some(comb) = si.next_sequence() {
+                match comb {
+                    Combinator::Child => {
+                        components.push(SelectorComponent::CombChild);
+                    }
+                    Combinator::Descendant => {
+                        components.push(SelectorComponent::CombDescendant);
+                    }
+                    _ => {
+                        html_trace!("Unknown combinator {:?}", comb);
+                        return Err(());
+                    }
+                }
+            } else {
+                break;
+            }
+        }
+        Ok(Selector {
+            components
+        })
+    }
+}
+
+#[derive(Debug, Clone)]
+pub(crate) enum Style {
+    Colour(CssColor),
+    DisplayNone,
+}
+
+#[derive(Debug, Clone)]
+struct Ruleset {
+    selector: Selector,
+    styles: Vec<Style>,
+}
 
 /// Stylesheet data which can be used while building the render tree.
 #[derive(Clone, Default, Debug)]
 pub struct StyleData {
-    /// Map from classes to colours
-    pub(crate) colours: HashMap<String, CssColor>,
-    pub(crate) display: HashMap<String, lightningcss::properties::display::Display>,
+    rules: Vec<Ruleset>,
 }
 
 impl StyleData {
@@ -21,39 +181,38 @@ impl StyleData {
     /// and the relevant and supported features extracted.
     pub fn add_css(&mut self, css: &str) {
         let ss = StyleSheet::parse(css, ParserOptions::default()).unwrap();
+        html_trace!("add css [[{}]]", css);
 
         for rule in &ss.rules.0 {
             match rule {
                 CssRule::Style(style) => {
+                    let mut styles = Vec::new();
                     for decl in &style.declarations.declarations {
                         match decl {
                             Property::Color(color) => {
-                                for selector in &style.selectors.0 {
-                                    for item in selector.iter() {
-                                        use lightningcss::selector::Component;
-                                        match item {
-                                            Component::Class(c) => { 
-                                                self.colours.insert(c.0.to_string(), color.clone());
-                                            }
-                                            _ => {  }
-                                        }
-                                    }
-                                }
+                                styles.push(Style::Colour(color.clone()));
                             }
                             Property::Display(disp) => {
-                                for selector in &style.selectors.0 {
-                                    for item in selector.iter() {
-                                        use lightningcss::selector::Component;
-                                        match item {
-                                            Component::Class(c) => { 
-                                                self.display.insert(c.0.to_string(), disp.clone());
-                                            }
-                                            _ => {  }
-                                        }
-                                    }
+                                if let display::Display::Keyword(DisplayKeyword::None) = disp {
+                                    styles.push(Style::DisplayNone);
                                 }
                             }
-                            _ => (),
+                            _ => {}
+                        }
+                    }
+                    if !styles.is_empty() {
+                        for selector in &style.selectors.0 {
+                            match Selector::try_from(selector) {
+                                Ok(selector) => {
+                                    self.rules.push(Ruleset {
+                                        selector,
+                                        styles: styles.clone()
+                                    });
+                                }
+                                Err(_) => {
+                                    continue;
+                                }
+                            }
                         }
                     }
                 }
@@ -65,8 +224,18 @@ impl StyleData {
     /// Merge style data from other into this one.
     /// Data on other takes precedence.
     pub fn merge(&mut self, other: Self) {
-        self.colours.extend(other.colours);
-        self.display.extend(other.display);
+        self.rules.extend(other.rules);
+    }
+
+    pub(crate) fn matching_rules(&self, handle: &Handle) -> Vec<Style> {
+        let mut result = Vec::new();
+        for rule in &self.rules {
+            if rule.selector.matches(handle) {
+                result.extend(rule.styles.iter().cloned());
+            }
+        }
+
+        result
     }
 }
 
