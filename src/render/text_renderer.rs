@@ -813,7 +813,7 @@ pub struct SubRenderer<D: TextDecorator> {
     decorator: D,
     ann_stack: Vec<D::Annotation>,
     text_filter_stack: Vec<fn(&str) -> Option<String>>,
-    /// The depth of <pre> block stacking.
+    /// The depth of `<pre>` block stacking.
     pre_depth: usize,
 }
 

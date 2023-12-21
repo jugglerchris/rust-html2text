@@ -181,7 +181,7 @@ impl StyleData {
     /// and the relevant and supported features extracted.
     pub fn add_css(&mut self, css: &str) {
         let ss = StyleSheet::parse(css, ParserOptions::default()).unwrap();
-        html_trace!("add css [[{css}]]");
+        html_trace!("add css [[{}]]", css);
 
         for rule in &ss.rules.0 {
             match rule {

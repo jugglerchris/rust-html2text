@@ -305,7 +305,7 @@ impl RenderTable {
     pub fn rows_mut(&mut self) -> std::slice::IterMut<RenderTableRow> {
         self.rows.iter_mut()
     }
-    /// Consume this and return a Vec<RenderNode> containing the children;
+    /// Consume this and return a `Vec<RenderNode>` containing the children;
     /// the children know the column sizes required.
     pub fn into_rows(self, col_sizes: Vec<usize>, vert: bool) -> Vec<RenderNode> {
         self.rows
@@ -393,15 +393,15 @@ pub enum RenderNodeInfo {
     Ol(i64, Vec<RenderNode>),
     /// A description list (containing Dt or Dd)
     Dl(Vec<RenderNode>),
-    /// A term (from a <dl>)
+    /// A term (from a `<dl>`)
     Dt(Vec<RenderNode>),
-    /// A definition (from a <dl>)
+    /// A definition (from a `<dl>`)
     Dd(Vec<RenderNode>),
     /// A line break
     Break,
     /// A table
     Table(RenderTable),
-    /// A set of table rows (from either <thead> or <tbody>
+    /// A set of table rows (from either `<thead>` or `<tbody>`
     TableBody(Vec<RenderTableRow>),
     /// Table row (must only appear within a table body)
     /// If the boolean is true, then the cells are drawn vertically
