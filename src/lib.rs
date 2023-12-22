@@ -51,6 +51,11 @@
 #![cfg_attr(feature = "clippy", plugin(clippy))]
 #![deny(missing_docs)]
 
+// Check code in README.md
+#[cfg(doctest)]
+#[doc = include_str!("../README.md")]
+struct ReadMe;
+
 #[macro_use]
 extern crate html5ever;
 extern crate unicode_width;
