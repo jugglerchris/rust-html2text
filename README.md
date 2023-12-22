@@ -52,8 +52,9 @@ let html = b"
 
 assert_eq!(
     config::plain()
-           .string_from_read(html, 20),
-    Ok("\
+           .string_from_read(&html[..], 20)
+           .unwrap(),
+    "\
 * Item one
 * Item two
 * Item three

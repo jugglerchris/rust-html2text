@@ -46,6 +46,7 @@ fn test_html_err(input: &[u8], expected: Error, width: usize) {
 fn test_html_style(input: &[u8], style: &str, expected: &str, width: usize) {
     let result = config::plain()
         .add_css(style)
+        .unwrap()
         .string_from_read(input, width).unwrap();
     assert_eq_str!(result, expected);
 }
@@ -937,6 +938,8 @@ Indented again
     );
 }
 
+// Some of the tracing output can overflow the stack when tracing some values.
+#[cfg(not(feature = "html_trace"))]
 #[test]
 fn test_deeply_nested() {
     use ::std::iter::repeat;
@@ -944,6 +947,8 @@ fn test_deeply_nested() {
     test_html(html.as_bytes(), "", 10);
 }
 
+// Some of the tracing output can overflow the stack when tracing some values.
+#[cfg(not(feature = "html_trace"))]
 #[test]
 fn test_deeply_nested_table() {
     use ::std::iter::repeat;

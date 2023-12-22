@@ -179,14 +179,9 @@ pub struct StyleData {
 impl StyleData {
     /// Add some CSS source to be included.  The source will be parsed
     /// and the relevant and supported features extracted.
-    pub fn add_css(&mut self, css: &str) {
-        let ss = match StyleSheet::parse(css, ParserOptions::default()) {
-            Ok(ss) => ss,
-            Err(_e) => {
-                html_trace!("failed to parse CSS: {}, [[{}]]", _e, css);
-                return;
-            }
-        };
+    pub fn add_css(&mut self, css: &str) -> Result<()> {
+        let ss = StyleSheet::parse(css, ParserOptions::default())
+            .map_err(|_| crate::Error::CssParseError)?;
 
         for rule in &ss.rules.0 {
             match rule {
@@ -224,6 +219,7 @@ impl StyleData {
                 _ => (),
             }
         }
+        Ok(())
     }
 
     /// Merge style data from other into this one.
@@ -321,7 +317,8 @@ pub fn dom_to_stylesheet<T: Write>(handle: Handle, err_out: &mut T) -> Result<St
     let mut result = StyleData::default();
     if let Some(styles) = styles {
         for css in styles {
-            result.add_css(&css);
+            // Ignore CSS parse errors.
+            let _ = result.add_css(&css);
         }
     }
     Ok(result)

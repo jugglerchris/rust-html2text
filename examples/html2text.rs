@@ -1,6 +1,8 @@
 extern crate argparse;
 extern crate html2text;
 use argparse::{ArgumentParser, Store, StoreOption, StoreTrue};
+use html2text::config::{Config, self};
+use html2text::render::text_renderer::{TextDecorator, TrivialDecorator};
 use std::io;
 use std::io::Write;
 
@@ -76,31 +78,63 @@ fn default_colour_map(annotations: &[RichAnnotation], s: &str) -> String {
     result
 }
 
-fn translate<R>(input: R, width: usize, literal: bool, _use_colour: bool) -> String
+fn update_config<T: TextDecorator>(mut config: Config<T>, flags: &Flags) -> Config<T> {
+    if let Some(wrap_width) = flags.wrap_width {
+        config = config.max_wrap_width(wrap_width);
+    }
+    #[cfg(feature = "css")]
+    if flags.use_css {
+        config = config.use_doc_css();
+    }
+    config
+}
+
+fn translate<R>(input: R, flags: Flags, literal: bool) -> String
 where
     R: io::Read,
 {
     #[cfg(unix)]
     {
-        if _use_colour {
-            return html2text::from_read_coloured(input, width, default_colour_map).unwrap();
+        if flags.use_colour {
+            let conf = config::rich();
+            let conf = update_config(conf, &flags);
+            return conf.coloured(input, flags.width, default_colour_map)
+                    .unwrap()
         }
     }
     if literal {
-        let decorator = html2text::render::text_renderer::TrivialDecorator::new();
-        html2text::from_read_with_decorator(input, width, decorator)
+        let conf = config::with_decorator(TrivialDecorator::new());
+        let conf = update_config(conf, &flags);
+        conf.string_from_read(input, flags.width)
+            .unwrap()
     } else {
-        html2text::from_read(input, width)
+        let conf = config::plain();
+        let conf = update_config(conf, &flags);
+        conf.string_from_read(input, flags.width)
+            .unwrap()
     }
+}
+
+struct Flags {
+    width: usize,
+    wrap_width: Option<usize>,
+    #[allow(unused)]
+    use_colour: bool,
+    #[cfg(feature = "css")]
+    use_css: bool,
 }
 
 fn main() {
     let mut infile: Option<String> = None;
     let mut outfile: Option<String> = None;
-    let mut width: usize = 80;
+    let mut flags = Flags {
+        width: 80,
+        wrap_width: None,
+        use_colour: false,
+        #[cfg(feature = "css")]
+        use_css: false,
+    };
     let mut literal: bool = false;
-    #[allow(unused)]
-    let mut use_colour = false;
 
     {
         let mut ap = ArgumentParser::new();
@@ -109,10 +143,15 @@ fn main() {
             StoreOption,
             "Input HTML file (default is standard input)",
         );
-        ap.refer(&mut width).add_option(
+        ap.refer(&mut flags.width).add_option(
             &["-w", "--width"],
             Store,
             "Column width to format to (default is 80)",
+        );
+        ap.refer(&mut flags.wrap_width).add_option(
+            &["-W", "--wrap-width"],
+            StoreOption,
+            "Maximum text wrap width (default same as width)",
         );
         ap.refer(&mut outfile).add_option(
             &["-o", "--output"],
@@ -125,20 +164,23 @@ fn main() {
             "Output only literal text (no decorations)",
         );
         #[cfg(unix)]
-        ap.refer(&mut use_colour)
+        ap.refer(&mut flags.use_colour)
             .add_option(&["--colour"], StoreTrue, "Use ANSI terminal colours");
+        #[cfg(feature = "css")]
+        ap.refer(&mut flags.use_css)
+            .add_option(&["--css"], StoreTrue, "Enable CSS");
         ap.parse_args_or_exit();
     }
 
     let data = match infile {
         None => {
             let stdin = io::stdin();
-            let data = translate(&mut stdin.lock(), width, literal, use_colour);
+            let data = translate(&mut stdin.lock(), flags, literal);
             data
         }
         Some(name) => {
             let mut file = std::fs::File::open(name).expect("Tried to open file");
-            translate(&mut file, width, literal, use_colour)
+            translate(&mut file, flags, literal)
         }
     };
 
