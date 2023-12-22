@@ -16,6 +16,7 @@ Possible log types:
 - [added] Support `<font color=...>` when CSS is enabled.
 - [added] `Config::max_wrap_width()` to wrap text to a norrower width than
   the overal size available.
+- [added] Add --wrap-width and --css options to html2text example.
 
 ### 0.8.0
 
