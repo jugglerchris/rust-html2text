@@ -9,6 +9,14 @@ Possible log types:
 - `[fixed]` for any bug fixes.
 - `[security]` to invite users to upgrade in case of vulnerabilities.
 
+### 0.9.0
+
+- [changed] `Config::add_css` now returns `Result` instead of panicking on
+  CSS parse errors.  Errors from parsing document CSS are ignored.
+- [added] Support `<font color=...>` when CSS is enabled.
+- [added] `Config::max_wrap_width()` to wrap text to a norrower width than
+  the overal size available.
+
 ### 0.8.0
 
 - [added] CSS: Support more extensive selectors
