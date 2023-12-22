@@ -180,8 +180,13 @@ impl StyleData {
     /// Add some CSS source to be included.  The source will be parsed
     /// and the relevant and supported features extracted.
     pub fn add_css(&mut self, css: &str) {
-        let ss = StyleSheet::parse(css, ParserOptions::default()).unwrap();
-        html_trace!("add css [[{}]]", css);
+        let ss = match StyleSheet::parse(css, ParserOptions::default()) {
+            Ok(ss) => ss,
+            Err(_e) => {
+                html_trace!("failed to parse CSS: {}, [[{}]]", _e, css);
+                return;
+            }
+        };
 
         for rule in &ss.rules.0 {
             match rule {
