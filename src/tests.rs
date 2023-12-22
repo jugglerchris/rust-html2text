@@ -937,6 +937,8 @@ Indented again
     );
 }
 
+// Some of the tracing output can overflow the stack when tracing some values.
+#[cfg(not(feature = "html_trace"))]
 #[test]
 fn test_deeply_nested() {
     use ::std::iter::repeat;
@@ -944,6 +946,8 @@ fn test_deeply_nested() {
     test_html(html.as_bytes(), "", 10);
 }
 
+// Some of the tracing output can overflow the stack when tracing some values.
+#[cfg(not(feature = "html_trace"))]
 #[test]
 fn test_deeply_nested_table() {
     use ::std::iter::repeat;
