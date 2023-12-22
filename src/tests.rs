@@ -645,6 +645,35 @@ wrap
 }
 
 #[test]
+fn test_wrap_max2() {
+    test_html_maxwrap(br#"
+        <p>plain para at the full screen width</p>
+        <ul>
+          <li>bullet point uses same width so its margin is 2 chars further right
+
+          <ul><li>nested bullets in turn move 2 chars right each time
+             <ul><li>result: you never get text squashed too narrow</li></ul>
+          </li></ul>
+        </li></ul>"#,
+        r#"plain para at the
+full screen width
+
+* bullet point uses
+  same width so its
+  margin is 2 chars
+  further right
+  
+  * nested bullets in
+    turn move 2 chars
+    right each time
+    
+    * result: you never
+      get text squashed
+      too narrow
+"#, 80, 17);
+}
+
+#[test]
 fn test_div() {
     test_html(
         br"<p>Hello</p><div>Div</div>",
