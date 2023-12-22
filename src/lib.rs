@@ -935,22 +935,24 @@ struct HtmlContext {
     style_data: css::StyleData,
     #[cfg(feature = "css")]
     use_doc_css: bool,
+
+    max_wrap_width: Option<usize>,
 }
 
 fn dom_to_render_tree_with_context<T: Write>(
     handle: Handle,
     err_out: &mut T,
-    mut context: HtmlContext)
+    context: &mut HtmlContext)
 -> Result<Option<RenderNode>> {
     html_trace!("### dom_to_render_tree: HTML: {:?}", handle);
     #[cfg(feature = "css")]
     if context.use_doc_css {
         let mut doc_style_data = css::dom_to_stylesheet(handle.clone(), err_out)?;
-        doc_style_data.merge(context.style_data);
+        doc_style_data.merge(std::mem::take(&mut context.style_data));
         context.style_data = doc_style_data;
     }
 
-    let result = tree_map_reduce(&mut context, handle, |context, handle| {
+    let result = tree_map_reduce(context, handle, |context, handle| {
         process_dom_node(handle, err_out, context)
     });
 
@@ -960,7 +962,7 @@ fn dom_to_render_tree_with_context<T: Write>(
 
 /// Convert a DOM tree or subtree into a render tree.
 pub fn dom_to_render_tree<T: Write>(handle: Handle, err_out: &mut T) -> Result<Option<RenderNode>> {
-    dom_to_render_tree_with_context(handle, err_out, Default::default())
+    dom_to_render_tree_with_context(handle, err_out, &mut Default::default())
 }
 
 fn pending<'a, F>(handle: Handle, f: F) -> TreeMapResult<'a, HtmlContext, Handle, RenderNode>
@@ -1734,6 +1736,8 @@ pub mod config {
     pub struct Config<D: TextDecorator> {
         decorator: D,
 
+        max_wrap_width: Option<usize>,
+
         #[cfg(feature = "css")]
         style: StyleData,
         #[cfg(feature = "css")]
@@ -1741,29 +1745,40 @@ pub mod config {
     }
 
     impl<D: TextDecorator> Config<D> {
+        /// Make the HtmlContext from self.
+        fn make_context(&mut self) -> HtmlContext {
+            HtmlContext {
+                #[cfg(feature = "css")]
+                style_data: std::mem::take(&mut self.style),
+                #[cfg(feature = "css")]
+                use_doc_css: self.use_doc_css,
+
+                max_wrap_width: self.max_wrap_width,
+            }
+        }
         /// Parse with context.
-        fn do_parse<R: std::io::Read>(&mut self, input: R) -> Result<RenderTree> {
+        fn do_parse<R: std::io::Read>(&mut self, context: &mut HtmlContext, input: R) -> Result<RenderTree> {
             super::parse_with_context(
                 input,
-                HtmlContext {
-                    #[cfg(feature = "css")]
-                    style_data: std::mem::take(&mut self.style),
-                    #[cfg(feature = "css")]
-                    use_doc_css: self.use_doc_css,
-                })
+                context)
         }
 
         /// Reads HTML from `input`, and returns a `String` with text wrapped to
         /// `width` columns.
         pub fn string_from_read<R: std::io::Read>(mut self, input: R, width: usize) -> Result<String> {
-            Ok(self.do_parse(input)?.render(width, self.decorator)?.into_string()?)
+            let mut context = self.make_context();
+            Ok(self.do_parse(&mut context, input)?
+               .render_with_context(&mut context, width, self.decorator)?
+               .into_string()?)
         }
+
         /// Reads HTML from `input`, and returns text wrapped to `width` columns.
         /// The text is returned as a `Vec<TaggedLine<_>>`; the annotations are vectors
         /// of the provided text decorator's `Annotation`.  The "outer" annotation comes first in
         /// the `Vec`.
         pub fn lines_from_read<R: std::io::Read>(mut self, input: R, width: usize) -> Result<Vec<TaggedLine<Vec<D::Annotation>>>> {
-            Ok(self.do_parse(input)?
+            let mut context = self.make_context();
+            Ok(self.do_parse(&mut context, input)?
                 .render(width, self.decorator)?
                 .into_lines()?)
         }
@@ -1779,9 +1794,15 @@ pub mod config {
         #[cfg(feature = "css")]
         /// Parse CSS from any <style> elements and use supported rules.
         pub fn use_doc_css(mut self) -> Self {
-            {
-                self.use_doc_css = true;
-            }
+            self.use_doc_css = true;
+            self
+        }
+
+        /// Set the maximum text wrap width.
+        /// When set, paragraphs will be wrapped to that width even if there
+        /// is more total width available for rendering.
+        pub fn max_wrap_width(mut self, wrap_width: usize) -> Self {
+            self.max_wrap_width = Some(wrap_width);
             self
         }
     }
@@ -1803,7 +1824,8 @@ pub mod config {
         {
             use std::fmt::Write;
 
-            let lines = self.do_parse(input)?
+            let mut context = self.make_context();
+            let lines = self.do_parse(&mut context, input)?
                 .render(width, self.decorator)?
                 .into_lines()?;
 
@@ -1826,6 +1848,7 @@ pub mod config {
             style: Default::default(),
             #[cfg(feature = "css")]
             use_doc_css: false,
+            max_wrap_width: None,
         }
     }
 
@@ -1837,6 +1860,7 @@ pub mod config {
             style: Default::default(),
             #[cfg(feature = "css")]
             use_doc_css: false,
+            max_wrap_width: None,
         }
     }
 
@@ -1848,6 +1872,7 @@ pub mod config {
             style: Default::default(),
             #[cfg(feature = "css")]
             use_doc_css: false,
+            max_wrap_width: None,
         }
     }
 }
@@ -1861,13 +1886,18 @@ pub struct RenderTree(RenderNode);
 
 impl RenderTree {
     /// Render this document using the given `decorator` and wrap it to `width` columns.
-    pub fn render<D: TextDecorator>(self, width: usize, decorator: D) -> Result<RenderedText<D>> {
+    fn render_with_context<D: TextDecorator>(self, context: &mut HtmlContext, width: usize, decorator: D) -> Result<RenderedText<D>> {
         if width == 0 {
             return Err(Error::TooNarrow);
         }
-        let builder = SubRenderer::new(width, decorator);
+        let builder = SubRenderer::new(width, context.max_wrap_width, decorator);
         let builder = render_tree_to_string(builder, self.0, &mut Discard {})?;
         Ok(RenderedText(builder))
+    }
+
+    /// Render this document using the given `decorator` and wrap it to `width` columns.
+    pub fn render<D: TextDecorator>(self, width: usize, decorator: D) -> Result<RenderedText<D>> {
+        self.render_with_context(&mut Default::default(), width, decorator)
     }
 
     /// Render this document as plain text using the [`PlainDecorator`][] and wrap it to `width`
@@ -1908,7 +1938,7 @@ impl<D: TextDecorator> RenderedText<D> {
 }
 
 fn parse_with_context(mut input: impl io::Read,
-                      context: HtmlContext,
+                      context: &mut HtmlContext,
                       ) -> Result<RenderTree> {
     let opts = ParseOpts {
         tree_builder: TreeBuilderOpts {
@@ -1928,7 +1958,7 @@ fn parse_with_context(mut input: impl io::Read,
 
 /// Reads and parses HTML from `input` and prepares a render tree.
 pub fn parse(input: impl io::Read) -> Result<RenderTree> {
-    parse_with_context(input, Default::default())
+    parse_with_context(input, &mut Default::default())
 }
 
 /// Reads HTML from `input`, decorates it using `decorator`, and

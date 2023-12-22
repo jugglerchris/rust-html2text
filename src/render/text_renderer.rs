@@ -805,6 +805,7 @@ impl<T: PartialEq + Eq + Clone + Debug + Default> RenderLine<T> {
 #[derive(Clone)]
 pub struct SubRenderer<D: TextDecorator> {
     width: usize,
+    wrap_width: Option<usize>,
     lines: LinkedList<RenderLine<Vec<D::Annotation>>>,
     /// True at the end of a block, meaning we should add
     /// a blank line if any other text is added.
@@ -836,10 +837,11 @@ impl<D: TextDecorator> SubRenderer<D> {
     }
 
     /// Construct a new empty SubRenderer.
-    pub fn new(width: usize, decorator: D) -> SubRenderer<D> {
+    pub fn new(width: usize, wrap_width: Option<usize>, decorator: D) -> SubRenderer<D> {
         html_trace!("new({})", width);
         SubRenderer {
             width,
+            wrap_width,
             lines: LinkedList::new(),
             at_block_end: false,
             wrapping: None,
@@ -852,7 +854,11 @@ impl<D: TextDecorator> SubRenderer<D> {
 
     fn ensure_wrapping_exists(&mut self) {
         if self.wrapping.is_none() {
-            self.wrapping = Some(WrappedBlock::new(self.width));
+            let wwidth = match self.wrap_width {
+                Some(ww) => ww.min(self.width),
+                None => self.width
+            };
+            self.wrapping = Some(WrappedBlock::new(wwidth));
         }
     }
 
@@ -1007,7 +1013,7 @@ impl<D: TextDecorator> Renderer for SubRenderer<D> {
         if width < 1 {
             return Err(Error::TooNarrow);
         }
-        Ok(SubRenderer::new(width, self.decorator.make_subblock_decorator()))
+        Ok(SubRenderer::new(width, self.wrap_width, self.decorator.make_subblock_decorator()))
     }
 
     fn start_block(&mut self) -> crate::Result<()> {

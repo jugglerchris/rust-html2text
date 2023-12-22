@@ -16,6 +16,12 @@ fn test_html(input: &[u8], expected: &str, width: usize) {
     let output = from_read(input, width);
     assert_eq_str!(output, expected);
 }
+fn test_html_maxwrap(input: &[u8], expected: &str, width: usize, wrap_width: usize) {
+    let result = config::plain()
+        .max_wrap_width(wrap_width)
+        .string_from_read(input, width).unwrap();
+    assert_eq_str!(result, expected);
+}
 #[cfg(feature = "css")]
 fn test_html_css(input: &[u8], expected: &str, width: usize) {
     let result = config::plain()
@@ -615,6 +621,27 @@ wrapped.
 "#,
         10,
     );
+}
+
+#[test]
+fn test_wrap_max() {
+    test_html_maxwrap(br#"
+        <p>This is a bit of text to wrap<p>
+        <ul>
+          <li>This is a bit of text to wrap too</li>
+          </li>
+        </ul>"#,
+        r#"This is a
+bit of
+text to
+wrap
+
+
+* This is a
+  bit of
+  text to
+  wrap too
+"#, 20, 10)
 }
 
 #[test]
