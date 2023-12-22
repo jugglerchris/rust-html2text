@@ -128,6 +128,10 @@ pub enum Error {
     /// The output width was too narrow to render to.
     #[error("Output width not wide enough.")]
     TooNarrow,
+    #[cfg(feature = "css")]
+    /// CSS parse error
+    #[error("Invalid CSS")]
+    CssParseError,
     /// An general error was encountered.
     #[error("Unknown failure")]
     Fail,
@@ -1786,9 +1790,9 @@ pub mod config {
         #[cfg(feature = "css")]
         /// Add some CSS rules which will be used (if supported) with any
         /// HTML processed.
-        pub fn add_css(mut self, css: &str) -> Self {
-            self.style.add_css(css);
-            self
+        pub fn add_css(mut self, css: &str) -> Result<Self> {
+            self.style.add_css(css)?;
+            Ok(self)
         }
 
         #[cfg(feature = "css")]

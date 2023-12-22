@@ -46,6 +46,7 @@ fn test_html_err(input: &[u8], expected: Error, width: usize) {
 fn test_html_style(input: &[u8], style: &str, expected: &str, width: usize) {
     let result = config::plain()
         .add_css(style)
+        .unwrap()
         .string_from_read(input, width).unwrap();
     assert_eq_str!(result, expected);
 }
