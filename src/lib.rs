@@ -1101,6 +1101,27 @@ fn process_dom_node<'a, 'b, 'c, T: Write>(
                         }
                     }
                 }
+                #[cfg(feature = "css")]
+                expanded_name!(html "font") => {
+                    let mut colour = None;
+                    if context.use_doc_css {
+                        use lightningcss::traits::Parse;
+                        let borrowed = attrs.borrow();
+                        for attr in borrowed.iter() {
+                            if &attr.name.local == "color" {
+                                colour = CssColor::parse_string(&*attr.value)
+                                    .ok()
+                                    .and_then(|c| TryFrom::try_from(&c).ok());
+                                break;
+                            }
+                        }
+                    }
+                    if let Some(colour) = colour {
+                        pending(handle, move |_, cs| Ok(Some(RenderNode::new(Coloured(colour, vec![RenderNode::new(Container(cs))])))))
+                    } else {
+                        pending(handle, |_, cs| Ok(Some(RenderNode::new(Container(cs)))))
+                    }
+                }
                 expanded_name!(html "a") => {
                     let borrowed = attrs.borrow();
                     let mut target = None;

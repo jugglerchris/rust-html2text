@@ -182,8 +182,8 @@ impl StyleData {
     pub fn add_css(&mut self, css: &str) {
         let ss = match StyleSheet::parse(css, ParserOptions::default()) {
             Ok(ss) => ss,
-            Err(e) => {
-                html_trace!("failed to parse CSS: {}, [[{}]]", e, css);
+            Err(_e) => {
+                html_trace!("failed to parse CSS: {}, [[{}]]", _e, css);
                 return;
             }
         };
