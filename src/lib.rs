@@ -1801,7 +1801,7 @@ pub mod config {
         }
 
         #[cfg(feature = "css")]
-        /// Parse CSS from any <style> elements and use supported rules.
+        /// Parse CSS from any \<style\> elements and use supported rules.
         pub fn use_doc_css(mut self) -> Self {
             self.use_doc_css = true;
             self
