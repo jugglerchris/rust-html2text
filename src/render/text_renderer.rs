@@ -541,7 +541,9 @@ impl<T: Clone + Eq + Debug + Default> WrappedBlock<T> {
 /// Decorating refers to adding extra text around the rendered version
 /// of some elements, such as surrounding emphasised text with `*` like
 /// in markdown: `Some *bold* text`.  The decorations are formatted and
-/// wrapped along with the rest of the rendered text.  This is
+/// wrapped along with the rest of the rendered text.  This is suitable
+/// for rendering HTML to an environment where terminal attributes are
+/// not available.
 ///
 /// In addition, instances of `TextDecorator` can also return annotations
 /// of an associated type `Annotation` which will be associated with spans of
@@ -568,19 +570,19 @@ pub trait TextDecorator {
     /// Return an annotation and rendering prefix for strong
     fn decorate_strong_start(&mut self) -> (String, Self::Annotation);
 
-    /// Return a suffix for after an strong.
+    /// Return a suffix for after a strong.
     fn decorate_strong_end(&mut self) -> String;
 
     /// Return an annotation and rendering prefix for strikeout
     fn decorate_strikeout_start(&mut self) -> (String, Self::Annotation);
 
-    /// Return a suffix for after an strikeout.
+    /// Return a suffix for after a strikeout.
     fn decorate_strikeout_end(&mut self) -> String;
 
     /// Return an annotation and rendering prefix for code
     fn decorate_code_start(&mut self) -> (String, Self::Annotation);
 
-    /// Return a suffix for after an code.
+    /// Return a suffix for after a code.
     fn decorate_code_end(&mut self) -> String;
 
     /// Return an annotation for the initial part of a preformatted line
