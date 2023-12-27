@@ -29,6 +29,39 @@ fn test_html_css(input: &[u8], expected: &str, width: usize) {
         .string_from_read(input, width).unwrap();
     assert_eq_str!(result, expected);
 }
+#[cfg(feature = "css")]
+fn test_colour_map(annotations: &[RichAnnotation], s: &str) -> String
+{
+    let mut tags = ("", "");
+    for ann in annotations {
+        match ann {
+            RichAnnotation::Colour(c) => {
+                match c {
+                    crate::Colour{
+                        r: 0xff,
+                        g: 0,
+                        b: 0
+                    } => {
+                        tags = ("<R>", "</R>");
+                    }
+                    _ => {
+                        tags = ("<?>", "</?>");
+                    }
+                }
+            }
+            _ => ()
+        }
+    }
+    format!("{}{}{}", tags.0, s, tags.1)
+}
+
+#[cfg(feature = "css")]
+fn test_html_coloured(input: &[u8], expected: &str, width: usize) {
+    let result = config::rich()
+        .use_doc_css()
+        .coloured(input, width, test_colour_map).unwrap();
+    assert_eq_str!(result, expected);
+}
 fn test_html_err(input: &[u8], expected: Error, width: usize) {
     let result = config::plain()
         .string_from_read(input, width);
@@ -1685,7 +1718,7 @@ fn test_issue_93_x() {
 
 #[cfg(feature = "css")]
 mod css_tests {
-    use super::{test_html_css, test_html_style};
+    use super::{test_html_css, test_html_style, test_html_coloured};
 
     #[test]
     fn test_disp_none() {
@@ -1757,6 +1790,51 @@ Span1
 Span1
 
 There
+"#, 20);
+    }
+
+    #[test]
+    fn test_coloured()
+    {
+        test_html_coloured(br##"
+          <style>
+              .red {
+                  color:#FF0000;
+              }
+          </style>
+        <p>Test <span class="red">red</span></p>
+        "##,
+        r#"Test <R>red</R>
+"#, 20);
+    }
+
+    #[test]
+    fn test_coloured_a()
+    {
+        test_html_coloured(br##"
+          <style>
+              .red {
+                  color:#FF0000;
+              }
+          </style>
+        <p>Test <a class="red" href="foo">red</a></p>
+        "##,
+        r#"Test <R>red</R>
+"#, 20);
+    }
+
+    #[test]
+    fn test_coloured_element()
+    {
+        test_html_coloured(br##"
+          <style>
+              .red {
+                  color:#FF0000;
+              }
+          </style>
+        <p>Test <blah class="red" href="foo">red</blah></p>
+        "##,
+        r#"Test <R>red</R>
 "#, 20);
     }
 }

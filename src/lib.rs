@@ -1073,7 +1073,9 @@ fn process_dom_node<'a, 'b, 'c, T: Write>(
                 for style in context.style_data.matching_rules(&handle) {
                     match style {
                         css::Style::Colour(col) => {
-                            css_colour = Some(col);
+                            if let Ok(colour) = Colour::try_from(&col) {
+                                css_colour = Some(colour);
+                            }
                         }
                         css::Style::DisplayNone => {
                             return Ok(Nothing);
@@ -1097,20 +1099,8 @@ fn process_dom_node<'a, 'b, 'c, T: Write>(
                     Nothing
                 }
                 expanded_name!(html "span") => {
-                    #[cfg(not(feature = "css"))]
-                    {
-                        /* process children, but don't add anything */
-                        pending(handle, |_, cs| Ok(Some(RenderNode::new(Container(cs)))))
-                    }
-                    #[cfg(feature = "css")]
-                    {
-                        if let Some(Ok(colour)) = css_colour.as_ref().map(TryFrom::try_from) {
-                            pending(handle, move |_, cs| Ok(Some(RenderNode::new(Coloured(colour, vec![RenderNode::new(Container(cs))])))))
-                        } else {
-                            /* process children, but don't add anything */
-                            pending(handle, |_, cs| Ok(Some(RenderNode::new(Container(cs)))))
-                        }
-                    }
+                    /* process children, but don't add anything */
+                    pending(handle, |_, cs| Ok(Some(RenderNode::new(Container(cs)))))
                 }
                 #[cfg(feature = "css")]
                 expanded_name!(html "font") => {
@@ -1264,7 +1254,7 @@ fn process_dom_node<'a, 'b, 'c, T: Write>(
                 }
             }
 
-            if let Some(fragname) = fragment {
+            let result = if let Some(fragname) = fragment {
                 match result {
                     Finished(node) => {
                         Finished(prepend_marker(RenderNode::new(FragStart(fragname)), node))
@@ -1293,7 +1283,31 @@ fn process_dom_node<'a, 'b, 'c, T: Write>(
                 }
             } else {
                 result
-            }
+            };
+
+            let result = if let Some(colour) = css_colour {
+                match result {
+                    Finished(node) => Finished(RenderNode::new(Coloured(colour.into(), vec![node]))),
+                    PendingChildren { children, cons, prefn, postfn } => {
+                        PendingChildren {
+                            children,
+                            prefn,
+                            postfn,
+                            cons: Box::new(move |ctx, ch| {
+                                Ok(cons(ctx, ch)?
+                                    .map(|n| {
+                                        RenderNode::new(Coloured(colour.into(), vec![n]))
+                                    }))
+                            }),
+                        }
+                    }
+                    Nothing => Nothing
+                }
+            } else {
+                result
+            };
+
+            result
         }
         markup5ever_rcdom::NodeData::Text { contents: ref tstr } => {
             Finished(RenderNode::new(Text((&*tstr.borrow()).into())))
