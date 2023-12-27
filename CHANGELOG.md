@@ -9,6 +9,11 @@ Possible log types:
 - `[fixed]` for any bug fixes.
 - `[security]` to invite users to upgrade in case of vulnerabilities.
 
+### 0.9.1
+
+- [fixed] Various documentation issues (thanks sgtatham)
+- [changed] CSS color rules now work for elements other than span.
+
 ### 0.9.0
 
 - [changed] `Config::add_css` now returns `Result` instead of panicking on
