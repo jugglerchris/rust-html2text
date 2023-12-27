@@ -99,9 +99,11 @@ read keys from stdin.
 When the `css` feature is enabled, some simple CSS handling is done.
 
 * The contents of \<style\> elements are parsed and some colour rules are extracted
-* Some simplified selector matching is done: currently `<span class="foo">` with
-  CSS rules similar to `.foo { color:#123456; }`.  This will add `Coloured(...)` nodes
-  to the render tree when matching.
+* Basic selector matching (including child and descendents, classes and element
+  types).
+* CSS colors will add `Coloured(...)` nodes to the render tree.
+* Rules with `display: none` will cause matching elements to be removed from the
+  render tree.
 
 The CSS handling is expected to improve in future (PRs welcome), but not to a full-
 blown browser style system, which would be overkill for terminal output.
