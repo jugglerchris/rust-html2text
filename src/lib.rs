@@ -1285,6 +1285,7 @@ fn process_dom_node<'a, 'b, 'c, T: Write>(
                 result
             };
 
+            #[cfg(feature = "css")]
             let result = if let Some(colour) = css_colour {
                 match result {
                     Finished(node) => Finished(RenderNode::new(Coloured(colour.into(), vec![node]))),
