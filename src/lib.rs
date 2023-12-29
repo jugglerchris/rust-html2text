@@ -153,6 +153,7 @@ impl PartialEq for Error {
         use Error::*;
         match (self, other) {
             (TooNarrow, TooNarrow) => true,
+            #[cfg(feature = "css")]
             (CssParseError, CssParseError) => true,
             (Fail, Fail) => true,
             (FmtError(f1), FmtError(f2)) => f1 == f2,
