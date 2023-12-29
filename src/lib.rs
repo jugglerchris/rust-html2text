@@ -422,6 +422,8 @@ pub enum RenderNodeInfo {
     FragStart(String),
     /// A region with classes
     Coloured(Colour, Vec<RenderNode>),
+    /// A list item
+    ListItem(Vec<RenderNode>),
 }
 
 /// Common fields from a node.
@@ -481,7 +483,7 @@ impl RenderNode {
 
             Container(ref v) | Em(ref v) | Strong(ref v) | Strikeout(ref v) | Code(ref v)
             | Block(ref v) | Div(ref v) | Pre(ref v) | BlockQuote(ref v) | Dl(ref v)
-            | Dt(ref v) | Dd(ref v) => v
+            | Dt(ref v) | Dd(ref v) | ListItem(ref v) => v
                 .iter()
                 .map(RenderNode::get_size_estimate)
                 .fold(Default::default(), SizeEstimate::add),
@@ -553,6 +555,7 @@ impl RenderNode {
             | Strikeout(ref v)
             | Code(ref v)
             | Block(ref v)
+            | ListItem(ref v)
             | Div(ref v)
             | Pre(ref v)
             | BlockQuote(ref v)
@@ -589,6 +592,7 @@ fn precalc_size_estimate<'a>(node: &'a RenderNode) -> Result<TreeMapResult<(), &
         | Strikeout(ref v)
         | Code(ref v)
         | Block(ref v)
+        | ListItem(ref v)
         | Div(ref v)
         | Pre(ref v)
         | BlockQuote(ref v)
@@ -638,42 +642,21 @@ fn precalc_size_estimate<'a>(node: &'a RenderNode) -> Result<TreeMapResult<(), &
 }
 
 /// Make a Vec of RenderNodes from the children of a node.
-fn children_to_render_nodes<T: Write>(handle: Handle, err_out: &mut T) -> Result<Vec<RenderNode>> {
+fn children_to_render_nodes<T: Write>(handle: Handle, err_out: &mut T, context: &mut HtmlContext) -> Result<Vec<RenderNode>> {
     /* process children, but don't add anything */
     handle
         .children
         .borrow()
         .iter()
-        .flat_map(|ch| dom_to_render_tree(ch.clone(), err_out).transpose())
+        .flat_map(|ch| dom_to_render_tree_with_context(ch.clone(), err_out, context).transpose())
         .collect()
-}
-
-/// Make a Vec of RenderNodes from the <li> children of a node.
-fn list_children_to_render_nodes<T: Write>(handle: Handle, err_out: &mut T) -> Result<Vec<RenderNode>> {
-    let mut children = Vec::new();
-
-    for child in handle.children.borrow().iter() {
-        match child.data {
-            Element { ref name, .. } => match name.expanded() {
-                expanded_name!(html "li") => {
-                    let li_children = children_to_render_nodes(child.clone(), err_out)?;
-                    children.push(RenderNode::new(RenderNodeInfo::Block(li_children)));
-                }
-                _ => {}
-            },
-            Comment { .. } => {}
-            _ => {
-                html_trace!("Unhandled in list: {:?}\n", child);
-            }
-        }
-    }
-    Ok(children)
 }
 
 /// Make a Vec of DtElements from the <dt> and <dd> children of a node.
 fn desc_list_children_to_render_nodes<T: Write>(
     handle: Handle,
     err_out: &mut T,
+    context: &mut HtmlContext,
 ) -> Result<Vec<RenderNode>> {
     let mut children = Vec::new();
 
@@ -681,11 +664,11 @@ fn desc_list_children_to_render_nodes<T: Write>(
         match child.data {
             Element { ref name, .. } => match name.expanded() {
                 expanded_name!(html "dt") => {
-                    let dt_children = children_to_render_nodes(child.clone(), err_out)?;
+                    let dt_children = children_to_render_nodes(child.clone(), err_out, context)?;
                     children.push(RenderNode::new(RenderNodeInfo::Dt(dt_children)));
                 }
                 expanded_name!(html "dd") => {
-                    let dd_children = children_to_render_nodes(child.clone(), err_out)?;
+                    let dd_children = children_to_render_nodes(child.clone(), err_out, context)?;
                     children.push(RenderNode::new(RenderNodeInfo::Dd(dd_children)));
                 }
                 _ => {}
@@ -1002,6 +985,7 @@ fn prepend_marker(prefix: RenderNode, mut orig: RenderNode) -> RenderNode {
         // For Container, we do the same thing just to make the data
         // less pointlessly nested.
         Block(ref mut children)
+        | ListItem(ref mut children)
         | Div(ref mut children)
         | Pre(ref mut children)
         | BlockQuote(ref mut children)
@@ -1199,6 +1183,9 @@ fn process_dom_node<'a, 'b, 'c, T: Write>(
                 expanded_name!(html "p") => {
                     pending(handle, |_, cs| Ok(Some(RenderNode::new(Block(cs)))))
                 }
+                expanded_name!(html "li") => {
+                    pending(handle, |_, cs| Ok(Some(RenderNode::new(ListItem(cs)))))
+                }
                 expanded_name!(html "div") => {
                     pending(handle, |_, cs| Ok(Some(RenderNode::new(Div(cs)))))
                 }
@@ -1217,9 +1204,9 @@ fn process_dom_node<'a, 'b, 'c, T: Write>(
                 expanded_name!(html "blockquote") => {
                     pending(handle, |_, cs| Ok(Some(RenderNode::new(BlockQuote(cs)))))
                 }
-                expanded_name!(html "ul") => Finished(RenderNode::new(Ul(
-                    list_children_to_render_nodes(handle.clone(), err_out)?,
-                ))),
+                expanded_name!(html "ul") => {
+                    pending(handle, |_, cs| Ok(Some(RenderNode::new(Ul(cs)))))
+                }
                 expanded_name!(html "ol") => {
                     let borrowed = attrs.borrow();
                     let mut start = 1;
@@ -1230,13 +1217,20 @@ fn process_dom_node<'a, 'b, 'c, T: Write>(
                         }
                     }
 
-                    Finished(RenderNode::new(Ol(
-                        start,
-                        list_children_to_render_nodes(handle.clone(), err_out)?,
-                    )))
+                    pending(handle, move |_, cs| {
+                        dbg!(&cs);
+                        let cs = cs.into_iter()
+                            .filter(|n| match &n.info {
+                                RenderNodeInfo::ListItem(..) => true,
+                                _ => false,
+                            })
+                            .collect();
+                        Ok(Some(RenderNode::new(Ol(start, dbg!(cs)))))
+                    })
+
                 }
                 expanded_name!(html "dl") => Finished(RenderNode::new(Dl(
-                    desc_list_children_to_render_nodes(handle.clone(), err_out)?,
+                    desc_list_children_to_render_nodes(handle.clone(), err_out, context)?,
                 ))),
                 _ => {
                     html_trace!("Unhandled element: {:?}\n", name.local);
@@ -1297,7 +1291,16 @@ fn process_dom_node<'a, 'b, 'c, T: Write>(
                             cons: Box::new(move |ctx, ch| {
                                 Ok(cons(ctx, ch)?
                                     .map(|n| {
-                                        RenderNode::new(Coloured(colour.into(), vec![n]))
+                                        // Special case: lists need to recognise ListItem nodes as
+                                        // direct children.
+                                        match n.info {
+                                            ListItem(children) => {
+                                                let coloured = RenderNode::new(Coloured(colour.into(), children));
+                                                RenderNode::new(
+                                                    ListItem(vec![coloured]))
+                                            }
+                                            ni => RenderNode::new(Coloured(colour.into(), vec![RenderNode::new(ni)])),
+                                        }
                                     }))
                             }),
                         }
@@ -1413,7 +1416,7 @@ fn do_render_node<'a, 'b, T: Write, D: TextDecorator>(
             renderer.add_image(&src, &title)?;
             Finished(None)
         }
-        Block(children) => {
+        Block(children) | ListItem(children) => {
             renderer.start_block()?;
             pending2(children, |renderer: &mut TextRenderer<D>, _| {
                 renderer.end_block();

@@ -1837,4 +1837,37 @@ There
         r#"Test <R>red</R>
 "#, 20);
     }
+
+    #[test]
+    fn test_css_lists()
+    {
+        test_html_coloured(br##"
+          <style>
+              .red {
+                  color:#FF0000;
+              }
+          </style>
+        <ul>
+          <li class="red">Line one</li>
+          <li>Line <span class="red">two</span></li>
+        </ul>
+        "##,
+        r#"* <R>Line one</R>
+* Line <R>two</R>
+"#, 20);
+        test_html_coloured(br##"
+          <style>
+              .red {
+                  color:#FF0000;
+              }
+          </style>
+        <ol>
+          <li class="red">Line one</li>
+          <li>Line <span class="red">two</span></li>
+        </ul>
+        "##,
+        r#"1. <R>Line one</R>
+2. Line <R>two</R>
+"#, 20);
+    }
 }
