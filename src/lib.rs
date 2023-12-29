@@ -162,6 +162,8 @@ impl PartialEq for Error {
     }
 }
 
+impl Eq for Error {}
+
 type Result<T> = std::result::Result<T, Error>;
 
 /// A dummy writer which does nothing
