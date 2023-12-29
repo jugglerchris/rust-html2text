@@ -1870,4 +1870,31 @@ There
 2. Line <R>two</R>
 "#, 20);
     }
+
+    #[test]
+    fn test_coloured_multi()
+    {
+        use super::test_colour_map;
+        let config = crate::config::rich()
+                    .use_doc_css();
+        let dom = config.parse_html(&br##"
+          <style>
+              .red {
+                  color:#FF0000;
+              }
+          </style>
+        <p>Test paragraph with <span class="red">red</span> text</p>
+        "##[..]).unwrap();
+        let rt = config.dom_to_render_tree(&dom).unwrap();
+        assert_eq!(config.render_coloured(rt.clone(), 10, test_colour_map).unwrap(),
+        r#"Test
+paragraph
+with <R>red</R>
+text
+"#);
+        assert_eq!(config.render_coloured(rt.clone(), 100, test_colour_map).unwrap(),
+        r#"Test paragraph with <R>red</R> text
+"#);
+    }
+
 }
