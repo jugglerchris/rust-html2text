@@ -127,7 +127,7 @@ impl TryFrom<&CssColor> for Colour {
 }
 
 /// Errors from reading or rendering HTML
-#[derive(thiserror::Error, Debug, Eq, PartialEq)]
+#[derive(thiserror::Error, Debug)]
 #[non_exhaustive]
 pub enum Error {
     /// The output width was too narrow to render to.
@@ -143,7 +143,26 @@ pub enum Error {
     /// A formatting error happened
     #[error("Formatting error")]
     FmtError(#[from] std::fmt::Error),
+    /// An I/O error
+    #[error("I/O error")]
+    IoError(#[from] std::io::Error),
 }
+
+impl PartialEq for Error {
+    fn eq(&self, other: &Error) -> bool {
+        use Error::*;
+        match (self, other) {
+            (TooNarrow, TooNarrow) => true,
+            #[cfg(feature = "css")]
+            (CssParseError, CssParseError) => true,
+            (Fail, Fail) => true,
+            (FmtError(f1), FmtError(f2)) => f1 == f2,
+            _ => false,
+        }
+    }
+}
+
+impl Eq for Error {}
 
 type Result<T> = std::result::Result<T, Error>;
 
@@ -422,6 +441,8 @@ pub enum RenderNodeInfo {
     FragStart(String),
     /// A region with classes
     Coloured(Colour, Vec<RenderNode>),
+    /// A list item
+    ListItem(Vec<RenderNode>),
 }
 
 /// Common fields from a node.
@@ -481,7 +502,7 @@ impl RenderNode {
 
             Container(ref v) | Em(ref v) | Strong(ref v) | Strikeout(ref v) | Code(ref v)
             | Block(ref v) | Div(ref v) | Pre(ref v) | BlockQuote(ref v) | Dl(ref v)
-            | Dt(ref v) | Dd(ref v) => v
+            | Dt(ref v) | Dd(ref v) | ListItem(ref v) => v
                 .iter()
                 .map(RenderNode::get_size_estimate)
                 .fold(Default::default(), SizeEstimate::add),
@@ -553,6 +574,7 @@ impl RenderNode {
             | Strikeout(ref v)
             | Code(ref v)
             | Block(ref v)
+            | ListItem(ref v)
             | Div(ref v)
             | Pre(ref v)
             | BlockQuote(ref v)
@@ -589,6 +611,7 @@ fn precalc_size_estimate<'a>(node: &'a RenderNode) -> Result<TreeMapResult<(), &
         | Strikeout(ref v)
         | Code(ref v)
         | Block(ref v)
+        | ListItem(ref v)
         | Div(ref v)
         | Pre(ref v)
         | BlockQuote(ref v)
@@ -638,42 +661,21 @@ fn precalc_size_estimate<'a>(node: &'a RenderNode) -> Result<TreeMapResult<(), &
 }
 
 /// Make a Vec of RenderNodes from the children of a node.
-fn children_to_render_nodes<T: Write>(handle: Handle, err_out: &mut T) -> Result<Vec<RenderNode>> {
+fn children_to_render_nodes<T: Write>(handle: Handle, err_out: &mut T, context: &mut HtmlContext) -> Result<Vec<RenderNode>> {
     /* process children, but don't add anything */
     handle
         .children
         .borrow()
         .iter()
-        .flat_map(|ch| dom_to_render_tree(ch.clone(), err_out).transpose())
+        .flat_map(|ch| dom_to_render_tree_with_context(ch.clone(), err_out, context).transpose())
         .collect()
 }
 
-/// Make a Vec of RenderNodes from the <li> children of a node.
-fn list_children_to_render_nodes<T: Write>(handle: Handle, err_out: &mut T) -> Result<Vec<RenderNode>> {
-    let mut children = Vec::new();
-
-    for child in handle.children.borrow().iter() {
-        match child.data {
-            Element { ref name, .. } => match name.expanded() {
-                expanded_name!(html "li") => {
-                    let li_children = children_to_render_nodes(child.clone(), err_out)?;
-                    children.push(RenderNode::new(RenderNodeInfo::Block(li_children)));
-                }
-                _ => {}
-            },
-            Comment { .. } => {}
-            _ => {
-                html_trace!("Unhandled in list: {:?}\n", child);
-            }
-        }
-    }
-    Ok(children)
-}
-
-/// Make a Vec of DtElements from the <dt> and <dd> children of a node.
+/// Make a Vec of DtElements from the `<dt>` and `<dd>` children of a node.
 fn desc_list_children_to_render_nodes<T: Write>(
     handle: Handle,
     err_out: &mut T,
+    context: &mut HtmlContext,
 ) -> Result<Vec<RenderNode>> {
     let mut children = Vec::new();
 
@@ -681,11 +683,11 @@ fn desc_list_children_to_render_nodes<T: Write>(
         match child.data {
             Element { ref name, .. } => match name.expanded() {
                 expanded_name!(html "dt") => {
-                    let dt_children = children_to_render_nodes(child.clone(), err_out)?;
+                    let dt_children = children_to_render_nodes(child.clone(), err_out, context)?;
                     children.push(RenderNode::new(RenderNodeInfo::Dt(dt_children)));
                 }
                 expanded_name!(html "dd") => {
-                    let dd_children = children_to_render_nodes(child.clone(), err_out)?;
+                    let dd_children = children_to_render_nodes(child.clone(), err_out, context)?;
                     children.push(RenderNode::new(RenderNodeInfo::Dd(dd_children)));
                 }
                 _ => {}
@@ -826,7 +828,7 @@ fn td_to_render_tree<'a, 'b, T: Write>(
 /// A reducer which combines results from mapping children into
 /// the result for the current node.  Takes a context and a
 /// vector of results and returns a new result (or nothing).
-type ResultReducer<'a, C, R> = dyn Fn(&mut C, Vec<R>) -> Result<Option<R>> + 'a;
+type ResultReducer<'a, C, R> = dyn FnOnce(&mut C, Vec<R>) -> Result<Option<R>> + 'a;
 
 /// A closure to call before processing a child node.
 type ChildPreFn<C, N> = dyn Fn(&mut C, &N) -> Result<()>;
@@ -1002,6 +1004,7 @@ fn prepend_marker(prefix: RenderNode, mut orig: RenderNode) -> RenderNode {
         // For Container, we do the same thing just to make the data
         // less pointlessly nested.
         Block(ref mut children)
+        | ListItem(ref mut children)
         | Div(ref mut children)
         | Pre(ref mut children)
         | BlockQuote(ref mut children)
@@ -1136,15 +1139,10 @@ fn process_dom_node<'a, 'b, 'c, T: Write>(
                     PendingChildren {
                         children: handle.children.borrow().clone(),
                         cons: if let Some(href) = target {
-                            // We need the closure to own the string it's going to use.
-                            // Unfortunately that means we ideally want FnOnce; but
-                            // that doesn't yet work in a Box.  Box<FnBox()> does, but
-                            // is unstable.  So we'll just move a string in and clone
-                            // it on use.
                             let href: String = href.into();
                             Box::new(move |_, cs: Vec<RenderNode>| {
                                 if cs.iter().any(|c| !c.is_shallow_empty()) {
-                                    Ok(Some(RenderNode::new(Link(href.clone(), cs))))
+                                    Ok(Some(RenderNode::new(Link(href, cs))))
                                 } else {
                                     Ok(None)
                                 }
@@ -1199,6 +1197,9 @@ fn process_dom_node<'a, 'b, 'c, T: Write>(
                 expanded_name!(html "p") => {
                     pending(handle, |_, cs| Ok(Some(RenderNode::new(Block(cs)))))
                 }
+                expanded_name!(html "li") => {
+                    pending(handle, |_, cs| Ok(Some(RenderNode::new(ListItem(cs)))))
+                }
                 expanded_name!(html "div") => {
                     pending(handle, |_, cs| Ok(Some(RenderNode::new(Div(cs)))))
                 }
@@ -1217,9 +1218,9 @@ fn process_dom_node<'a, 'b, 'c, T: Write>(
                 expanded_name!(html "blockquote") => {
                     pending(handle, |_, cs| Ok(Some(RenderNode::new(BlockQuote(cs)))))
                 }
-                expanded_name!(html "ul") => Finished(RenderNode::new(Ul(
-                    list_children_to_render_nodes(handle.clone(), err_out)?,
-                ))),
+                expanded_name!(html "ul") => {
+                    pending(handle, |_, cs| Ok(Some(RenderNode::new(Ul(cs)))))
+                }
                 expanded_name!(html "ol") => {
                     let borrowed = attrs.borrow();
                     let mut start = 1;
@@ -1230,13 +1231,20 @@ fn process_dom_node<'a, 'b, 'c, T: Write>(
                         }
                     }
 
-                    Finished(RenderNode::new(Ol(
-                        start,
-                        list_children_to_render_nodes(handle.clone(), err_out)?,
-                    )))
+                    pending(handle, move |_, cs| {
+                        dbg!(&cs);
+                        let cs = cs.into_iter()
+                            .filter(|n| match &n.info {
+                                RenderNodeInfo::ListItem(..) => true,
+                                _ => false,
+                            })
+                            .collect();
+                        Ok(Some(RenderNode::new(Ol(start, dbg!(cs)))))
+                    })
+
                 }
                 expanded_name!(html "dl") => Finished(RenderNode::new(Dl(
-                    desc_list_children_to_render_nodes(handle.clone(), err_out)?,
+                    desc_list_children_to_render_nodes(handle.clone(), err_out, context)?,
                 ))),
                 _ => {
                     html_trace!("Unhandled element: {:?}\n", name.local);
@@ -1272,7 +1280,7 @@ fn process_dom_node<'a, 'b, 'c, T: Write>(
                             prefn,
                             postfn,
                             cons: Box::new(move |ctx, ch| {
-                                let fragnode = RenderNode::new(FragStart(fragname.clone()));
+                                let fragnode = RenderNode::new(FragStart(fragname));
                                 match cons(ctx, ch)? {
                                     None => Ok(Some(fragnode)),
                                     Some(node) => Ok(Some(prepend_marker(fragnode, node))),
@@ -1297,7 +1305,16 @@ fn process_dom_node<'a, 'b, 'c, T: Write>(
                             cons: Box::new(move |ctx, ch| {
                                 Ok(cons(ctx, ch)?
                                     .map(|n| {
-                                        RenderNode::new(Coloured(colour.into(), vec![n]))
+                                        // Special case: lists need to recognise ListItem nodes as
+                                        // direct children.
+                                        match n.info {
+                                            ListItem(children) => {
+                                                let coloured = RenderNode::new(Coloured(colour.into(), children));
+                                                RenderNode::new(
+                                                    ListItem(vec![coloured]))
+                                            }
+                                            ni => RenderNode::new(Coloured(colour.into(), vec![RenderNode::new(ni)])),
+                                        }
                                     }))
                             }),
                         }
@@ -1413,7 +1430,7 @@ fn do_render_node<'a, 'b, T: Write, D: TextDecorator>(
             renderer.add_image(&src, &title)?;
             Finished(None)
         }
-        Block(children) => {
+        Block(children) | ListItem(children) => {
             renderer.start_block()?;
             pending2(children, |renderer: &mut TextRenderer<D>, _| {
                 renderer.end_block();
@@ -1755,6 +1772,7 @@ pub mod config {
     }, Result, RenderTree, HtmlContext};
     #[cfg(feature = "css")]
     use crate::css::StyleData;
+    use super::{Discard, Error};
 
     /// Configure the HTML processing.
     pub struct Config<D: TextDecorator> {
@@ -1770,10 +1788,10 @@ pub mod config {
 
     impl<D: TextDecorator> Config<D> {
         /// Make the HtmlContext from self.
-        fn make_context(&mut self) -> HtmlContext {
+        fn make_context(&self) -> HtmlContext {
             HtmlContext {
                 #[cfg(feature = "css")]
-                style_data: std::mem::take(&mut self.style),
+                style_data: self.style.clone(),
                 #[cfg(feature = "css")]
                 use_doc_css: self.use_doc_css,
 
@@ -1785,6 +1803,47 @@ pub mod config {
             super::parse_with_context(
                 input,
                 context)
+        }
+
+        /// Parse the HTML into a DOM structure.
+        pub fn parse_html<R: std::io::Read>(&self, mut input: R) -> Result<super::RcDom> {
+            use html5ever::tendril::TendrilSink;
+            let opts = super::ParseOpts {
+                tree_builder: super::TreeBuilderOpts {
+                    drop_doctype: true,
+                    ..Default::default()
+                },
+                ..Default::default()
+            };
+            Ok(super::parse_document(super::RcDom::default(), opts)
+                .from_utf8()
+                .read_from(&mut input)?)
+        }
+
+        /// Convert an HTML DOM into a RenderTree.
+        pub fn dom_to_render_tree(&self, dom: &super::RcDom) -> Result<RenderTree> {
+            Ok(RenderTree(super::dom_to_render_tree_with_context(
+                    dom.document.clone(),
+                    &mut Discard {},
+                    &mut self.make_context())?
+                    .ok_or(Error::Fail)?))
+        }
+
+        /// Render an existing RenderTree into a string.
+        pub fn render_to_string(&self, render_tree: RenderTree, width: usize) -> Result<String> {
+            Ok(render_tree.render_with_context(
+                &mut self.make_context(), width, self.decorator.make_subblock_decorator())?
+                .into_string()?)
+        }
+
+        /// Take an existing RenderTree, and returns text wrapped to `width` columns.
+        /// The text is returned as a `Vec<TaggedLine<_>>`; the annotations are vectors
+        /// of the provided text decorator's `Annotation`.  The "outer" annotation comes first in
+        /// the `Vec`.
+        pub fn render_to_lines(&self, render_tree: RenderTree, width: usize) -> Result<Vec<TaggedLine<Vec<D::Annotation>>>> {
+            Ok(render_tree.render_with_context(
+                &mut self.make_context(), width, self.decorator.make_subblock_decorator())?
+                .into_lines()?)
         }
 
         /// Reads HTML from `input`, and returns a `String` with text wrapped to
@@ -1852,6 +1911,32 @@ pub mod config {
             let lines = self.do_parse(&mut context, input)?
                 .render(width, self.decorator)?
                 .into_lines()?;
+
+            let mut result = String::new();
+            for line in lines {
+                for ts in line.tagged_strings() {
+                    write!(result, "{}", colour_map(&ts.tag, &ts.s))?;
+                }
+                result.push('\n');
+            }
+            Ok(result)
+        }
+
+        /// Return coloured text from a RenderTree.  `colour_map` is a function which takes a list
+        /// of `RichAnnotation` and some text, and returns the text with any terminal escapes
+        /// desired to indicate those annotations (such as colour).
+        pub fn render_coloured<FMap>(
+            &self,
+            render_tree: RenderTree,
+            width: usize,
+            colour_map: FMap,
+        ) -> Result<String>
+        where
+            FMap: Fn(&[RichAnnotation], &str) -> String,
+        {
+            use std::fmt::Write;
+
+            let lines = self.render_to_lines(render_tree, width)?;
 
             let mut result = String::new();
             for line in lines {
