@@ -809,7 +809,7 @@ fn td_to_render_tree<'a, 'b, T: Write>(
 /// A reducer which combines results from mapping children into
 /// the result for the current node.  Takes a context and a
 /// vector of results and returns a new result (or nothing).
-type ResultReducer<'a, C, R> = dyn Fn(&mut C, Vec<R>) -> Result<Option<R>> + 'a;
+type ResultReducer<'a, C, R> = dyn FnOnce(&mut C, Vec<R>) -> Result<Option<R>> + 'a;
 
 /// A closure to call before processing a child node.
 type ChildPreFn<C, N> = dyn Fn(&mut C, &N) -> Result<()>;
@@ -1120,15 +1120,10 @@ fn process_dom_node<'a, 'b, 'c, T: Write>(
                     PendingChildren {
                         children: handle.children.borrow().clone(),
                         cons: if let Some(href) = target {
-                            // We need the closure to own the string it's going to use.
-                            // Unfortunately that means we ideally want FnOnce; but
-                            // that doesn't yet work in a Box.  Box<FnBox()> does, but
-                            // is unstable.  So we'll just move a string in and clone
-                            // it on use.
                             let href: String = href.into();
                             Box::new(move |_, cs: Vec<RenderNode>| {
                                 if cs.iter().any(|c| !c.is_shallow_empty()) {
-                                    Ok(Some(RenderNode::new(Link(href.clone(), cs))))
+                                    Ok(Some(RenderNode::new(Link(href, cs))))
                                 } else {
                                     Ok(None)
                                 }
@@ -1266,7 +1261,7 @@ fn process_dom_node<'a, 'b, 'c, T: Write>(
                             prefn,
                             postfn,
                             cons: Box::new(move |ctx, ch| {
-                                let fragnode = RenderNode::new(FragStart(fragname.clone()));
+                                let fragnode = RenderNode::new(FragStart(fragname));
                                 match cons(ctx, ch)? {
                                     None => Ok(Some(fragnode)),
                                     Some(node) => Ok(Some(prepend_marker(fragnode, node))),
