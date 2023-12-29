@@ -669,7 +669,7 @@ fn children_to_render_nodes<T: Write>(handle: Handle, err_out: &mut T, context: 
         .collect()
 }
 
-/// Make a Vec of DtElements from the <dt> and <dd> children of a node.
+/// Make a Vec of DtElements from the `<dt>` and `<dd>` children of a node.
 fn desc_list_children_to_render_nodes<T: Write>(
     handle: Handle,
     err_out: &mut T,
