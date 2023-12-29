@@ -9,6 +9,14 @@ Possible log types:
 - `[fixed]` for any bug fixes.
 - `[security]` to invite users to upgrade in case of vulnerabilities.
 
+### 0.9.2
+
+- [fixed] CSS didn't work inside `<ul>` or `<ol>`.
+- [added] Add methods to get and use the intermediate HTML DOM and RenderTree
+  from Config.
+- [fixed] Removed some clones which are no longer necessary now that Box<FnOnce>
+  works.
+
 ### 0.9.1
 
 - [fixed] Various documentation issues (thanks sgtatham)

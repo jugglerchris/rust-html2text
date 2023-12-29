@@ -1,6 +1,6 @@
 [package]
 name = "html2text"
-version = "0.9.1"
+version = "0.9.2"
 authors = ["Chris Emerson <github@mail.nosreme.org>"]
 description = "Render HTML as plain text."
 repository = "https://github.com/jugglerchris/rust-html2text/"
@@ -25,7 +25,7 @@ lightningcss = { version = "1.0.0-alpha.51", optional=true }
 [features]
 html_trace = []
 html_trace_bt = ["backtrace"]
-default = ["css"]
+default = []
 css = ["dep:lightningcss"]
 
 [[example]]
