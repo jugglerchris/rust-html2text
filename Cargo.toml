@@ -1,6 +1,6 @@
 [package]
 name = "html2text"
-version = "0.9.3"
+version = "0.9.4"
 authors = ["Chris Emerson <github@mail.nosreme.org>"]
 description = "Render HTML as plain text."
 repository = "https://github.com/jugglerchris/rust-html2text/"
@@ -41,4 +41,4 @@ path = "examples/html2text.rs"
 argparse = "0.2.2"
 
 [target.'cfg(unix)'.dev-dependencies]
-termion = "1.5"
+termion = "2.0"

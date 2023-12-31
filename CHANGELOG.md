@@ -9,6 +9,10 @@ Possible log types:
 - `[fixed]` for any bug fixes.
 - `[security]` to invite users to upgrade in case of vulnerabilities.
 
+### 0.9.4
+
+- [changed] Updated the termion dev-dependency to 2.0.
+
 ### 0.9.3
 
 - [changed] Added cargo categories and update to 2021 edition.
