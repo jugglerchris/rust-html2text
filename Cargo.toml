@@ -8,6 +8,7 @@ readme = "README.md"
 documentation = "https://docs.rs/html2text/"
 edition = "2018"
 rust-version = "1.60"
+categories = ["text-processing"]
 
 keywords = ["html", "text"]
 license = "MIT"
