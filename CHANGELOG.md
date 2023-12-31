@@ -9,6 +9,10 @@ Possible log types:
 - `[fixed]` for any bug fixes.
 - `[security]` to invite users to upgrade in case of vulnerabilities.
 
+### 0.9.3
+
+- [changed] Added cargo categories and update to 2021 edition.
+
 ### 0.9.2
 
 - [fixed] CSS didn't work inside `<ul>` or `<ol>`.
