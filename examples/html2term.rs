@@ -18,7 +18,7 @@ mod top {
     use termion::event::Key;
     use termion::input::TermRead;
     use termion::raw::IntoRawMode;
-    use termion::screen::AlternateScreen;
+    use termion::screen::IntoAlternateScreen;
     use unicode_width::UnicodeWidthStr;
 
     fn to_style(tag: &Vec<RichAnnotation>) -> String {
@@ -170,7 +170,11 @@ mod top {
         let mut doc_x = 0;
         let mut doc_y = 0;
 
-        let mut screen = AlternateScreen::from(io::stdout().into_raw_mode().unwrap());
+        let mut screen = io::stdout()
+            .into_raw_mode()
+            .unwrap()
+            .into_alternate_screen()
+            .unwrap();
 
         loop {
             // Sanity-check the current screen position. max_y should
