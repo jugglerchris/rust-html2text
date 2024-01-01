@@ -193,6 +193,10 @@ impl StyleData {
                             Property::Color(color) => {
                                 styles.push(Style::Colour(color.clone()));
                             }
+                            Property::Background(bginfo) => {
+                                let color = bginfo.last().unwrap().color.clone();
+                                styles.push(Style::BgColour(color));
+                            }
                             Property::BackgroundColor(color) => {
                                 styles.push(Style::BgColour(color.clone()));
                             }
