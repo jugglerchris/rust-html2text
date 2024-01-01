@@ -45,6 +45,13 @@ fn test_colour_map(annotations: &[RichAnnotation], s: &str) -> String
                     } => {
                         tags = ("<R>", "</R>");
                     }
+                    crate::Colour{
+                        r: 0,
+                        g: 0xff,
+                        b: 0
+                    } => {
+                        tags = ("<G>", "</G>");
+                    }
                     _ => {
                         tags = ("<?>", "</?>");
                     }
@@ -1843,6 +1850,22 @@ There
         <p>Test <span class="red">red</span></p>
         "##,
         r#"Test <g><R>red</R></g>
+"#, 20);
+    }
+
+    #[test]
+    fn test_bgcoloured2()
+    {
+        test_html_coloured(br##"
+          <style>
+              .red {
+                  color:#FF0000;
+                  background-color:#00FF00;
+              }
+          </style>
+        <p>Test <span class="red">red</span> and <span style="color: #00ff00">green</span></p>
+        "##,
+        r#"Test <g><R>red</R></g> and <G>green</G>
 "#, 20);
     }
 
