@@ -248,21 +248,23 @@ impl StyleData {
         self.rules.extend(other.rules);
     }
 
-    pub(crate) fn matching_rules(&self, handle: &Handle) -> Vec<Style> {
+    pub(crate) fn matching_rules(&self, handle: &Handle, use_doc_css: bool) -> Vec<Style> {
         let mut result = Vec::new();
         for rule in &self.rules {
             if rule.selector.matches(handle) {
                 result.extend(rule.styles.iter().cloned());
             }
         }
-        // Now look for a style attribute
-        if let Element { attrs, .. } = &handle.data {
-            let borrowed = attrs.borrow();
-            for attr in borrowed.iter() {
-                if &attr.name.local == "style" {
-                    let rules = parse_style_attribute(&attr.value).unwrap_or_default();
-                    result.extend(rules);
-                    break;
+        if use_doc_css {
+            // Now look for a style attribute
+            if let Element { attrs, .. } = &handle.data {
+                let borrowed = attrs.borrow();
+                for attr in borrowed.iter() {
+                    if &attr.name.local == "style" {
+                        let rules = parse_style_attribute(&attr.value).unwrap_or_default();
+                        result.extend(rules);
+                        break;
+                    }
                 }
             }
         }
