@@ -1154,11 +1154,16 @@ fn process_dom_node<'a, 'b, 'c, T: Write>(
                         postfn: None,
                     }
                 }
-                expanded_name!(html "em") => pending(handle, |_, cs| Ok(Some(RenderNode::new(Em(cs))))),
+                expanded_name!(html "em")
+                | expanded_name!(html "i")
+                | expanded_name!(html "ins") => {
+                    pending(handle, |_, cs| Ok(Some(RenderNode::new(Em(cs)))))
+                }
                 expanded_name!(html "strong") => {
                     pending(handle, |_, cs| Ok(Some(RenderNode::new(Strong(cs)))))
                 }
-                expanded_name!(html "s") => {
+                expanded_name!(html "s")
+                | expanded_name!(html "del") => {
                     pending(handle, |_, cs| Ok(Some(RenderNode::new(Strikeout(cs)))))
                 }
                 expanded_name!(html "code") => {
