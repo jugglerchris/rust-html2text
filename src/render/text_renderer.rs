@@ -800,7 +800,7 @@ impl<T: PartialEq + Eq + Clone + Debug + Default> RenderLine<T> {
                 let tag = border.tag.clone();
                 tagged.push(Str(TaggedString {
                     s: border.into_string(),
-                    tag,
+                    tag: tag,
                 }));
                 tagged
             }
@@ -1030,7 +1030,10 @@ impl<D: TextDecorator> Renderer for SubRenderer<D> {
         if width < 1 {
             return Err(Error::TooNarrow);
         }
-        Ok(SubRenderer::new(width, self.wrap_width, self.decorator.make_subblock_decorator()))
+        let mut result = SubRenderer::new(width, self.wrap_width, self.decorator.make_subblock_decorator());
+        // Copy the annotation stack
+        result.ann_stack = self.ann_stack.clone();
+        Ok(result)
     }
 
     fn start_block(&mut self) -> crate::Result<()> {
