@@ -655,23 +655,27 @@ pub enum BorderSegHoriz {
 /// A dividing line between table rows which tracks intersections
 /// with vertical lines.
 #[derive(Clone, Debug)]
-pub struct BorderHoriz {
+pub struct BorderHoriz<T: Clone> {
     /// The segments for the line.
     pub segments: Vec<BorderSegHoriz>,
+    /// The tag associated with the lines
+    pub tag: T,
 }
 
-impl BorderHoriz {
+impl<T: Clone> BorderHoriz<T> {
     /// Create a new blank border line.
-    pub fn new(width: usize) -> BorderHoriz {
+    pub fn new(width: usize, tag: T) -> Self {
         BorderHoriz {
             segments: vec![BorderSegHoriz::Straight; width],
+            tag
         }
     }
 
     /// Create a new blank border line.
-    pub fn new_type(width: usize, linetype: BorderSegHoriz) -> BorderHoriz {
+    pub fn new_type(width: usize, linetype: BorderSegHoriz, tag: T) -> Self {
         BorderHoriz {
             segments: vec![linetype; width],
+            tag,
         }
     }
 
@@ -708,7 +712,7 @@ impl BorderHoriz {
     }
 
     /// Merge a (possibly partial) border line below into this one.
-    pub fn merge_from_below(&mut self, other: &BorderHoriz, pos: usize) {
+    pub fn merge_from_below(&mut self, other: &BorderHoriz<T>, pos: usize) {
         use self::BorderSegHoriz::*;
         for (idx, seg) in other.segments.iter().enumerate() {
             match *seg {
@@ -721,7 +725,7 @@ impl BorderHoriz {
     }
 
     /// Merge a (possibly partial) border line above into this one.
-    pub fn merge_from_above(&mut self, other: &BorderHoriz, pos: usize) {
+    pub fn merge_from_above(&mut self, other: &BorderHoriz<T>, pos: usize) {
         use self::BorderSegHoriz::*;
         for (idx, seg) in other.segments.iter().enumerate() {
             match *seg {
@@ -772,7 +776,7 @@ pub enum RenderLine<T: PartialEq + Eq + Clone + Debug + Default> {
     /// Some rendered text
     Text(TaggedLine<T>),
     /// A table border line
-    Line(BorderHoriz),
+    Line(BorderHoriz<T>),
 }
 
 impl<T: PartialEq + Eq + Clone + Debug + Default> RenderLine<T> {
@@ -793,9 +797,10 @@ impl<T: PartialEq + Eq + Clone + Debug + Default> RenderLine<T> {
             RenderLine::Text(tagged) => tagged,
             RenderLine::Line(border) => {
                 let mut tagged = TaggedLine::new();
+                let tag = border.tag.clone();
                 tagged.push(Str(TaggedString {
                     s: border.into_string(),
-                    tag: T::default(),
+                    tag,
                 }));
                 tagged
             }
@@ -990,7 +995,7 @@ impl<D: TextDecorator> SubRenderer<D> {
         Ok(self.lines)
     }
 
-    fn add_horizontal_line(&mut self, line: BorderHoriz) -> Result<(), Error> {
+    fn add_horizontal_line(&mut self, line: BorderHoriz<Vec<D::Annotation>>) -> Result<(), Error> {
         self.flush_wrapping()?;
         self.lines.push_back(RenderLine::Line(line));
         Ok(())
@@ -1058,14 +1063,14 @@ impl<D: TextDecorator> Renderer for SubRenderer<D> {
     fn add_horizontal_border(&mut self) -> Result<(), Error> {
         self.flush_wrapping()?;
         self.lines
-            .push_back(RenderLine::Line(BorderHoriz::new(self.width)));
+            .push_back(RenderLine::Line(BorderHoriz::new(self.width, self.ann_stack.clone())));
         Ok(())
     }
 
     fn add_horizontal_border_width(&mut self, width: usize) -> Result<(), Error> {
         self.flush_wrapping()?;
         self.lines
-            .push_back(RenderLine::Line(BorderHoriz::new(width)));
+            .push_back(RenderLine::Line(BorderHoriz::new(width, self.ann_stack.clone())));
         Ok(())
     }
 
@@ -1218,7 +1223,7 @@ impl<D: TextDecorator> Renderer for SubRenderer<D> {
 
         tot_width += line_sets.len().saturating_sub(1);
 
-        let mut next_border = BorderHoriz::new(tot_width);
+        let mut next_border = BorderHoriz::new(tot_width, self.ann_stack.clone());
 
         // Join the vertical lines to all the borders
         {
@@ -1362,7 +1367,7 @@ impl<D: TextDecorator> Renderer for SubRenderer<D> {
             if first {
                 first = false;
             } else {
-                let border = BorderHoriz::new_type(width, BorderSegHoriz::StraightVert);
+                let border = BorderHoriz::new_type(width, BorderSegHoriz::StraightVert, self.ann_stack.clone());
                 self.add_horizontal_line(border)?;
             }
             self.append_subrender(col, std::iter::repeat(""))?;
