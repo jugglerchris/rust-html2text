@@ -621,6 +621,16 @@ pub trait TextDecorator {
         false
     }
 
+    /// Return an annotation corresponding to adding background colour, or none.
+    fn push_bgcolour(&mut self, _: Colour) -> Option<Self::Annotation> {
+        None
+    }
+
+    /// Pop the last background colour pushed if we pushed one.
+    fn pop_bgcolour(&mut self) -> bool {
+        false
+    }
+
     /// Finish with a document, and return extra lines (eg footnotes)
     /// to add to the rendered text.
     fn finalise(&mut self, links: Vec<String>) -> Vec<TaggedLine<Self::Annotation>>;
@@ -1488,6 +1498,18 @@ impl<D: TextDecorator> Renderer for SubRenderer<D> {
             self.ann_stack.pop();
         }
     }
+
+    fn push_bgcolour(&mut self, colour: Colour) {
+        if let Some(ann) = self.decorator.push_bgcolour(colour) {
+            self.ann_stack.push(ann);
+        }
+    }
+
+    fn pop_bgcolour(&mut self) {
+        if self.decorator.pop_bgcolour() {
+            self.ann_stack.pop();
+        }
+    }
 }
 
 /// A decorator for use with `SubRenderer` which outputs plain UTF-8 text
@@ -1712,6 +1734,8 @@ pub enum RichAnnotation {
     Preformat(bool),
     /// Colour information
     Colour(crate::Colour),
+    /// Background Colour information
+    BgColour(crate::Colour),
 }
 
 impl Default for RichAnnotation {
@@ -1812,6 +1836,14 @@ impl TextDecorator for RichDecorator {
     }
 
     fn pop_colour(&mut self) -> bool {
+        true
+    }
+
+    fn push_bgcolour(&mut self, colour: Colour) -> Option<Self::Annotation> {
+        Some(RichAnnotation::BgColour(colour))
+    }
+
+    fn pop_bgcolour(&mut self) -> bool {
         true
     }
 }

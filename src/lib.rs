@@ -439,8 +439,10 @@ pub enum RenderNodeInfo {
     TableCell(RenderTableCell),
     /// Start of a named HTML fragment
     FragStart(String),
-    /// A region with classes
+    /// A region with a foreground colour
     Coloured(Colour, Vec<RenderNode>),
+    /// A region with a background colour
+    BgColoured(Colour, Vec<RenderNode>),
     /// A list item
     ListItem(Vec<RenderNode>),
 }
@@ -545,6 +547,7 @@ impl RenderNode {
             Table(ref t) => t.get_size_estimate(),
             TableRow(..) | TableBody(_) | TableCell(_) => unimplemented!(),
             FragStart(_) => Default::default(),
+            BgColoured(_, ref v) |
             Coloured(_, ref v) => v
                 .iter()
                 .map(RenderNode::get_size_estimate)
@@ -588,6 +591,7 @@ impl RenderNode {
             Table(ref _t) => false,
             TableRow(..) | TableBody(_) | TableCell(_) => false,
             FragStart(_) => true,
+            BgColoured(_, ref v) |
             Coloured(_, ref v) => v.is_empty(),
         }
     }
@@ -648,6 +652,7 @@ fn precalc_size_estimate<'a>(node: &'a RenderNode) -> Result<TreeMapResult<(), &
             }
         }
         TableRow(..) | TableBody(_) | TableCell(_) => unimplemented!(),
+        BgColoured(_, ref v) |
         Coloured(_, ref v) => TreeMapResult::PendingChildren {
             children: v.iter().collect(),
             cons: Box::new(move |_, _cs| {
@@ -852,6 +857,42 @@ enum TreeMapResult<'a, C, N, R> {
     },
     /// Nothing (e.g. a comment or other ignored element).
     Nothing,
+}
+
+impl<'a, C: 'a, N> TreeMapResult<'a, C, N, RenderNode> {
+    fn wrap_render_nodes<F>(self, f: F)
+    -> Self 
+    where
+        F: Fn(Vec<RenderNode>) -> RenderNodeInfo + 'a
+    {
+        use TreeMapResult::*;
+        match self {
+            Finished(node) => Finished(RenderNode::new(f(vec![node]))),
+            PendingChildren { children, cons, prefn, postfn } => {
+                PendingChildren {
+                    children,
+                    prefn,
+                    postfn,
+                    cons: Box::new(move |ctx, ch| {
+                        Ok(cons(ctx, ch)?
+                           .map(|n| {
+                               // Special case: lists need to recognise ListItem nodes as
+                               // direct children.
+                               match n.info {
+                                   RenderNodeInfo::ListItem(children) => {
+                                       let coloured = RenderNode::new(f(children));
+                                       RenderNode::new(
+                                           RenderNodeInfo::ListItem(vec![coloured]))
+                                   }
+                                   ni => RenderNode::new(f(vec![RenderNode::new(ni)])),
+                               }
+                           }))
+                    }),
+                }
+            }
+            Nothing => Nothing
+        }
+    }
 }
 
 fn tree_map_reduce<'a, C, N, R, M>(context: &mut C, top: N, mut process_node: M) -> Result<Option<R>>
@@ -1072,12 +1113,19 @@ fn process_dom_node<'a, 'b, 'c, T: Write>(
             #[cfg(feature = "css")]
             let mut css_colour = None;
             #[cfg(feature = "css")]
+            let mut css_bgcolour = None;
+            #[cfg(feature = "css")]
             {
                 for style in context.style_data.matching_rules(&handle) {
                     match style {
                         css::Style::Colour(col) => {
                             if let Ok(colour) = Colour::try_from(&col) {
                                 css_colour = Some(colour);
+                            }
+                        }
+                        css::Style::BgColour(col) => {
+                            if let Ok(colour) = Colour::try_from(&col) {
+                                css_bgcolour = Some(colour);
                             }
                         }
                         css::Style::DisplayNone => {
@@ -1300,32 +1348,15 @@ fn process_dom_node<'a, 'b, 'c, T: Write>(
 
             #[cfg(feature = "css")]
             let result = if let Some(colour) = css_colour {
-                match result {
-                    Finished(node) => Finished(RenderNode::new(Coloured(colour.into(), vec![node]))),
-                    PendingChildren { children, cons, prefn, postfn } => {
-                        PendingChildren {
-                            children,
-                            prefn,
-                            postfn,
-                            cons: Box::new(move |ctx, ch| {
-                                Ok(cons(ctx, ch)?
-                                    .map(|n| {
-                                        // Special case: lists need to recognise ListItem nodes as
-                                        // direct children.
-                                        match n.info {
-                                            ListItem(children) => {
-                                                let coloured = RenderNode::new(Coloured(colour.into(), children));
-                                                RenderNode::new(
-                                                    ListItem(vec![coloured]))
-                                            }
-                                            ni => RenderNode::new(Coloured(colour.into(), vec![RenderNode::new(ni)])),
-                                        }
-                                    }))
-                            }),
-                        }
-                    }
-                    Nothing => Nothing
-                }
+                let colour = colour.into();
+                result.wrap_render_nodes(move |children| Coloured(colour, children))
+            } else {
+                result
+            };
+            #[cfg(feature = "css")]
+            let result = if let Some(colour) = css_bgcolour {
+                let colour = colour.into();
+                result.wrap_render_nodes(move |children| BgColoured(colour, children))
             } else {
                 result
             };
@@ -1592,6 +1623,13 @@ fn do_render_node<'a, 'b, T: Write, D: TextDecorator>(
             renderer.push_colour(colour);
             pending2(children, |renderer: &mut TextRenderer<D>, _| {
                 renderer.pop_colour();
+                Ok(Some(None))
+            })
+        }
+        BgColoured(colour, children) => {
+            renderer.push_bgcolour(colour);
+            pending2(children, |renderer: &mut TextRenderer<D>, _| {
+                renderer.pop_bgcolour();
                 Ok(Some(None))
             })
         }

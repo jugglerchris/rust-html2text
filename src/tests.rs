@@ -33,6 +33,7 @@ fn test_html_css(input: &[u8], expected: &str, width: usize) {
 fn test_colour_map(annotations: &[RichAnnotation], s: &str) -> String
 {
     let mut tags = ("", "");
+    let mut bgtags = ("", "");
     for ann in annotations {
         match ann {
             RichAnnotation::Colour(c) => {
@@ -49,10 +50,31 @@ fn test_colour_map(annotations: &[RichAnnotation], s: &str) -> String
                     }
                 }
             }
+            RichAnnotation::BgColour(c) => {
+                match c {
+                    crate::Colour{
+                        r: 0xff,
+                        g: 0,
+                        b: 0
+                    } => {
+                        bgtags = ("<r>", "</r>");
+                    }
+                    crate::Colour{
+                        r: 0,
+                        g: 0xff,
+                        b: 0
+                    } => {
+                        bgtags = ("<g>", "</g>");
+                    }
+                    _ => {
+                        bgtags = ("<.>", "</.>");
+                    }
+                }
+            }
             _ => ()
         }
     }
-    format!("{}{}{}", tags.0, s, tags.1)
+    format!("{}{}{}{}{}", bgtags.0, tags.0, s, tags.1, bgtags.1)
 }
 
 #[cfg(feature = "css")]
@@ -1794,21 +1816,6 @@ There
     }
 
     #[test]
-    fn test_coloured()
-    {
-        test_html_coloured(br##"
-          <style>
-              .red {
-                  color:#FF0000;
-              }
-          </style>
-        <p>Test <span class="red">red</span></p>
-        "##,
-        r#"Test <R>red</R>
-"#, 20);
-    }
-
-    #[test]
     fn test_coloured_a()
     {
         test_html_coloured(br##"
@@ -1820,6 +1827,22 @@ There
         <p>Test <a class="red" href="foo">red</a></p>
         "##,
         r#"Test <R>red</R>
+"#, 20);
+    }
+
+    #[test]
+    fn test_bgcoloured()
+    {
+        test_html_coloured(br##"
+          <style>
+              .red {
+                  color:#FF0000;
+                  background-color:#00FF00;
+              }
+          </style>
+        <p>Test <span class="red">red</span></p>
+        "##,
+        r#"Test <g><R>red</R></g>
 "#, 20);
     }
 

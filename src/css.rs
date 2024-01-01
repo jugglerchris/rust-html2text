@@ -161,6 +161,7 @@ impl<'r, 'i> TryFrom<&'r lightningcss::selector::Selector<'i>> for Selector {
 #[derive(Debug, Clone)]
 pub(crate) enum Style {
     Colour(CssColor),
+    BgColour(CssColor),
     DisplayNone,
 }
 
@@ -191,6 +192,9 @@ impl StyleData {
                         match decl {
                             Property::Color(color) => {
                                 styles.push(Style::Colour(color.clone()));
+                            }
+                            Property::BackgroundColor(color) => {
+                                styles.push(Style::BgColour(color.clone()));
                             }
                             Property::Display(disp) => {
                                 if let display::Display::Keyword(DisplayKeyword::None) = disp {

@@ -132,9 +132,15 @@ pub trait Renderer {
     /// Record the start of a named HTML fragment
     fn record_frag_start(&mut self, fragname: &str);
 
-    /// Push some CSS classes
+    /// Push a new foreground colour
     fn push_colour(&mut self, colour: Colour);
 
-    /// Pop the last CSS classes pushed
+    /// Pop the last foreground colour
     fn pop_colour(&mut self);
+
+    /// Push a new background colour
+    fn push_bgcolour(&mut self, colour: Colour);
+
+    /// Pop the last background colour
+    fn pop_bgcolour(&mut self);
 }
