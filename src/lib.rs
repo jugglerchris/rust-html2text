@@ -880,9 +880,16 @@ impl<'a, C: 'a, N> TreeMapResult<'a, C, N, RenderNode> {
                                // direct children.
                                match n.info {
                                    RenderNodeInfo::ListItem(children) => {
-                                       let coloured = RenderNode::new(f(children));
+                                       let wrapped = RenderNode::new(f(children));
                                        RenderNode::new(
-                                           RenderNodeInfo::ListItem(vec![coloured]))
+                                           RenderNodeInfo::ListItem(vec![wrapped]))
+                                   }
+                                   RenderNodeInfo::TableCell(mut cellinfo) => {
+                                       let children = cellinfo.content;
+                                       let wrapped = RenderNode::new(f(children));
+                                       cellinfo.content = vec![wrapped];
+                                       RenderNode::new(
+                                           RenderNodeInfo::TableCell(cellinfo))
                                    }
                                    ni => RenderNode::new(f(vec![RenderNode::new(ni)])),
                                }
