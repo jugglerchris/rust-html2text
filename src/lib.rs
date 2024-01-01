@@ -860,6 +860,7 @@ enum TreeMapResult<'a, C, N, R> {
 }
 
 impl<'a, C: 'a, N> TreeMapResult<'a, C, N, RenderNode> {
+    #[cfg(feature = "css")]
     fn wrap_render_nodes<F>(self, f: F)
     -> Self 
     where
@@ -1123,7 +1124,7 @@ fn process_dom_node<'a, 'b, 'c, T: Write>(
             let mut css_bgcolour = None;
             #[cfg(feature = "css")]
             {
-                for style in context.style_data.matching_rules(&handle) {
+                for style in context.style_data.matching_rules(&handle, context.use_doc_css) {
                     match style {
                         css::Style::Colour(col) => {
                             if let Ok(colour) = Colour::try_from(&col) {
