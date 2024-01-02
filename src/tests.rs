@@ -1199,7 +1199,7 @@ Bar
 
 #[test]
 fn test_pre_emptyline() {
-    test_html(br#"<pre>X<span id="i"> </span></pre>"#, "X  \n", 10);
+    test_html(br#"<pre>X<span id="i"> </span></pre>"#, "X \n", 10);
 }
 
 #[test]
@@ -1504,8 +1504,7 @@ fn test_empty_table() {
         br##"
    <table></table>
 "##,
-        r#"
-"#,
+        r#""#,
         12,
     );
 }
@@ -1516,8 +1515,7 @@ fn test_table_empty_single_row() {
         br##"
    <table><tr></tr></table>
 "##,
-        r#"
-"#,
+        r#""#,
         12,
     );
 }
@@ -1528,8 +1526,7 @@ fn test_table_empty_single_row_empty_cell() {
         br##"
    <table><tr><td></td></tr></table>
 "##,
-        r#"
-"#,
+        r#""#,
         12,
     );
 }
