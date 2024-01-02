@@ -1750,8 +1750,6 @@ fn render_table_tree<T: Write, D: TextDecorator>(
         }
     }
 
-    renderer.start_block()?;
-
     let table_width = if vert_row {
         width
     } else {
@@ -1766,6 +1764,8 @@ fn render_table_tree<T: Write, D: TextDecorator>(
     if table_width == 0 {
         return Ok(TreeMapResult::Nothing);
     }
+
+    renderer.start_block()?;
 
     renderer.add_horizontal_border_width(table_width)?;
 
