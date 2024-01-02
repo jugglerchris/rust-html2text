@@ -110,6 +110,17 @@ pub enum TaggedLineElement<T> {
     FragmentStart(String),
 }
 
+impl<T> TaggedLineElement<T> {
+    /// Return true if this element is non-empty.
+    /// FragmentStart is considered empty.
+    fn has_content(&self) -> bool {
+        match self {
+            TaggedLineElement::Str(_) => true,
+            TaggedLineElement::FragmentStart(_) => false,
+        }
+    }
+}
+
 /// A line of tagged text (composed of a set of `TaggedString`s).
 #[derive(Debug, Clone, PartialEq)]
 pub struct TaggedLine<T> {
@@ -145,7 +156,12 @@ impl<T: Debug + Eq + PartialEq + Clone + Default> TaggedLine<T> {
 
     /// Return true if the line is non-empty
     pub fn is_empty(&self) -> bool {
-        self.v.len() == 0
+        for elt in &self.v {
+            if elt.has_content() {
+                return false;
+            }
+        }
+        true
     }
 
     /// Add a new tagged string fragment to the line
