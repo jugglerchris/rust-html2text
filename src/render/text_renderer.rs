@@ -1089,12 +1089,6 @@ impl<D: TextDecorator> Renderer for SubRenderer<D> {
         html_trace!("start_block({})", self.width);
         self.flush_all()?;
         if self.lines.iter().any(|l| l.has_content()) {
-            /*
-            eprintln!("Starting block, lines not empty");
-            for line in &self.lines {
-                dbg!(line);
-            }
-            */
             self.add_empty_line()?;
         }
         html_trace_quiet!("start_block; at_block_end <- false");

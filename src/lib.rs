@@ -1315,14 +1315,13 @@ fn process_dom_node<'a, 'b, 'c, T: Write>(
                     }
 
                     pending_noempty(handle, move |_, cs| {
-                        dbg!(&cs);
                         let cs = cs.into_iter()
                             .filter(|n| match &n.info {
                                 RenderNodeInfo::ListItem(..) => true,
                                 _ => false,
                             })
                             .collect();
-                        Ok(Some(RenderNode::new(Ol(start, dbg!(cs)))))
+                        Ok(Some(RenderNode::new(Ol(start, cs))))
                     })
 
                 }
