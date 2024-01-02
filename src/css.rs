@@ -4,8 +4,8 @@ use std::convert::TryFrom;
 use std::ops::Deref;
 
 use lightningcss::{stylesheet::{
-    ParserOptions, StyleSheet
-}, rules::CssRule, properties::{Property, display::{self, DisplayKeyword}}, values::color::CssColor};
+    ParserOptions, StyleSheet, StyleAttribute
+}, rules::CssRule, properties::{Property, display::{self, DisplayKeyword}}, values::color::CssColor, declaration::DeclarationBlock};
 
 use crate::{Result, TreeMapResult, markup5ever_rcdom::{Handle, NodeData::{Comment, Document, Element, self}}, tree_map_reduce};
 
@@ -161,6 +161,7 @@ impl<'r, 'i> TryFrom<&'r lightningcss::selector::Selector<'i>> for Selector {
 #[derive(Debug, Clone)]
 pub(crate) enum Style {
     Colour(CssColor),
+    BgColour(CssColor),
     DisplayNone,
 }
 
@@ -176,6 +177,38 @@ pub struct StyleData {
     rules: Vec<Ruleset>,
 }
 
+pub(crate) fn parse_style_attribute(text: &str) -> Result<Vec<Style>> {
+    let sattr = StyleAttribute::parse(text, ParserOptions::default())
+        .map_err(|_| crate::Error::CssParseError)?;
+
+    Ok(styles_from_properties(&sattr.declarations))
+}
+
+fn styles_from_properties(decls: &DeclarationBlock<'_>) -> Vec<Style> {
+    let mut styles = Vec::new();
+    for decl in &decls.declarations {
+        match decl {
+            Property::Color(color) => {
+                styles.push(Style::Colour(color.clone()));
+            }
+            Property::Background(bginfo) => {
+                let color = bginfo.last().unwrap().color.clone();
+                styles.push(Style::BgColour(color));
+            }
+            Property::BackgroundColor(color) => {
+                styles.push(Style::BgColour(color.clone()));
+            }
+            Property::Display(disp) => {
+                if let display::Display::Keyword(DisplayKeyword::None) = disp {
+                    styles.push(Style::DisplayNone);
+                }
+            }
+            _ => {}
+        }
+    }
+    styles
+}
+
 impl StyleData {
     /// Add some CSS source to be included.  The source will be parsed
     /// and the relevant and supported features extracted.
@@ -186,20 +219,7 @@ impl StyleData {
         for rule in &ss.rules.0 {
             match rule {
                 CssRule::Style(style) => {
-                    let mut styles = Vec::new();
-                    for decl in &style.declarations.declarations {
-                        match decl {
-                            Property::Color(color) => {
-                                styles.push(Style::Colour(color.clone()));
-                            }
-                            Property::Display(disp) => {
-                                if let display::Display::Keyword(DisplayKeyword::None) = disp {
-                                    styles.push(Style::DisplayNone);
-                                }
-                            }
-                            _ => {}
-                        }
-                    }
+                    let styles = styles_from_properties(&style.declarations);
                     if !styles.is_empty() {
                         for selector in &style.selectors.0 {
                             match Selector::try_from(selector) {
@@ -228,11 +248,24 @@ impl StyleData {
         self.rules.extend(other.rules);
     }
 
-    pub(crate) fn matching_rules(&self, handle: &Handle) -> Vec<Style> {
+    pub(crate) fn matching_rules(&self, handle: &Handle, use_doc_css: bool) -> Vec<Style> {
         let mut result = Vec::new();
         for rule in &self.rules {
             if rule.selector.matches(handle) {
                 result.extend(rule.styles.iter().cloned());
+            }
+        }
+        if use_doc_css {
+            // Now look for a style attribute
+            if let Element { attrs, .. } = &handle.data {
+                let borrowed = attrs.borrow();
+                for attr in borrowed.iter() {
+                    if &attr.name.local == "style" {
+                        let rules = parse_style_attribute(&attr.value).unwrap_or_default();
+                        result.extend(rules);
+                        break;
+                    }
+                }
             }
         }
 

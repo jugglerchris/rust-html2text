@@ -33,6 +33,7 @@ fn test_html_css(input: &[u8], expected: &str, width: usize) {
 fn test_colour_map(annotations: &[RichAnnotation], s: &str) -> String
 {
     let mut tags = ("", "");
+    let mut bgtags = ("", "");
     for ann in annotations {
         match ann {
             RichAnnotation::Colour(c) => {
@@ -44,15 +45,43 @@ fn test_colour_map(annotations: &[RichAnnotation], s: &str) -> String
                     } => {
                         tags = ("<R>", "</R>");
                     }
+                    crate::Colour{
+                        r: 0,
+                        g: 0xff,
+                        b: 0
+                    } => {
+                        tags = ("<G>", "</G>");
+                    }
                     _ => {
                         tags = ("<?>", "</?>");
+                    }
+                }
+            }
+            RichAnnotation::BgColour(c) => {
+                match c {
+                    crate::Colour{
+                        r: 0xff,
+                        g: 0,
+                        b: 0
+                    } => {
+                        bgtags = ("<r>", "</r>");
+                    }
+                    crate::Colour{
+                        r: 0,
+                        g: 0xff,
+                        b: 0
+                    } => {
+                        bgtags = ("<g>", "</g>");
+                    }
+                    _ => {
+                        bgtags = ("<.>", "</.>");
                     }
                 }
             }
             _ => ()
         }
     }
-    format!("{}{}{}", tags.0, s, tags.1)
+    format!("{}{}{}{}{}", bgtags.0, tags.0, s, tags.1, bgtags.1)
 }
 
 #[cfg(feature = "css")]
@@ -1170,7 +1199,7 @@ Bar
 
 #[test]
 fn test_pre_emptyline() {
-    test_html(br#"<pre>X<span id="i"> </span></pre>"#, "X  \n", 10);
+    test_html(br#"<pre>X<span id="i"> </span></pre>"#, "X \n", 10);
 }
 
 #[test]
@@ -1475,8 +1504,7 @@ fn test_empty_table() {
         br##"
    <table></table>
 "##,
-        r#"
-"#,
+        r#""#,
         12,
     );
 }
@@ -1487,8 +1515,7 @@ fn test_table_empty_single_row() {
         br##"
    <table><tr></tr></table>
 "##,
-        r#"
-"#,
+        r#""#,
         12,
     );
 }
@@ -1499,8 +1526,7 @@ fn test_table_empty_single_row_empty_cell() {
         br##"
    <table><tr><td></td></tr></table>
 "##,
-        r#"
-"#,
+        r#""#,
         12,
     );
 }
@@ -1660,7 +1686,7 @@ Test.
 End.
 </pre>"#;
     let decorator = crate::render::text_renderer::TrivialDecorator::new();
-    let text = from_read_with_decorator(html.as_bytes(), usize::MAX, decorator.clone());
+    let text = from_read_with_decorator(html.as_bytes(), 20, decorator.clone());
     assert_eq!(text, "Test.\n\n\nEnd.\n");
 }
 
@@ -1794,21 +1820,6 @@ There
     }
 
     #[test]
-    fn test_coloured()
-    {
-        test_html_coloured(br##"
-          <style>
-              .red {
-                  color:#FF0000;
-              }
-          </style>
-        <p>Test <span class="red">red</span></p>
-        "##,
-        r#"Test <R>red</R>
-"#, 20);
-    }
-
-    #[test]
     fn test_coloured_a()
     {
         test_html_coloured(br##"
@@ -1820,6 +1831,38 @@ There
         <p>Test <a class="red" href="foo">red</a></p>
         "##,
         r#"Test <R>red</R>
+"#, 20);
+    }
+
+    #[test]
+    fn test_bgcoloured()
+    {
+        test_html_coloured(br##"
+          <style>
+              .red {
+                  color:#FF0000;
+                  background-color:#00FF00;
+              }
+          </style>
+        <p>Test <span class="red">red</span></p>
+        "##,
+        r#"Test <g><R>red</R></g>
+"#, 20);
+    }
+
+    #[test]
+    fn test_bgcoloured2()
+    {
+        test_html_coloured(br##"
+          <style>
+              .red {
+                  color:#FF0000;
+                  background-color:#00FF00;
+              }
+          </style>
+        <p>Test <span class="red">red</span> and <span style="color: #00ff00">green</span></p>
+        "##,
+        r#"Test <g><R>red</R></g> and <G>green</G>
 "#, 20);
     }
 

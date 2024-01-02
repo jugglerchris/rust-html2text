@@ -110,6 +110,17 @@ pub enum TaggedLineElement<T> {
     FragmentStart(String),
 }
 
+impl<T> TaggedLineElement<T> {
+    /// Return true if this element is non-empty.
+    /// FragmentStart is considered empty.
+    fn has_content(&self) -> bool {
+        match self {
+            TaggedLineElement::Str(_) => true,
+            TaggedLineElement::FragmentStart(_) => false,
+        }
+    }
+}
+
 /// A line of tagged text (composed of a set of `TaggedString`s).
 #[derive(Debug, Clone, PartialEq)]
 pub struct TaggedLine<T> {
@@ -145,7 +156,12 @@ impl<T: Debug + Eq + PartialEq + Clone + Default> TaggedLine<T> {
 
     /// Return true if the line is non-empty
     pub fn is_empty(&self) -> bool {
-        self.v.len() == 0
+        for elt in &self.v {
+            if elt.has_content() {
+                return false;
+            }
+        }
+        true
     }
 
     /// Add a new tagged string fragment to the line
@@ -262,14 +278,14 @@ impl<T: Debug + Eq + PartialEq + Clone + Default> TaggedLine<T> {
 
     /// Pad this line to width with spaces (or if already at least this wide, do
     /// nothing).
-    pub fn pad_to(&mut self, width: usize) {
+    pub fn pad_to(&mut self, width: usize, tag: &T) {
         use self::TaggedLineElement::Str;
 
         let my_width = self.width();
         if width > my_width {
             self.v.push(Str(TaggedString {
                 s: format!("{: <width$}", "", width = width - my_width),
-                tag: T::default(),
+                tag: tag.clone(),
             }));
         }
     }
@@ -288,10 +304,11 @@ struct WrappedBlock<T> {
     word: TaggedLine<T>, // The current word (with no whitespace).
     wordlen: usize,
     pre_wrapped: bool, // If true, we've been forced to wrap a <pre> line.
+    pad_blocks: bool,
 }
 
 impl<T: Clone + Eq + Debug + Default> WrappedBlock<T> {
-    pub fn new(width: usize) -> WrappedBlock<T> {
+    pub fn new(width: usize, pad_blocks: bool) -> WrappedBlock<T> {
         WrappedBlock {
             width,
             text: Vec::new(),
@@ -302,6 +319,7 @@ impl<T: Clone + Eq + Debug + Default> WrappedBlock<T> {
             word: TaggedLine::new(),
             wordlen: 0,
             pre_wrapped: false,
+            pad_blocks,
         }
     }
 
@@ -319,7 +337,7 @@ impl<T: Clone + Eq + Debug + Default> WrappedBlock<T> {
                 if self.linelen > 0 {
                     self.line.push(Str(TaggedString {
                         s: " ".into(),
-                        tag: self.spacetag.take().unwrap_or_else(|| Default::default()),
+                        tag: self.spacetag.clone().unwrap_or_else(|| Default::default()),
                     }));
                     self.linelen += 1;
                     html_trace!("linelen incremented to {}", self.linelen);
@@ -341,7 +359,9 @@ impl<T: Clone + Eq + Debug + Default> WrappedBlock<T> {
                 } else {
                     html_trace!("Splitting the word");
                     /* We need to split the word. */
-                    let mut wordbits = self.word.drain_all();
+                    let mut word = TaggedLine::new();
+                    mem::swap(&mut word, &mut self.word);
+                    let mut wordbits = word.drain_all();
                     /* Note: there's always at least one piece */
                     let mut opt_elt = wordbits.next();
                     let mut lineleft = self.width;
@@ -377,13 +397,8 @@ impl<T: Clone + Eq + Debug + Default> WrappedBlock<T> {
                                     s: piece.s[..split_idx].into(),
                                     tag: piece.tag.clone(),
                                 }));
-                                {
-                                    let mut tmp_line = TaggedLine::new();
-                                    mem::swap(&mut tmp_line, &mut self.line);
-                                    self.text.push(tmp_line);
-                                }
+                                self.force_flush_line();
                                 lineleft = self.width;
-                                self.linelen = 0;
                                 html_trace!("linelen set to zero here");
                                 opt_elt = Some(Str(TaggedString {
                                     s: piece.s[split_idx..].into(),
@@ -411,6 +426,16 @@ impl<T: Clone + Eq + Debug + Default> WrappedBlock<T> {
     fn force_flush_line(&mut self) {
         let mut tmp_line = TaggedLine::new();
         mem::swap(&mut tmp_line, &mut self.line);
+        if self.pad_blocks {
+            let tmp_tag;
+            let tag = if let Some(st) = self.spacetag.as_ref() {
+                st
+            } else {
+                tmp_tag = Default::default();
+                &tmp_tag
+            };
+            tmp_line.pad_to(self.width, tag);
+        }
         self.text.push(tmp_line);
         self.linelen = 0;
     }
@@ -451,7 +476,7 @@ impl<T: Clone + Eq + Debug + Default> WrappedBlock<T> {
             if c.is_whitespace() {
                 /* Whitespace is mostly ignored, except to terminate words. */
                 self.flush_word()?;
-                self.spacetag = Some(tag.clone());
+        self.spacetag = Some(tag.clone());
             } else if let Some(charwidth) = UnicodeWidthChar::width(c) {
                 /* Not whitespace; add to the current word. */
                 self.word.push_char(c, tag);
@@ -621,6 +646,16 @@ pub trait TextDecorator {
         false
     }
 
+    /// Return an annotation corresponding to adding background colour, or none.
+    fn push_bgcolour(&mut self, _: Colour) -> Option<Self::Annotation> {
+        None
+    }
+
+    /// Pop the last background colour pushed if we pushed one.
+    fn pop_bgcolour(&mut self) -> bool {
+        false
+    }
+
     /// Finish with a document, and return extra lines (eg footnotes)
     /// to add to the rendered text.
     fn finalise(&mut self, links: Vec<String>) -> Vec<TaggedLine<Self::Annotation>>;
@@ -645,23 +680,27 @@ pub enum BorderSegHoriz {
 /// A dividing line between table rows which tracks intersections
 /// with vertical lines.
 #[derive(Clone, Debug)]
-pub struct BorderHoriz {
+pub struct BorderHoriz<T: Clone> {
     /// The segments for the line.
     pub segments: Vec<BorderSegHoriz>,
+    /// The tag associated with the lines
+    pub tag: T,
 }
 
-impl BorderHoriz {
+impl<T: Clone> BorderHoriz<T> {
     /// Create a new blank border line.
-    pub fn new(width: usize) -> BorderHoriz {
+    pub fn new(width: usize, tag: T) -> Self {
         BorderHoriz {
             segments: vec![BorderSegHoriz::Straight; width],
+            tag
         }
     }
 
     /// Create a new blank border line.
-    pub fn new_type(width: usize, linetype: BorderSegHoriz) -> BorderHoriz {
+    pub fn new_type(width: usize, linetype: BorderSegHoriz, tag: T) -> Self {
         BorderHoriz {
             segments: vec![linetype; width],
+            tag,
         }
     }
 
@@ -698,7 +737,7 @@ impl BorderHoriz {
     }
 
     /// Merge a (possibly partial) border line below into this one.
-    pub fn merge_from_below(&mut self, other: &BorderHoriz, pos: usize) {
+    pub fn merge_from_below(&mut self, other: &BorderHoriz<T>, pos: usize) {
         use self::BorderSegHoriz::*;
         for (idx, seg) in other.segments.iter().enumerate() {
             match *seg {
@@ -711,7 +750,7 @@ impl BorderHoriz {
     }
 
     /// Merge a (possibly partial) border line above into this one.
-    pub fn merge_from_above(&mut self, other: &BorderHoriz, pos: usize) {
+    pub fn merge_from_above(&mut self, other: &BorderHoriz<T>, pos: usize) {
         use self::BorderSegHoriz::*;
         for (idx, seg) in other.segments.iter().enumerate() {
             match *seg {
@@ -762,7 +801,7 @@ pub enum RenderLine<T: PartialEq + Eq + Clone + Debug + Default> {
     /// Some rendered text
     Text(TaggedLine<T>),
     /// A table border line
-    Line(BorderHoriz),
+    Line(BorderHoriz<T>),
 }
 
 impl<T: PartialEq + Eq + Clone + Debug + Default> RenderLine<T> {
@@ -783,9 +822,10 @@ impl<T: PartialEq + Eq + Clone + Debug + Default> RenderLine<T> {
             RenderLine::Text(tagged) => tagged,
             RenderLine::Line(border) => {
                 let mut tagged = TaggedLine::new();
+                let tag = border.tag.clone();
                 tagged.push(Str(TaggedString {
                     s: border.into_string(),
-                    tag: T::default(),
+                    tag: tag,
                 }));
                 tagged
             }
@@ -800,6 +840,15 @@ impl<T: PartialEq + Eq + Clone + Debug + Default> RenderLine<T> {
             RenderLine::Line(border) => border.to_string(),
         }
     }
+
+    /// Return whether this line has any text content
+    /// Borders do not count as text.
+    fn has_content(&self) -> bool {
+        match self {
+            RenderLine::Text(line) => !line.is_empty(),
+            RenderLine::Line(_) => false,
+        }
+    }
 }
 
 /// A renderer which just outputs plain text with
@@ -807,7 +856,7 @@ impl<T: PartialEq + Eq + Clone + Debug + Default> RenderLine<T> {
 #[derive(Clone)]
 pub struct SubRenderer<D: TextDecorator> {
     width: usize,
-    wrap_width: Option<usize>,
+    options: RenderOptions,
     lines: LinkedList<RenderLine<Vec<D::Annotation>>>,
     /// True at the end of a block, meaning we should add
     /// a blank line if any other text is added.
@@ -832,6 +881,21 @@ impl<D: TextDecorator + Debug> std::fmt::Debug for SubRenderer<D> {
     }
 }
 
+/// Rendering options.
+#[derive(Clone, Default)]
+#[non_exhaustive]
+pub struct RenderOptions {
+    /// The maximum text wrap width.  If set, paragraphs of text will only be wrapped
+    /// to that width or less, though the overall width can be larger (e.g. for indented
+    /// blocks or side-by-side table cells).
+    pub wrap_width: Option<usize>,
+
+    /// Whether to always pad lines out to the full width.
+    /// This may give a better output when the parent block
+    /// has a background colour set.
+    pub pad_block_width: bool,
+}
+
 impl<D: TextDecorator> SubRenderer<D> {
     /// Render links as lines
     pub fn finalise(&mut self, links: Vec<String>) -> Vec<TaggedLine<D::Annotation>> {
@@ -839,11 +903,11 @@ impl<D: TextDecorator> SubRenderer<D> {
     }
 
     /// Construct a new empty SubRenderer.
-    pub fn new(width: usize, wrap_width: Option<usize>, decorator: D) -> SubRenderer<D> {
+    pub fn new(width: usize, options: RenderOptions, decorator: D) -> SubRenderer<D> {
         html_trace!("new({})", width);
         SubRenderer {
             width,
-            wrap_width,
+            options,
             lines: LinkedList::new(),
             at_block_end: false,
             wrapping: None,
@@ -856,11 +920,11 @@ impl<D: TextDecorator> SubRenderer<D> {
 
     fn ensure_wrapping_exists(&mut self) {
         if self.wrapping.is_none() {
-            let wwidth = match self.wrap_width {
+            let wwidth = match self.options.wrap_width {
                 Some(ww) => ww.min(self.width),
                 None => self.width
             };
-            self.wrapping = Some(WrappedBlock::new(wwidth));
+            self.wrapping = Some(WrappedBlock::new(wwidth, self.options.pad_block_width));
         }
     }
 
@@ -918,7 +982,7 @@ impl<D: TextDecorator> SubRenderer<D> {
 
     #[cfg(feature = "html_trace")]
     /// Returns a string of the current builder contents (for testing).
-    fn to_string(&self) -> String {
+    pub fn to_string(&self) -> String {
         let mut result = String::new();
         for line in &self.lines {
             result += &line.to_string();
@@ -980,7 +1044,7 @@ impl<D: TextDecorator> SubRenderer<D> {
         Ok(self.lines)
     }
 
-    fn add_horizontal_line(&mut self, line: BorderHoriz) -> Result<(), Error> {
+    fn add_horizontal_line(&mut self, line: BorderHoriz<Vec<D::Annotation>>) -> Result<(), Error> {
         self.flush_wrapping()?;
         self.lines.push_back(RenderLine::Line(line));
         Ok(())
@@ -1015,13 +1079,16 @@ impl<D: TextDecorator> Renderer for SubRenderer<D> {
         if width < 1 {
             return Err(Error::TooNarrow);
         }
-        Ok(SubRenderer::new(width, self.wrap_width, self.decorator.make_subblock_decorator()))
+        let mut result = SubRenderer::new(width, self.options.clone(), self.decorator.make_subblock_decorator());
+        // Copy the annotation stack
+        result.ann_stack = self.ann_stack.clone();
+        Ok(result)
     }
 
     fn start_block(&mut self) -> crate::Result<()> {
         html_trace!("start_block({})", self.width);
         self.flush_all()?;
-        if !self.lines.is_empty() {
+        if self.lines.iter().any(|l| l.has_content()) {
             self.add_empty_line()?;
         }
         html_trace_quiet!("start_block; at_block_end <- false");
@@ -1048,14 +1115,14 @@ impl<D: TextDecorator> Renderer for SubRenderer<D> {
     fn add_horizontal_border(&mut self) -> Result<(), Error> {
         self.flush_wrapping()?;
         self.lines
-            .push_back(RenderLine::Line(BorderHoriz::new(self.width)));
+            .push_back(RenderLine::Line(BorderHoriz::new(self.width, self.ann_stack.clone())));
         Ok(())
     }
 
     fn add_horizontal_border_width(&mut self, width: usize) -> Result<(), Error> {
         self.flush_wrapping()?;
         self.lines
-            .push_back(RenderLine::Line(BorderHoriz::new(width)));
+            .push_back(RenderLine::Line(BorderHoriz::new(width, self.ann_stack.clone())));
         Ok(())
     }
 
@@ -1173,7 +1240,7 @@ impl<D: TextDecorator> Renderer for SubRenderer<D> {
     {
         use self::TaggedLineElement::Str;
         html_trace!("append_columns_with_borders(collapse={})", collapse);
-        html_trace!("self=\n{}", self.to_string());
+        html_trace!("self=<<<\n{}>>>", self.to_string());
 
         self.flush_wrapping()?;
 
@@ -1193,7 +1260,7 @@ impl<D: TextDecorator> Renderer for SubRenderer<D> {
                         .map(|mut line| {
                             match line {
                                 RenderLine::Text(ref mut tline) => {
-                                    tline.pad_to(width);
+                                    tline.pad_to(width, &self.ann_stack);
                                 }
                                 RenderLine::Line(ref mut border) => {
                                     border.stretch_to(width);
@@ -1208,7 +1275,7 @@ impl<D: TextDecorator> Renderer for SubRenderer<D> {
 
         tot_width += line_sets.len().saturating_sub(1);
 
-        let mut next_border = BorderHoriz::new(tot_width);
+        let mut next_border = BorderHoriz::new(tot_width, self.ann_stack.clone());
 
         // Join the vertical lines to all the borders
         {
@@ -1352,7 +1419,7 @@ impl<D: TextDecorator> Renderer for SubRenderer<D> {
             if first {
                 first = false;
             } else {
-                let border = BorderHoriz::new_type(width, BorderSegHoriz::StraightVert);
+                let border = BorderHoriz::new_type(width, BorderSegHoriz::StraightVert, self.ann_stack.clone());
                 self.add_horizontal_line(border)?;
             }
             self.append_subrender(col, std::iter::repeat(""))?;
@@ -1485,6 +1552,18 @@ impl<D: TextDecorator> Renderer for SubRenderer<D> {
 
     fn pop_colour(&mut self) {
         if self.decorator.pop_colour() {
+            self.ann_stack.pop();
+        }
+    }
+
+    fn push_bgcolour(&mut self, colour: Colour) {
+        if let Some(ann) = self.decorator.push_bgcolour(colour) {
+            self.ann_stack.push(ann);
+        }
+    }
+
+    fn pop_bgcolour(&mut self) {
+        if self.decorator.pop_bgcolour() {
             self.ann_stack.pop();
         }
     }
@@ -1712,6 +1791,8 @@ pub enum RichAnnotation {
     Preformat(bool),
     /// Colour information
     Colour(crate::Colour),
+    /// Background Colour information
+    BgColour(crate::Colour),
 }
 
 impl Default for RichAnnotation {
@@ -1812,6 +1893,14 @@ impl TextDecorator for RichDecorator {
     }
 
     fn pop_colour(&mut self) -> bool {
+        true
+    }
+
+    fn push_bgcolour(&mut self, colour: Colour) -> Option<Self::Annotation> {
+        Some(RichAnnotation::BgColour(colour))
+    }
+
+    fn pop_bgcolour(&mut self) -> bool {
         true
     }
 }

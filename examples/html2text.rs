@@ -65,6 +65,10 @@ fn default_colour_map(annotations: &[RichAnnotation], s: &str) -> String {
                 finish.push(format!("{}", Fg(Reset)));
                 have_explicit_colour = true;
             }
+            BgColour(c) => {
+                start.push(format!("{}", Bg(Rgb(c.r, c.g, c.b))));
+                finish.push(format!("{}", Bg(Reset)));
+            }
             _ => {}
         }
     }
@@ -186,7 +190,7 @@ fn main() {
 
     match outfile {
         None => {
-            println!("{}", data);
+            print!("{}", data);
         }
         Some(name) => {
             let mut file = std::fs::File::create(name).expect("Tried to create file");
