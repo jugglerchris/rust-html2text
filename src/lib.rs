@@ -1941,7 +1941,7 @@ pub mod config {
         pub fn lines_from_read<R: std::io::Read>(mut self, input: R, width: usize) -> Result<Vec<TaggedLine<Vec<D::Annotation>>>> {
             let mut context = self.make_context();
             Ok(self.do_parse(&mut context, input)?
-                .render(width, self.decorator)?
+                .render_with_context(&mut context, width, self.decorator)?
                 .into_lines()?)
         }
 
@@ -1994,7 +1994,7 @@ pub mod config {
 
             let mut context = self.make_context();
             let lines = self.do_parse(&mut context, input)?
-                .render(width, self.decorator)?
+                .render_with_context(&mut context, width, self.decorator)?
                 .into_lines()?;
 
             let mut result = String::new();
