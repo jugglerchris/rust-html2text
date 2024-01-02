@@ -262,14 +262,14 @@ impl<T: Debug + Eq + PartialEq + Clone + Default> TaggedLine<T> {
 
     /// Pad this line to width with spaces (or if already at least this wide, do
     /// nothing).
-    pub fn pad_to(&mut self, width: usize) {
+    pub fn pad_to(&mut self, width: usize, tag: &T) {
         use self::TaggedLineElement::Str;
 
         let my_width = self.width();
         if width > my_width {
             self.v.push(Str(TaggedString {
                 s: format!("{: <width$}", "", width = width - my_width),
-                tag: T::default(),
+                tag: tag.clone(),
             }));
         }
     }
@@ -319,7 +319,7 @@ impl<T: Clone + Eq + Debug + Default> WrappedBlock<T> {
                 if self.linelen > 0 {
                     self.line.push(Str(TaggedString {
                         s: " ".into(),
-                        tag: self.spacetag.take().unwrap_or_else(|| Default::default()),
+                        tag: self.spacetag.clone().unwrap_or_else(|| Default::default()),
                     }));
                     self.linelen += 1;
                     html_trace!("linelen incremented to {}", self.linelen);
@@ -341,7 +341,9 @@ impl<T: Clone + Eq + Debug + Default> WrappedBlock<T> {
                 } else {
                     html_trace!("Splitting the word");
                     /* We need to split the word. */
-                    let mut wordbits = self.word.drain_all();
+                    let mut word = TaggedLine::new();
+                    mem::swap(&mut word, &mut self.word);
+                    let mut wordbits = word.drain_all();
                     /* Note: there's always at least one piece */
                     let mut opt_elt = wordbits.next();
                     let mut lineleft = self.width;
@@ -377,13 +379,8 @@ impl<T: Clone + Eq + Debug + Default> WrappedBlock<T> {
                                     s: piece.s[..split_idx].into(),
                                     tag: piece.tag.clone(),
                                 }));
-                                {
-                                    let mut tmp_line = TaggedLine::new();
-                                    mem::swap(&mut tmp_line, &mut self.line);
-                                    self.text.push(tmp_line);
-                                }
+                                self.force_flush_line();
                                 lineleft = self.width;
-                                self.linelen = 0;
                                 html_trace!("linelen set to zero here");
                                 opt_elt = Some(Str(TaggedString {
                                     s: piece.s[split_idx..].into(),
@@ -411,6 +408,14 @@ impl<T: Clone + Eq + Debug + Default> WrappedBlock<T> {
     fn force_flush_line(&mut self) {
         let mut tmp_line = TaggedLine::new();
         mem::swap(&mut tmp_line, &mut self.line);
+        let tmp_tag;
+        let tag = if let Some(st) = self.spacetag.as_ref() {
+            st
+        } else {
+            tmp_tag = Default::default();
+            &tmp_tag
+        };
+        tmp_line.pad_to(self.width, tag);
         self.text.push(tmp_line);
         self.linelen = 0;
     }
@@ -447,11 +452,11 @@ impl<T: Clone + Eq + Debug + Default> WrappedBlock<T> {
 
     pub fn add_text(&mut self, text: &str, tag: &T) -> Result<(), Error> {
         html_trace!("WrappedBlock::add_text({}), {:?}", text, tag);
+        self.spacetag = Some(tag.clone());
         for c in text.chars() {
             if c.is_whitespace() {
                 /* Whitespace is mostly ignored, except to terminate words. */
                 self.flush_word()?;
-                self.spacetag = Some(tag.clone());
             } else if let Some(charwidth) = UnicodeWidthChar::width(c) {
                 /* Not whitespace; add to the current word. */
                 self.word.push_char(c, tag);
@@ -1211,7 +1216,7 @@ impl<D: TextDecorator> Renderer for SubRenderer<D> {
                         .map(|mut line| {
                             match line {
                                 RenderLine::Text(ref mut tline) => {
-                                    tline.pad_to(width);
+                                    tline.pad_to(width, &self.ann_stack);
                                 }
                                 RenderLine::Line(ref mut border) => {
                                     border.stretch_to(width);
