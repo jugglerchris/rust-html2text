@@ -720,9 +720,12 @@ fn table_to_render_tree<'a, 'b, T: Write>(
                 html_trace!("Found in table: {:?}", bodynode.info);
             }
         }
-        Ok(Some(RenderNode::new(RenderNodeInfo::Table(RenderTable::new(
-            rows,
-        )))))
+        if rows.is_empty() {
+            Ok(None)
+        } else {
+            Ok(Some(RenderNode::new(RenderNodeInfo::Table(RenderTable::new(
+                                rows)))))
+        }
     })
 }
 
@@ -731,7 +734,7 @@ fn tbody_to_render_tree<'a, 'b, T: Write>(
     handle: Handle,
     _err_out: &'b mut T,
 ) -> TreeMapResult<'a, HtmlContext, Handle, RenderNode> {
-    pending(handle, |_, rowchildren| {
+    pending_noempty(handle, |_, rowchildren| {
         let mut rows = rowchildren
             .into_iter()
             .flat_map(|rownode| {
@@ -1038,6 +1041,24 @@ where
     }
 }
 
+fn pending_noempty<'a, F>(handle: Handle, f: F) -> TreeMapResult<'a, HtmlContext, Handle, RenderNode>
+where
+    for<'r> F: Fn(&'r mut HtmlContext, std::vec::Vec<RenderNode>) -> Result<Option<RenderNode>> + 'static,
+{
+    TreeMapResult::PendingChildren {
+        children: handle.children.borrow().clone(),
+        cons: Box::new(move |ctx, children| {
+            if children.is_empty() {
+                Ok(None)
+            } else {
+                f(ctx, children)
+            }
+        }),
+        prefn: None,
+        postfn: None,
+    }
+}
+
 /// Prepend a FragmentStart (or analogous) marker to an existing
 /// RenderNode.
 fn prepend_marker(prefix: RenderNode, mut orig: RenderNode) -> RenderNode {
@@ -1160,7 +1181,7 @@ fn process_dom_node<'a, 'b, 'c, T: Write>(
                 }
                 expanded_name!(html "span") => {
                     /* process children, but don't add anything */
-                    pending(handle, |_, cs| Ok(Some(RenderNode::new(Container(cs)))))
+                    pending_noempty(handle, |_, cs| Ok(Some(RenderNode::new(Container(cs)))))
                 }
                 #[cfg(feature = "css")]
                 expanded_name!(html "font") => {
@@ -1178,9 +1199,9 @@ fn process_dom_node<'a, 'b, 'c, T: Write>(
                         }
                     }
                     if let Some(colour) = colour {
-                        pending(handle, move |_, cs| Ok(Some(RenderNode::new(Coloured(colour, vec![RenderNode::new(Container(cs))])))))
+                        pending_noempty(handle, move |_, cs| Ok(Some(RenderNode::new(Coloured(colour, vec![RenderNode::new(Container(cs))])))))
                     } else {
-                        pending(handle, |_, cs| Ok(Some(RenderNode::new(Container(cs)))))
+                        pending_noempty(handle, |_, cs| Ok(Some(RenderNode::new(Container(cs)))))
                     }
                 }
                 expanded_name!(html "a") => {
@@ -1257,13 +1278,13 @@ fn process_dom_node<'a, 'b, 'c, T: Write>(
                     })
                 }
                 expanded_name!(html "p") => {
-                    pending(handle, |_, cs| Ok(Some(RenderNode::new(Block(cs)))))
+                    pending_noempty(handle, |_, cs| Ok(Some(RenderNode::new(Block(cs)))))
                 }
                 expanded_name!(html "li") => {
                     pending(handle, |_, cs| Ok(Some(RenderNode::new(ListItem(cs)))))
                 }
                 expanded_name!(html "div") => {
-                    pending(handle, |_, cs| Ok(Some(RenderNode::new(Div(cs)))))
+                    pending_noempty(handle, |_, cs| Ok(Some(RenderNode::new(Div(cs)))))
                 }
                 expanded_name!(html "pre") => {
                     pending(handle, |_, cs| Ok(Some(RenderNode::new(Pre(cs)))))
@@ -1278,10 +1299,10 @@ fn process_dom_node<'a, 'b, 'c, T: Write>(
                     td_to_render_tree(handle.clone(), err_out)
                 }
                 expanded_name!(html "blockquote") => {
-                    pending(handle, |_, cs| Ok(Some(RenderNode::new(BlockQuote(cs)))))
+                    pending_noempty(handle, |_, cs| Ok(Some(RenderNode::new(BlockQuote(cs)))))
                 }
                 expanded_name!(html "ul") => {
-                    pending(handle, |_, cs| Ok(Some(RenderNode::new(Ul(cs)))))
+                    pending_noempty(handle, |_, cs| Ok(Some(RenderNode::new(Ul(cs)))))
                 }
                 expanded_name!(html "ol") => {
                     let borrowed = attrs.borrow();
@@ -1293,7 +1314,7 @@ fn process_dom_node<'a, 'b, 'c, T: Write>(
                         }
                     }
 
-                    pending(handle, move |_, cs| {
+                    pending_noempty(handle, move |_, cs| {
                         dbg!(&cs);
                         let cs = cs.into_iter()
                             .filter(|n| match &n.info {
@@ -1310,7 +1331,7 @@ fn process_dom_node<'a, 'b, 'c, T: Write>(
                 ))),
                 _ => {
                     html_trace!("Unhandled element: {:?}\n", name.local);
-                    pending(handle, |_, cs| Ok(Some(RenderNode::new(Container(cs)))))
+                    pending_noempty(handle, |_, cs| Ok(Some(RenderNode::new(Container(cs)))))
                     //None
                 }
             };
@@ -1741,6 +1762,10 @@ fn render_table_tree<T: Write, D: TextDecorator>(
                 .count()
                 .saturating_sub(1)
     };
+
+    if table_width == 0 {
+        return Ok(TreeMapResult::Nothing);
+    }
 
     renderer.add_horizontal_border_width(table_width)?;
 

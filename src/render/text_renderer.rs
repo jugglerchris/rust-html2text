@@ -840,6 +840,15 @@ impl<T: PartialEq + Eq + Clone + Debug + Default> RenderLine<T> {
             RenderLine::Line(border) => border.to_string(),
         }
     }
+
+    /// Return whether this line has any text content
+    /// Borders do not count as text.
+    fn has_content(&self) -> bool {
+        match self {
+            RenderLine::Text(line) => !line.is_empty(),
+            RenderLine::Line(_) => false,
+        }
+    }
 }
 
 /// A renderer which just outputs plain text with
@@ -973,7 +982,7 @@ impl<D: TextDecorator> SubRenderer<D> {
 
     #[cfg(feature = "html_trace")]
     /// Returns a string of the current builder contents (for testing).
-    fn to_string(&self) -> String {
+    pub fn to_string(&self) -> String {
         let mut result = String::new();
         for line in &self.lines {
             result += &line.to_string();
@@ -1079,7 +1088,13 @@ impl<D: TextDecorator> Renderer for SubRenderer<D> {
     fn start_block(&mut self) -> crate::Result<()> {
         html_trace!("start_block({})", self.width);
         self.flush_all()?;
-        if !self.lines.is_empty() {
+        if self.lines.iter().any(|l| l.has_content()) {
+            /*
+            eprintln!("Starting block, lines not empty");
+            for line in &self.lines {
+                dbg!(line);
+            }
+            */
             self.add_empty_line()?;
         }
         html_trace_quiet!("start_block; at_block_end <- false");
@@ -1231,7 +1246,7 @@ impl<D: TextDecorator> Renderer for SubRenderer<D> {
     {
         use self::TaggedLineElement::Str;
         html_trace!("append_columns_with_borders(collapse={})", collapse);
-        html_trace!("self=\n{}", self.to_string());
+        html_trace!("self=<<<\n{}>>>", self.to_string());
 
         self.flush_wrapping()?;
 

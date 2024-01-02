@@ -190,7 +190,7 @@ fn main() {
 
     match outfile {
         None => {
-            println!("{}", data);
+            print!("{}", data);
         }
         Some(name) => {
             let mut file = std::fs::File::create(name).expect("Tried to create file");
