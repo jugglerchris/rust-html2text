@@ -288,10 +288,11 @@ struct WrappedBlock<T> {
     word: TaggedLine<T>, // The current word (with no whitespace).
     wordlen: usize,
     pre_wrapped: bool, // If true, we've been forced to wrap a <pre> line.
+    pad_blocks: bool,
 }
 
 impl<T: Clone + Eq + Debug + Default> WrappedBlock<T> {
-    pub fn new(width: usize) -> WrappedBlock<T> {
+    pub fn new(width: usize, pad_blocks: bool) -> WrappedBlock<T> {
         WrappedBlock {
             width,
             text: Vec::new(),
@@ -302,6 +303,7 @@ impl<T: Clone + Eq + Debug + Default> WrappedBlock<T> {
             word: TaggedLine::new(),
             wordlen: 0,
             pre_wrapped: false,
+            pad_blocks,
         }
     }
 
@@ -408,14 +410,16 @@ impl<T: Clone + Eq + Debug + Default> WrappedBlock<T> {
     fn force_flush_line(&mut self) {
         let mut tmp_line = TaggedLine::new();
         mem::swap(&mut tmp_line, &mut self.line);
-        let tmp_tag;
-        let tag = if let Some(st) = self.spacetag.as_ref() {
-            st
-        } else {
-            tmp_tag = Default::default();
-            &tmp_tag
-        };
-        tmp_line.pad_to(self.width, tag);
+        if self.pad_blocks {
+            let tmp_tag;
+            let tag = if let Some(st) = self.spacetag.as_ref() {
+                st
+            } else {
+                tmp_tag = Default::default();
+                &tmp_tag
+            };
+            tmp_line.pad_to(self.width, tag);
+        }
         self.text.push(tmp_line);
         self.linelen = 0;
     }
@@ -452,11 +456,11 @@ impl<T: Clone + Eq + Debug + Default> WrappedBlock<T> {
 
     pub fn add_text(&mut self, text: &str, tag: &T) -> Result<(), Error> {
         html_trace!("WrappedBlock::add_text({}), {:?}", text, tag);
-        self.spacetag = Some(tag.clone());
         for c in text.chars() {
             if c.is_whitespace() {
                 /* Whitespace is mostly ignored, except to terminate words. */
                 self.flush_word()?;
+        self.spacetag = Some(tag.clone());
             } else if let Some(charwidth) = UnicodeWidthChar::width(c) {
                 /* Not whitespace; add to the current word. */
                 self.word.push_char(c, tag);
@@ -827,7 +831,7 @@ impl<T: PartialEq + Eq + Clone + Debug + Default> RenderLine<T> {
 #[derive(Clone)]
 pub struct SubRenderer<D: TextDecorator> {
     width: usize,
-    wrap_width: Option<usize>,
+    options: RenderOptions,
     lines: LinkedList<RenderLine<Vec<D::Annotation>>>,
     /// True at the end of a block, meaning we should add
     /// a blank line if any other text is added.
@@ -852,6 +856,21 @@ impl<D: TextDecorator + Debug> std::fmt::Debug for SubRenderer<D> {
     }
 }
 
+/// Rendering options.
+#[derive(Clone, Default)]
+#[non_exhaustive]
+pub struct RenderOptions {
+    /// The maximum text wrap width.  If set, paragraphs of text will only be wrapped
+    /// to that width or less, though the overall width can be larger (e.g. for indented
+    /// blocks or side-by-side table cells).
+    pub wrap_width: Option<usize>,
+
+    /// Whether to always pad lines out to the full width.
+    /// This may give a better output when the parent block
+    /// has a background colour set.
+    pub pad_block_width: bool,
+}
+
 impl<D: TextDecorator> SubRenderer<D> {
     /// Render links as lines
     pub fn finalise(&mut self, links: Vec<String>) -> Vec<TaggedLine<D::Annotation>> {
@@ -859,11 +878,11 @@ impl<D: TextDecorator> SubRenderer<D> {
     }
 
     /// Construct a new empty SubRenderer.
-    pub fn new(width: usize, wrap_width: Option<usize>, decorator: D) -> SubRenderer<D> {
+    pub fn new(width: usize, options: RenderOptions, decorator: D) -> SubRenderer<D> {
         html_trace!("new({})", width);
         SubRenderer {
             width,
-            wrap_width,
+            options,
             lines: LinkedList::new(),
             at_block_end: false,
             wrapping: None,
@@ -876,11 +895,11 @@ impl<D: TextDecorator> SubRenderer<D> {
 
     fn ensure_wrapping_exists(&mut self) {
         if self.wrapping.is_none() {
-            let wwidth = match self.wrap_width {
+            let wwidth = match self.options.wrap_width {
                 Some(ww) => ww.min(self.width),
                 None => self.width
             };
-            self.wrapping = Some(WrappedBlock::new(wwidth));
+            self.wrapping = Some(WrappedBlock::new(wwidth, self.options.pad_block_width));
         }
     }
 
@@ -1035,7 +1054,7 @@ impl<D: TextDecorator> Renderer for SubRenderer<D> {
         if width < 1 {
             return Err(Error::TooNarrow);
         }
-        let mut result = SubRenderer::new(width, self.wrap_width, self.decorator.make_subblock_decorator());
+        let mut result = SubRenderer::new(width, self.options.clone(), self.decorator.make_subblock_decorator());
         // Copy the annotation stack
         result.ann_stack = self.ann_stack.clone();
         Ok(result)

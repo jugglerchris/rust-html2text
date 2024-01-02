@@ -1689,7 +1689,7 @@ Test.
 End.
 </pre>"#;
     let decorator = crate::render::text_renderer::TrivialDecorator::new();
-    let text = from_read_with_decorator(html.as_bytes(), usize::MAX, decorator.clone());
+    let text = from_read_with_decorator(html.as_bytes(), 20, decorator.clone());
     assert_eq!(text, "Test.\n\n\nEnd.\n");
 }
 

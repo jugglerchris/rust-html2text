@@ -68,7 +68,7 @@ pub mod render;
 pub mod css;
 
 use render::text_renderer::{
-    PlainDecorator, RenderLine, RichAnnotation, RichDecorator, SubRenderer, TaggedLine,
+    PlainDecorator, RenderLine, RichAnnotation, RichDecorator, SubRenderer, TaggedLine, RenderOptions,
     TextDecorator, TextRenderer,
 };
 use render::Renderer;
@@ -997,6 +997,7 @@ struct HtmlContext {
     use_doc_css: bool,
 
     max_wrap_width: Option<usize>,
+    pad_block_width: bool,
 }
 
 fn dom_to_render_tree_with_context<T: Write>(
@@ -1835,6 +1836,8 @@ pub mod config {
         style: StyleData,
         #[cfg(feature = "css")]
         use_doc_css: bool,
+
+        pad_block_width: bool,
     }
 
     impl<D: TextDecorator> Config<D> {
@@ -1847,6 +1850,7 @@ pub mod config {
                 use_doc_css: self.use_doc_css,
 
                 max_wrap_width: self.max_wrap_width,
+                pad_block_width: self.pad_block_width,
             }
         }
         /// Parse with context.
@@ -1932,6 +1936,12 @@ pub mod config {
             self
         }
 
+        /// Pad lines out to the full render width.
+        pub fn pad_block_width(mut self) -> Self {
+            self.pad_block_width = true;
+            self
+        }
+
         /// Set the maximum text wrap width.
         /// When set, paragraphs will be wrapped to that width even if there
         /// is more total width available for rendering.
@@ -2009,6 +2019,7 @@ pub mod config {
             #[cfg(feature = "css")]
             use_doc_css: false,
             max_wrap_width: None,
+            pad_block_width: false,
         }
     }
 
@@ -2021,6 +2032,7 @@ pub mod config {
             #[cfg(feature = "css")]
             use_doc_css: false,
             max_wrap_width: None,
+            pad_block_width: false,
         }
     }
 
@@ -2033,6 +2045,7 @@ pub mod config {
             #[cfg(feature = "css")]
             use_doc_css: false,
             max_wrap_width: None,
+            pad_block_width: false,
         }
     }
 }
@@ -2050,7 +2063,10 @@ impl RenderTree {
         if width == 0 {
             return Err(Error::TooNarrow);
         }
-        let builder = SubRenderer::new(width, context.max_wrap_width, decorator);
+        let mut render_options = RenderOptions::default();
+        render_options.wrap_width = context.max_wrap_width;
+        render_options.pad_block_width = context.pad_block_width;
+        let builder = SubRenderer::new(width, render_options, decorator);
         let builder = render_tree_to_string(builder, self.0, &mut Discard {})?;
         Ok(RenderedText(builder))
     }
