@@ -9,6 +9,16 @@ Possible log types:
 - `[fixed]` for any bug fixes.
 - `[security]` to invite users to upgrade in case of vulnerabilities.
 
+### 0.10.0
+
+- [added] Simple support for `<i>`, `<ins>`, and `<del>` (thanks sgtatham)
+- [added] Added background-color support
+- [fixed] CSS support didn't work in some places, such as `<td>` elements.
+- [added] Add support for `style` attributes.
+- [added] Styles apply to table borders
+- [changed] Update some dependencies
+- [fixed] Fix a few places which caused excess blank lines or empty tables
+
 ### 0.9.4
 
 - [changed] Updated the termion dev-dependency to 2.0.

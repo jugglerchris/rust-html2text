@@ -96,14 +96,22 @@ read keys from stdin.
 
 ### CSS support
 
-When the `css` feature is enabled, some simple CSS handling is done.
+When the `css` feature is enabled, some simple CSS handling is available.
 
-* The contents of \<style\> elements are parsed and some colour rules are extracted
+Style rules are taken from:
+* If `Config::use_doc_css()` is called, then style from the document:
+  * `<style>` elements
+  * Inline `style` attributes (`<div style="...">`)
+  * `<font color=...>`
+* Independently of `use_doc_css`, extra rules can be added with `Config::add_css(...)`
+
+The following CSS features are implemented:
 * Basic selector matching (including child and descendents, classes and element
   types).
-* CSS colors will add `Coloured(...)` nodes to the render tree.
-* Rules with `display: none` will cause matching elements to be removed from the
-  render tree.
+* CSS colors (`color`/`background-color`) will add
+  `Coloured(...)`/`BgColoured(...)` nodes to the render tree.
+* Rules with `display: none` will cause matching elements to be removed from
+  the render tree.
 
 The CSS handling is expected to improve in future (PRs welcome), but not to a full-
 blown browser style system, which would be overkill for terminal output.
