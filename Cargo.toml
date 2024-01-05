@@ -23,7 +23,7 @@ backtrace = { version = "0.3", optional=true }
 thiserror = "1.0.50"
 lightningcss = { version = "1.0.0-alpha.51", optional=true }
 # Keep dashmap back; 5.5 has a higher MSRV.
-dashmap = "~5.4"
+dashmap = "~5.5"
 
 [features]
 html_trace = []
