@@ -184,18 +184,39 @@ pub(crate) fn parse_style_attribute(text: &str) -> Result<Vec<Style>> {
     Ok(styles_from_properties(&sattr.declarations))
 }
 
+fn is_transparent(color: &CssColor) -> bool {
+    match color {
+        CssColor::CurrentColor => false,
+        CssColor::RGBA(rgba) => {
+            rgba.alpha == 0
+        }
+        CssColor::LAB(_) => false,
+        CssColor::Predefined(_) => false,
+        CssColor::Float(_) => false,
+    }
+}
+
 fn styles_from_properties(decls: &DeclarationBlock<'_>) -> Vec<Style> {
     let mut styles = Vec::new();
     for decl in &decls.declarations {
         match decl {
             Property::Color(color) => {
+                if is_transparent(&color) {
+                    continue;
+                }
                 styles.push(Style::Colour(color.clone()));
             }
             Property::Background(bginfo) => {
                 let color = bginfo.last().unwrap().color.clone();
+                if is_transparent(&color) {
+                    continue;
+                }
                 styles.push(Style::BgColour(color));
             }
             Property::BackgroundColor(color) => {
+                if is_transparent(&color) {
+                    continue;
+                }
                 styles.push(Style::BgColour(color.clone()));
             }
             Property::Display(disp) => {
