@@ -9,6 +9,10 @@ Possible log types:
 - `[fixed]` for any bug fixes.
 - `[security]` to invite users to upgrade in case of vulnerabilities.
 
+### 0.10.2
+
+- [fixed] CSS: Ignore transparent colours.
+
 ### 0.10.1
 
 - [fixed] `max_width` was not working with some render methods.
