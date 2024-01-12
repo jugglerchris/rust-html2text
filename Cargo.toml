@@ -27,7 +27,7 @@ dashmap = "~5.4"
 
 [features]
 html_trace = []
-html_trace_bt = ["backtrace"]
+html_trace_bt = ["dep:backtrace"]
 default = []
 css = ["dep:lightningcss"]
 
