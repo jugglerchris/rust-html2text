@@ -386,7 +386,7 @@ impl<T: Clone + Eq + Debug + Default> WrappedBlock<T> {
                                         // Check if we've made no progress, for example
                                         // if the first character is 2 cells wide and we
                                         // only have a width of 1.
-                                        if idx == 0 {
+                                        if idx == 0 && self.line.width() == 0 {
                                             return Err(Error::TooNarrow);
                                         }
                                         split_idx = idx;

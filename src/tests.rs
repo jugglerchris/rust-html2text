@@ -46,6 +46,13 @@ fn test_colour_map(annotations: &[RichAnnotation], s: &str) -> String
                         tags = ("<R>", "</R>");
                     }
                     crate::Colour{
+                        r: 0xff,
+                        g: 0xff,
+                        b: 0xff
+                    } => {
+                        tags = ("<W>", "</W>");
+                    }
+                    crate::Colour{
                         r: 0,
                         g: 0xff,
                         b: 0
@@ -734,6 +741,76 @@ full screen width
       get text squashed
       too narrow
 "#, 80, 17);
+}
+
+#[test]
+fn test_wrap_word_boundaries() {
+    test_html(br#"Hello there boo"#,
+              "Hello there boo\n",
+              20);
+    test_html(br#"Hello there boo"#,
+              "Hello there boo\n",
+              15);
+    test_html(br#"Hello there boo"#,
+              "Hello there\nboo\n",
+              14);
+    test_html(br#"Hello there boo"#,
+              "Hello there\nboo\n",
+              13);
+    test_html(br#"Hello there boo"#,
+              "Hello there\nboo\n",
+              12);
+    test_html(br#"Hello there boo"#,
+              "Hello there\nboo\n",
+              11);
+    test_html(br#"Hello there boo"#,
+              "Hello\nthere boo\n",
+              10);
+    test_html(br#"Hello there boo"#,
+              "Hello\nthere\nboo\n",
+              6);
+    test_html(br#"Hello there boo"#,
+              "Hello\nthere\nboo\n",
+              5);
+    test_html(br#"Hello there boo"#,
+              "Hell\no\nther\ne\nboo\n",
+              4);
+    test_html(br#"Hello there boo"#,
+              "H\ne\nl\nl\no\nt\nh\ne\nr\ne\nb\no\no\n",
+              1);
+    test_html(br#"Hello <em>there</em> boo"#,
+              "Hello *there* boo\n",
+              20);
+    test_html(br#"Hello <em>there</em> boo"#,
+              "Hello *there*\nboo\n",
+              15);
+    test_html(br#"Hello <em>there</em> boo"#,
+              "Hello *there*\nboo\n",
+              14);
+    test_html(br#"Hello <em>there</em> boo"#,
+              "Hello *there*\nboo\n",
+              13);
+    test_html(br#"Hello <em>there</em> boo"#,
+              "Hello\n*there* boo\n",
+              12);
+    test_html(br#"Hello <em>there</em> boo"#,
+              "Hello\n*there* boo\n",
+              11);
+    test_html(br#"Hello <em>there</em> boo"#,
+              "Hello\n*there*\nboo\n",
+              10);
+    test_html(br#"Hello <em>there</em> boo"#,
+              "Hello\n*there\n* boo\n",
+              6);
+    test_html(br#"Hello <em>there</em> boo"#,
+              "Hello\n*ther\ne*\nboo\n",
+              5);
+    test_html(br#"Hello <em>there</em> boo"#,
+              "Hell\no\n*the\nre*\nboo\n",
+              4);
+    test_html(br#"Hello <em>there</em> boo"#,
+              "H\ne\nl\nl\no\n*\nt\nh\ne\nr\ne\n*\nb\no\no\n",
+              1);
 }
 
 #[test]
@@ -1940,4 +2017,46 @@ text
 "#);
     }
 
+    #[test]
+    fn test_wrap_word_boundaries() {
+        let html = br#"<head><style>em { color: white; }</style></head>
+            <body>
+                Hello *<em>there</em>* boo"#;
+        test_html_coloured(html,
+                  "Hello *<W>there</W>* boo\n",
+                  20);
+        test_html_coloured(html,
+                  "Hello *<W>there</W>*\nboo\n",
+                  15);
+        test_html_coloured(html,
+                  "Hello *<W>there</W>*\nboo\n",
+                  14);
+        test_html_coloured(html,
+                  "Hello *<W>there</W>*\nboo\n",
+                  13);
+        test_html_coloured(html,
+                  "Hello\n*<W>there</W>* boo\n",
+                  12);
+        test_html_coloured(html,
+                  "Hello\n*<W>there</W>* boo\n",
+                  11);
+        test_html_coloured(html,
+                  "Hello\n*<W>there</W>*\nboo\n",
+                  10);
+        test_html_coloured(html,
+                  "Hello\n*<W>there</W>*\nboo\n",
+                  7);
+        test_html_coloured(html,
+                  "Hello\n*<W>there</W>\n* boo\n",
+                  6);
+        test_html_coloured(html,
+                  "Hello\n*<W>ther</W>\n<W>e</W>*\nboo\n",
+                  5);
+        test_html_coloured(html,
+                  "Hell\no\n*<W>the</W>\n<W>re</W>*\nboo\n",
+                  4);
+        test_html_coloured(html,
+                  "H\ne\nl\nl\no\n*<W></W>\n<W>t</W>\n<W>h</W>\n<W>e</W>\n<W>r</W>\n<W>e</W>\n*\nb\no\no\n",
+                  1);
+    }
 }

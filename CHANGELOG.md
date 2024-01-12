@@ -9,6 +9,11 @@ Possible log types:
 - `[fixed]` for any bug fixes.
 - `[security]` to invite users to upgrade in case of vulnerabilities.
 
+### 0.10.3
+
+- [fixed] A panic on some unlucky text wrapping coincidences.
+- [fixed] Use dep:backtrace in Cargo.toml to avoid implicit feature.
+
 ### 0.10.2
 
 - [fixed] CSS: Ignore transparent colours.
