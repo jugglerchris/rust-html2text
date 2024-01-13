@@ -445,6 +445,8 @@ pub enum RenderNodeInfo {
     BgColoured(Colour, Vec<RenderNode>),
     /// A list item
     ListItem(Vec<RenderNode>),
+    /// Superscript text
+    Sup(Vec<RenderNode>),
 }
 
 /// Common fields from a node.
@@ -504,7 +506,7 @@ impl RenderNode {
 
             Container(ref v) | Em(ref v) | Strong(ref v) | Strikeout(ref v) | Code(ref v)
             | Block(ref v) | Div(ref v) | Pre(ref v) | BlockQuote(ref v) | Dl(ref v)
-            | Dt(ref v) | Dd(ref v) | ListItem(ref v) => v
+            | Dt(ref v) | Dd(ref v) | ListItem(ref v) | Sup(ref v) => v
                 .iter()
                 .map(RenderNode::get_size_estimate)
                 .fold(Default::default(), SizeEstimate::add),
@@ -585,7 +587,8 @@ impl RenderNode {
             | Dt(ref v)
             | Dd(ref v)
             | Ul(ref v)
-            | Ol(_, ref v) => v.is_empty(),
+            | Ol(_, ref v)
+            | Sup(ref v) => v.is_empty(),
             Header(_level, ref v) => v.is_empty(),
             Break => true,
             Table(ref _t) => false,
@@ -624,6 +627,7 @@ fn precalc_size_estimate<'a>(node: &'a RenderNode) -> Result<TreeMapResult<(), &
         | Dl(ref v)
         | Dt(ref v)
         | Dd(ref v)
+        | Sup(ref v)
         | Header(_, ref v) => TreeMapResult::PendingChildren {
             children: v.iter().collect(),
             cons: Box::new(move |_, _cs| {
@@ -1283,6 +1287,9 @@ fn process_dom_node<'a, 'b, 'c, T: Write>(
                 expanded_name!(html "li") => {
                     pending(handle, |_, cs| Ok(Some(RenderNode::new(ListItem(cs)))))
                 }
+                expanded_name!(html "sup") => {
+                    pending(handle, |_, cs| Ok(Some(RenderNode::new(Sup(cs)))))
+                }
                 expanded_name!(html "div") => {
                     pending_noempty(handle, |_, cs| Ok(Some(RenderNode::new(Div(cs)))))
                 }
@@ -1659,6 +1666,13 @@ fn do_render_node<'a, 'b, T: Write, D: TextDecorator>(
             renderer.push_bgcolour(colour);
             pending2(children, |renderer: &mut TextRenderer<D>, _| {
                 renderer.pop_bgcolour();
+                Ok(Some(None))
+            })
+        }
+        Sup(children) => {
+            renderer.start_superscript()?;
+            pending2(children, |renderer: &mut TextRenderer<D>, _| {
+                renderer.end_superscript()?;
                 Ok(Some(None))
             })
         }
