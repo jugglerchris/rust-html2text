@@ -1,13 +1,13 @@
 [package]
 name = "html2text"
-version = "0.10.3"
+version = "0.11.0"
 authors = ["Chris Emerson <github@mail.nosreme.org>"]
 description = "Render HTML as plain text."
 repository = "https://github.com/jugglerchris/rust-html2text/"
 readme = "README.md"
 documentation = "https://docs.rs/html2text/"
 edition = "2021"
-rust-version = "1.60"
+rust-version = "1.63"
 categories = ["text-processing"]
 
 keywords = ["html", "text"]
@@ -24,10 +24,11 @@ thiserror = "1.0.50"
 lightningcss = { version = "1.0.0-alpha.51", optional=true }
 # Keep dashmap back; 5.5 has a higher MSRV.
 dashmap = "~5.4"
+log = { version = "0.4.20", optional = true }
 
 [features]
-html_trace = []
-html_trace_bt = ["dep:backtrace"]
+html_trace = ["dep:log"]
+html_trace_bt = ["html_trace", "dep:backtrace"]
 default = []
 css = ["dep:lightningcss"]
 
@@ -40,7 +41,9 @@ name = "html2text"
 path = "examples/html2text.rs"
 
 [dev-dependencies]
+env_logger = "0.10.1"
 argparse = "0.2.2"
+log = "0.4.20"
 
 [target.'cfg(unix)'.dev-dependencies]
 termion = "2.0"

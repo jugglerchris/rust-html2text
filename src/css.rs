@@ -178,10 +178,13 @@ pub struct StyleData {
 }
 
 pub(crate) fn parse_style_attribute(text: &str) -> Result<Vec<Style>> {
+    html_trace_quiet!("Parsing inline style: {text}");
     let sattr = StyleAttribute::parse(text, ParserOptions::default())
         .map_err(|_| crate::Error::CssParseError)?;
 
-    Ok(styles_from_properties(&sattr.declarations))
+    let styles = styles_from_properties(&sattr.declarations);
+    html_trace_quiet!("Parsed inline style: {:?}", styles);
+    Ok(styles)
 }
 
 fn is_transparent(color: &CssColor) -> bool {
@@ -198,7 +201,9 @@ fn is_transparent(color: &CssColor) -> bool {
 
 fn styles_from_properties(decls: &DeclarationBlock<'_>) -> Vec<Style> {
     let mut styles = Vec::new();
-    for decl in &decls.declarations {
+    html_trace_quiet!("styles:from_properties: {decls:?}");
+    for decl in decls.declarations.iter().chain(decls.important_declarations.iter()) {
+        html_trace_quiet!("styles:from_properties: {decl:?}");
         match decl {
             Property::Color(color) => {
                 if is_transparent(&color) {
@@ -224,7 +229,9 @@ fn styles_from_properties(decls: &DeclarationBlock<'_>) -> Vec<Style> {
                     styles.push(Style::DisplayNone);
                 }
             }
-            _ => {}
+            _ => {
+                html_trace_quiet!("CSS: Unhandled property {:?}", decl);
+            }
         }
     }
     styles
@@ -245,12 +252,15 @@ impl StyleData {
                         for selector in &style.selectors.0 {
                             match Selector::try_from(selector) {
                                 Ok(selector) => {
-                                    self.rules.push(Ruleset {
+                                    let ruleset = Ruleset {
                                         selector,
                                         styles: styles.clone()
-                                    });
+                                    };
+                                    html_trace_quiet!("Adding ruleset {ruleset:?}");
+                                    self.rules.push(ruleset);
                                 }
                                 Err(_) => {
+                                    html_trace!("Ignoring selector {:?}", selector);
                                     continue;
                                 }
                             }
@@ -322,7 +332,7 @@ fn combine_vecs(vecs: Vec<Vec<String>>) -> Vec<String> {
 
 fn extract_style_nodes<'a, 'b, T: Write>(
     handle: Handle,
-    err_out: &'b mut T,
+    _err_out: &'b mut T,
 ) -> TreeMapResult<'a, (), Handle, Vec<String>> {
     use TreeMapResult::*;
 
@@ -345,9 +355,7 @@ fn extract_style_nodes<'a, 'b, T: Write>(
                     Finished(vec![result])
                 }
                 _ => {
-                    html_trace!("Unhandled element: {:?}\n", name.local);
                     pending(handle, |_, cs| Ok(Some(combine_vecs(cs))))
-                    //None
                 }
             }
         }
@@ -356,7 +364,6 @@ fn extract_style_nodes<'a, 'b, T: Write>(
         }
         _ => {
             // NodeData doesn't have a Debug impl.
-            write!(err_out, "Unhandled node type.\n").unwrap();
             Nothing
         }
     }

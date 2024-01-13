@@ -9,6 +9,12 @@ Possible log types:
 - `[fixed]` for any bug fixes.
 - `[security]` to invite users to upgrade in case of vulnerabilities.
 
+### 0.11.0
+
+- [fixed] CSS: rules marked !important were ignored.
+- [changed] html\_trace feature now uses the `log` crate.
+- [changed] Bumped MSRV to 1.63 (matching Debian stable) due to some dependencies.
+
 ### 0.10.3
 
 - [fixed] A panic on some unlucky text wrapping coincidences.
