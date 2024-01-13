@@ -20,9 +20,9 @@ jobs:
       - run: cargo --version
       - run: cargo build --features=css
       - run: cargo test --features=css
-  build-1-60:
+  build-1-63:
     docker:
-      - image: cimg/rust:1.60
+      - image: cimg/rust:1.63
     steps:
       - checkout
       - run: cargo --version
@@ -63,5 +63,5 @@ workflows:
     jobs:
       - "build-stable"
       - "build-css"
-      - "build-1-60"
+      - "build-1-63"
       - "build-windows"
