@@ -5,6 +5,7 @@ use html2text::config::{Config, self};
 use html2text::render::text_renderer::{TextDecorator, TrivialDecorator};
 use std::io;
 use std::io::Write;
+use log::trace;
 
 #[cfg(unix)]
 use html2text::render::text_renderer::RichAnnotation;
@@ -19,6 +20,7 @@ fn default_colour_map(annotations: &[RichAnnotation], s: &str) -> String {
     let mut have_explicit_colour = false;
     let mut start = Vec::new();
     let mut finish = Vec::new();
+    trace!("default_colour_map: str={s}, annotations={annotations:?}");
     for annotation in annotations.iter() {
         match annotation {
             Default => {}
@@ -79,6 +81,7 @@ fn default_colour_map(annotations: &[RichAnnotation], s: &str) -> String {
     for s in finish {
         result.push_str(&s);
     }
+    trace!("default_colour_map: output={result}");
     result
 }
 
@@ -129,6 +132,9 @@ struct Flags {
 }
 
 fn main() {
+    #[cfg(feature = "html_trace")]
+    env_logger::init();
+
     let mut infile: Option<String> = None;
     let mut outfile: Option<String> = None;
     let mut flags = Flags {

@@ -17,22 +17,22 @@ macro_rules! html_trace {
          #[cfg(feature = "html_trace_bt")]
          {
              let bt = ::backtrace::Backtrace::new();
-             eprintln!( concat!($fmt, " at {:?}"), bt );
+             log::info!( concat!($fmt, " at {:?}"), bt );
          }
          #[cfg(not(feature = "html_trace_bt"))]
          {
-             eprintln!($fmt);
+             log::info!($fmt);
          }
     };
     ($fmt:expr, $( $args:expr ),*) => {
          #[cfg(feature = "html_trace_bt")]
          {
              let bt = ::backtrace::Backtrace::new();
-             eprintln!( concat!($fmt, " at {:?}"), $( $args ),* , bt );
+             log::info!( concat!($fmt, " at {:?}"), $( $args ),* , bt );
          }
          #[cfg(not(feature = "html_trace_bt"))]
          {
-             eprintln!($fmt, $( $args ),*);
+             log::info!($fmt, $( $args ),*);
          }
     };
 }
@@ -53,10 +53,10 @@ macro_rules! html_trace {
 #[doc(hidden)]
 macro_rules! html_trace_quiet {
     ($fmt:expr) => {
-         eprintln!( $fmt );
+         log::trace!( $fmt );
     };
     ($fmt:expr, $( $args:expr ),*) => {
-         eprintln!( $fmt, $( $args ),* );
+         log::trace!( $fmt, $( $args ),* );
     };
 }
 

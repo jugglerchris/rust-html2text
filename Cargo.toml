@@ -24,11 +24,12 @@ thiserror = "1.0.50"
 lightningcss = { version = "1.0.0-alpha.51", optional=true }
 # Keep dashmap back; 5.5 has a higher MSRV.
 dashmap = "~5.4"
+log = { version = "0.4.20", optional = true }
 
 [features]
-html_trace = []
-html_trace_bt = ["dep:backtrace"]
-default = []
+html_trace = ["dep:log"]
+html_trace_bt = ["html_trace", "dep:backtrace"]
+default = ["css", "html_trace"]
 css = ["dep:lightningcss"]
 
 [[example]]
@@ -40,6 +41,7 @@ name = "html2text"
 path = "examples/html2text.rs"
 
 [dev-dependencies]
+env_logger = { version = "0.10.1" }
 argparse = "0.2.2"
 
 [target.'cfg(unix)'.dev-dependencies]
