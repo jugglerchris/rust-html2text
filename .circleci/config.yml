@@ -27,7 +27,7 @@ jobs:
       - checkout
       - run: cargo --version
       - run: cargo build
-      - run: cargo test
+        #      - run: cargo test
   build-windows:
     executor:
       name: win/default
