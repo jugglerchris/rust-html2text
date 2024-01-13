@@ -43,6 +43,7 @@ path = "examples/html2text.rs"
 [dev-dependencies]
 env_logger = { version = "0.10.1" }
 argparse = "0.2.2"
+log = "0.4.20"
 
 [target.'cfg(unix)'.dev-dependencies]
 termion = "2.0"
