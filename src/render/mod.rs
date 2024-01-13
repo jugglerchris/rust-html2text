@@ -143,4 +143,10 @@ pub trait Renderer {
 
     /// Pop the last background colour
     fn pop_bgcolour(&mut self);
+
+    /// Start a section of superscript text.
+    fn start_superscript(&mut self) -> crate::Result<()>;
+
+    /// End a section of superscript text.
+    fn end_superscript(&mut self) -> crate::Result<()>;
 }

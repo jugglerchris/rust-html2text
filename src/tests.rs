@@ -1819,6 +1819,12 @@ fn test_issue_93_x() {
     let _local1 = crate::RenderTree::render(_local0, 1, d1);
 }
 
+#[test]
+fn test_superscript() {
+    test_html(br#"Exponential x<sup>y</sup>"#, "Exponential x^{y}\n", 80);
+    test_html(br#"Exponential 2<sup>32</sup>"#, "Exponential 2³²\n", 80);
+}
+
 #[cfg(feature = "css")]
 mod css_tests {
     use super::{test_html_css, test_html_style, test_html_coloured};

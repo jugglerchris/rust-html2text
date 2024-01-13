@@ -656,6 +656,16 @@ pub trait TextDecorator {
         false
     }
 
+    /// Return an annotation and rendering prefix for superscript text
+    fn decorate_superscript_start(&mut self) -> (String, Self::Annotation) {
+        ("^{".into(), Default::default())
+    }
+
+    /// Return a suffix for after a superscript.
+    fn decorate_superscript_end(&mut self) -> String {
+        "}".into()
+    }
+
     /// Finish with a document, and return extra lines (eg footnotes)
     /// to add to the rendered text.
     fn finalise(&mut self, links: Vec<String>) -> Vec<TaggedLine<Self::Annotation>>;
@@ -1566,6 +1576,19 @@ impl<D: TextDecorator> Renderer for SubRenderer<D> {
         if self.decorator.pop_bgcolour() {
             self.ann_stack.pop();
         }
+    }
+
+    fn start_superscript(&mut self) -> crate::Result<()> {
+        let (s, annotation) = self.decorator.decorate_superscript_start();
+        self.ann_stack.push(annotation);
+        self.add_inline_text(&s)?;
+        Ok(())
+    }
+    fn end_superscript(&mut self) -> crate::Result<()> {
+        let s = self.decorator.decorate_superscript_end();
+        self.add_inline_text(&s)?;
+        self.ann_stack.pop();
+        Ok(())
     }
 }
 

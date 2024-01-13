@@ -445,6 +445,8 @@ pub enum RenderNodeInfo {
     BgColoured(Colour, Vec<RenderNode>),
     /// A list item
     ListItem(Vec<RenderNode>),
+    /// Superscript text
+    Sup(Vec<RenderNode>),
 }
 
 /// Common fields from a node.
@@ -504,7 +506,7 @@ impl RenderNode {
 
             Container(ref v) | Em(ref v) | Strong(ref v) | Strikeout(ref v) | Code(ref v)
             | Block(ref v) | Div(ref v) | Pre(ref v) | BlockQuote(ref v) | Dl(ref v)
-            | Dt(ref v) | Dd(ref v) | ListItem(ref v) => v
+            | Dt(ref v) | Dd(ref v) | ListItem(ref v) | Sup(ref v) => v
                 .iter()
                 .map(RenderNode::get_size_estimate)
                 .fold(Default::default(), SizeEstimate::add),
@@ -585,7 +587,8 @@ impl RenderNode {
             | Dt(ref v)
             | Dd(ref v)
             | Ul(ref v)
-            | Ol(_, ref v) => v.is_empty(),
+            | Ol(_, ref v)
+            | Sup(ref v) => v.is_empty(),
             Header(_level, ref v) => v.is_empty(),
             Break => true,
             Table(ref _t) => false,
@@ -624,6 +627,7 @@ fn precalc_size_estimate<'a>(node: &'a RenderNode) -> Result<TreeMapResult<(), &
         | Dl(ref v)
         | Dt(ref v)
         | Dd(ref v)
+        | Sup(ref v)
         | Header(_, ref v) => TreeMapResult::PendingChildren {
             children: v.iter().collect(),
             cons: Box::new(move |_, _cs| {
@@ -1283,6 +1287,9 @@ fn process_dom_node<'a, 'b, 'c, T: Write>(
                 expanded_name!(html "li") => {
                     pending(handle, |_, cs| Ok(Some(RenderNode::new(ListItem(cs)))))
                 }
+                expanded_name!(html "sup") => {
+                    pending(handle, |_, cs| Ok(Some(RenderNode::new(Sup(cs)))))
+                }
                 expanded_name!(html "div") => {
                     pending_noempty(handle, |_, cs| Ok(Some(RenderNode::new(Div(cs)))))
                 }
@@ -1661,6 +1668,38 @@ fn do_render_node<'a, 'b, T: Write, D: TextDecorator>(
                 renderer.pop_bgcolour();
                 Ok(Some(None))
             })
+        }
+        Sup(children) => {
+            // Special case for digit-only superscripts - use superscript
+            // characters.
+            fn sup_digits(children: &Vec<RenderNode>) -> Option<String> {
+                if children.len() != 1 {
+                    return None;
+                }
+                if let Text(s) = &children[0].info {
+                    if s.chars().all(|d| d.is_ascii_digit()) {
+                        // It's just a string of digits - replace by superscript characters.
+                        const SUPERSCRIPTS: [char; 10] = [
+                            '⁰', '¹', '²', '³', '⁴', '⁵', '⁶', '⁷', '⁸', '⁹'
+                        ];
+                        return Some(
+                            s.bytes()
+                             .map(|b| SUPERSCRIPTS[(b - b'0') as usize])
+                             .collect())
+                    }
+                }
+                None
+            }
+            if let Some(digitstr) = sup_digits(&children) {
+                renderer.add_inline_text(&digitstr)?;
+                Finished(None)
+            } else {
+                renderer.start_superscript()?;
+                pending2(children, |renderer: &mut TextRenderer<D>, _| {
+                    renderer.end_superscript()?;
+                    Ok(Some(None))
+                })
+            }
         }
     })
 }
