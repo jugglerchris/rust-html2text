@@ -201,7 +201,9 @@ fn is_transparent(color: &CssColor) -> bool {
 
 fn styles_from_properties(decls: &DeclarationBlock<'_>) -> Vec<Style> {
     let mut styles = Vec::new();
-    for decl in &decls.declarations {
+    html_trace_quiet!("styles:from_properties: {decls:?}");
+    for decl in decls.declarations.iter().chain(decls.important_declarations.iter()) {
+        html_trace_quiet!("styles:from_properties: {decl:?}");
         match decl {
             Property::Color(color) => {
                 if is_transparent(&color) {
