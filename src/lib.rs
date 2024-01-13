@@ -1670,11 +1670,36 @@ fn do_render_node<'a, 'b, T: Write, D: TextDecorator>(
             })
         }
         Sup(children) => {
-            renderer.start_superscript()?;
-            pending2(children, |renderer: &mut TextRenderer<D>, _| {
-                renderer.end_superscript()?;
-                Ok(Some(None))
-            })
+            // Special case for digit-only superscripts - use superscript
+            // characters.
+            fn sup_digits(children: &Vec<RenderNode>) -> Option<String> {
+                if children.len() != 1 {
+                    return None;
+                }
+                if let Text(s) = &children[0].info {
+                    if s.chars().all(|d| d.is_ascii_digit()) {
+                        // It's just a string of digits - replace by superscript characters.
+                        const SUPERSCRIPTS: [char; 10] = [
+                            '⁰', '¹', '²', '³', '⁴', '⁵', '⁶', '⁷', '⁸', '⁹'
+                        ];
+                        return Some(
+                            s.bytes()
+                             .map(|b| SUPERSCRIPTS[(b - b'0') as usize])
+                             .collect())
+                    }
+                }
+                None
+            }
+            if let Some(digitstr) = sup_digits(&children) {
+                renderer.add_inline_text(&digitstr)?;
+                Finished(None)
+            } else {
+                renderer.start_superscript()?;
+                pending2(children, |renderer: &mut TextRenderer<D>, _| {
+                    renderer.end_superscript()?;
+                    Ok(Some(None))
+                })
+            }
         }
     })
 }

@@ -1822,7 +1822,7 @@ fn test_issue_93_x() {
 #[test]
 fn test_superscript() {
     test_html(br#"Exponential x<sup>y</sup>"#, "Exponential x^{y}\n", 80);
-    test_html(br#"Exponential 2<sup>32</sup>"#, "Exponential 2^{32}\n", 80);
+    test_html(br#"Exponential 2<sup>32</sup>"#, "Exponential 2³²\n", 80);
 }
 
 #[cfg(feature = "css")]
