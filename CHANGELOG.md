@@ -9,6 +9,11 @@ Possible log types:
 - `[fixed]` for any bug fixes.
 - `[security]` to invite users to upgrade in case of vulnerabilities.
 
+### 0.10.4
+
+- [fixed] CSS: rules marked !important were ignored.
+- [changed] html\_trace feature now uses the `log` crate.
+
 ### 0.10.3
 
 - [fixed] A panic on some unlucky text wrapping coincidences.
