@@ -196,11 +196,20 @@ impl Default for SizeEstimate {
 }
 
 impl SizeEstimate {
-    /// Combine two estimates into one (add size and widest required)
+    /// Combine two estimates into one (add size and take the largest
+    /// min width)
     pub fn add(self, other: SizeEstimate) -> SizeEstimate {
         SizeEstimate {
             size: self.size + other.size,
             min_width: max(self.min_width, other.min_width),
+        }
+    }
+    /// Combine two estimates into one which need to be side by side.
+    /// The min widths are added.
+    pub fn add_hor(self, other: SizeEstimate) -> SizeEstimate {
+        SizeEstimate {
+            size: self.size + other.size,
+            min_width: self.min_width + other.min_width,
         }
     }
 
@@ -363,8 +372,8 @@ impl RenderTable {
                 for colnum in 0..cell.colspan {
                     sizes[colno + colnum].size += cellsize.size / cell.colspan;
                     sizes[colno + colnum].min_width = max(
-                        sizes[colno + colnum].min_width / cell.colspan,
-                        cellsize.min_width,
+                        sizes[colno + colnum].min_width,
+                        cellsize.min_width / cell.colspan,
                     );
                 }
                 colno += cell.colspan;
@@ -1005,6 +1014,8 @@ struct HtmlContext {
 
     max_wrap_width: Option<usize>,
     pad_block_width: bool,
+    allow_width_overflow: bool,
+    min_wrap_width: usize,
 }
 
 fn dom_to_render_tree_with_context<T: Write>(
@@ -1511,7 +1522,7 @@ fn do_render_node<'a, 'b, T: Write, D: TextDecorator>(
         }
         Header(level, children) => {
             let prefix = renderer.header_prefix(level);
-            let sub_builder = renderer.new_sub_renderer(renderer.width().checked_sub(prefix.len()).ok_or(Error::TooNarrow)?)?;
+            let sub_builder = renderer.new_sub_renderer(renderer.width_minus(prefix.len())?)?;
             renderer.push(sub_builder);
             pending2(children, move |renderer: &mut TextRenderer<D>, _| {
                 let sub_builder = renderer.pop();
@@ -1884,7 +1895,7 @@ pub mod config {
 
     use crate::{render::text_renderer::{
         PlainDecorator, RichDecorator, TaggedLine, TextDecorator, RichAnnotation
-    }, Result, RenderTree, HtmlContext};
+    }, Result, RenderTree, HtmlContext, MIN_WIDTH};
     #[cfg(feature = "css")]
     use crate::css::StyleData;
     use super::{Discard, Error};
@@ -1901,6 +1912,9 @@ pub mod config {
         use_doc_css: bool,
 
         pad_block_width: bool,
+
+        allow_width_overflow: bool,
+        min_wrap_width: usize,
     }
 
     impl<D: TextDecorator> Config<D> {
@@ -1914,6 +1928,8 @@ pub mod config {
 
                 max_wrap_width: self.max_wrap_width,
                 pad_block_width: self.pad_block_width,
+                allow_width_overflow: self.allow_width_overflow,
+                min_wrap_width: self.min_wrap_width,
             }
         }
         /// Parse with context.
@@ -2012,6 +2028,25 @@ pub mod config {
             self.max_wrap_width = Some(wrap_width);
             self
         }
+
+        /// Allow the output to be wider than the max width.  When enabled,
+        /// then output wider than the specified width will be returned
+        /// instead of returning `Err(TooNarrow)` if the output wouldn't
+        /// otherwise fit.
+        pub fn allow_width_overflow(mut self) -> Self {
+            self.allow_width_overflow = true;
+            self
+        }
+
+        /// Set the minimum width for text wrapping.  The default is 3.
+        /// Blocks of text will be forced to have at least this width
+        /// (unless the text inside is less than that).  Increasing this
+        /// can increase the chance that the width will overflow, leading
+        /// to a TooNarrow error unless `allow_width_overflow()` is set.
+        pub fn min_wrap_width(mut self, min_wrap_width: usize) -> Self {
+            self.min_wrap_width = min_wrap_width;
+            self
+        }
     }
 
     impl Config<RichDecorator> {
@@ -2083,6 +2118,8 @@ pub mod config {
             use_doc_css: false,
             max_wrap_width: None,
             pad_block_width: false,
+            allow_width_overflow: false,
+            min_wrap_width: MIN_WIDTH,
         }
     }
 
@@ -2096,6 +2133,8 @@ pub mod config {
             use_doc_css: false,
             max_wrap_width: None,
             pad_block_width: false,
+            allow_width_overflow: false,
+            min_wrap_width: MIN_WIDTH,
         }
     }
 
@@ -2109,6 +2148,8 @@ pub mod config {
             use_doc_css: false,
             max_wrap_width: None,
             pad_block_width: false,
+            allow_width_overflow: false,
+            min_wrap_width: MIN_WIDTH,
         }
     }
 }
@@ -2129,6 +2170,8 @@ impl RenderTree {
         let mut render_options = RenderOptions::default();
         render_options.wrap_width = context.max_wrap_width;
         render_options.pad_block_width = context.pad_block_width;
+        render_options.min_wrap_width = context.min_wrap_width;
+        render_options.allow_width_overflow = context.allow_width_overflow;
         let builder = SubRenderer::new(width, render_options, decorator);
         let builder = render_tree_to_string(builder, self.0, &mut Discard {})?;
         Ok(RenderedText(builder))

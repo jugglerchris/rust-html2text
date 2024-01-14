@@ -892,7 +892,7 @@ impl<D: TextDecorator + Debug> std::fmt::Debug for SubRenderer<D> {
 }
 
 /// Rendering options.
-#[derive(Clone, Default)]
+#[derive(Clone)]
 #[non_exhaustive]
 pub struct RenderOptions {
     /// The maximum text wrap width.  If set, paragraphs of text will only be wrapped
@@ -900,10 +900,28 @@ pub struct RenderOptions {
     /// blocks or side-by-side table cells).
     pub wrap_width: Option<usize>,
 
+    /// The minimum text width to use when wrapping.
+    pub min_wrap_width: usize,
+
+    /// If true, then allow the output to be wider than specified instead of returning
+    /// `Err(TooNarrow)`.
+    pub allow_width_overflow: bool,
+
     /// Whether to always pad lines out to the full width.
     /// This may give a better output when the parent block
     /// has a background colour set.
     pub pad_block_width: bool,
+}
+
+impl Default for RenderOptions {
+    fn default() -> Self {
+        Self {
+            wrap_width: Default::default(),
+            min_wrap_width: crate::MIN_WIDTH,
+            allow_width_overflow: Default::default(),
+            pad_block_width: Default::default()
+        }
+    }
 }
 
 impl<D: TextDecorator> SubRenderer<D> {
@@ -1058,6 +1076,16 @@ impl<D: TextDecorator> SubRenderer<D> {
         self.flush_wrapping()?;
         self.lines.push_back(RenderLine::Line(line));
         Ok(())
+    }
+
+    pub(crate) fn width_minus(&self, prefix_len: usize) -> crate::Result<usize> {
+        let new_width = self.width.saturating_sub(prefix_len);
+        if new_width < self.options.min_wrap_width {
+            if !self.options.allow_width_overflow {
+                return Err(Error::TooNarrow);
+            }
+        }
+        Ok(new_width.max(self.options.min_wrap_width))
     }
 }
 
