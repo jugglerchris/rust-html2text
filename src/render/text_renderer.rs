@@ -1078,14 +1078,14 @@ impl<D: TextDecorator> SubRenderer<D> {
         Ok(())
     }
 
-    pub(crate) fn width_minus(&self, prefix_len: usize) -> crate::Result<usize> {
+    pub(crate) fn width_minus(&self, prefix_len: usize, min_width: usize) -> crate::Result<usize> {
         let new_width = self.width.saturating_sub(prefix_len);
-        if new_width < self.options.min_wrap_width {
+        if new_width < min_width {
             if !self.options.allow_width_overflow {
                 return Err(Error::TooNarrow);
             }
         }
-        Ok(new_width.max(self.options.min_wrap_width))
+        Ok(new_width.max(min_width))
     }
 }
 
