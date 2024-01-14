@@ -362,7 +362,7 @@ impl RenderTable {
             .collect()
     }
 
-    fn calc_size_estimate(&self, context: &HtmlContext) -> SizeEstimate {
+    fn calc_size_estimate(&self, _context: &HtmlContext) -> SizeEstimate {
         if self.num_columns == 0 {
             let result = SizeEstimate {
                 size: 0,
@@ -489,7 +489,7 @@ impl RenderNode {
     }
 
     /// Calculate the size of this node.
-    pub fn calc_size_estimate(&self, context: &HtmlContext) -> SizeEstimate {
+    fn calc_size_estimate(&self, context: &HtmlContext) -> SizeEstimate {
         // If it's already calculated, then just return the answer.
         if let Some(s) = self.size_estimate.get() {
             return s;
