@@ -14,10 +14,12 @@ macro_rules! assert_eq_str {
         }
     };
 }
+#[track_caller]
 fn test_html(input: &[u8], expected: &str, width: usize) {
     let output = from_read(input, width);
     assert_eq_str!(output, expected);
 }
+#[track_caller]
 fn test_html_conf<F>(input: &[u8], expected: &str, width: usize, conf: F)
     where F: Fn(Config<PlainDecorator>) -> Config<PlainDecorator>
 {
@@ -25,6 +27,7 @@ fn test_html_conf<F>(input: &[u8], expected: &str, width: usize, conf: F)
         .string_from_read(input, width).unwrap();
     assert_eq_str!(result, expected);
 }
+#[track_caller]
 fn test_html_maxwrap(input: &[u8], expected: &str, width: usize, wrap_width: usize) {
     test_html_conf(input, expected, width, |conf| conf.max_wrap_width(wrap_width))
 }
@@ -98,6 +101,7 @@ fn test_colour_map(annotations: &[RichAnnotation], s: &str) -> String
 }
 
 #[cfg(feature = "css")]
+#[track_caller]
 fn test_html_coloured(input: &[u8], expected: &str, width: usize) {
     let result = config::rich()
         .use_doc_css()
@@ -124,6 +128,7 @@ fn test_html_err(input: &[u8], expected: Error, width: usize) {
 }
 
 #[cfg(feature = "css")]
+#[track_caller]
 fn test_html_style(input: &[u8], style: &str, expected: &str, width: usize) {
     let result = config::plain()
         .add_css(style)
@@ -132,6 +137,7 @@ fn test_html_style(input: &[u8], style: &str, expected: &str, width: usize) {
     assert_eq_str!(result, expected);
 }
 
+#[track_caller]
 fn test_html_decorator<D>(input: &[u8], expected: &str, width: usize, decorator: D)
 where
     D: TextDecorator,
