@@ -532,7 +532,7 @@ impl RenderNode {
 
             Container(ref v) | Em(ref v) | Strong(ref v) | Strikeout(ref v) | Code(ref v)
             | Block(ref v) | Div(ref v) | Pre(ref v) | Dl(ref v)
-            | Dt(ref v) | Dd(ref v) | ListItem(ref v) | Sup(ref v) => v
+            | Dt(ref v) | ListItem(ref v) | Sup(ref v) => v
                 .iter()
                 .map(recurse)
                 .fold(Default::default(), SizeEstimate::add),
@@ -545,16 +545,21 @@ impl RenderNode {
                     min_width: 5,
                     prefix_size: 0,
                 }),
+            Dd(ref v) |
             BlockQuote(ref v) | 
-            Ul(ref v) => v
-                .iter()
-                .map(recurse)
-                .fold(Default::default(), SizeEstimate::add)
-                .add_hor(SizeEstimate {
-                    size: 2,
-                    min_width: 2,
-                    prefix_size: 0,
-                }),
+            Ul(ref v) => {
+                let mut size =
+                    v.iter()
+                     .map(recurse)
+                     .fold(Default::default(), SizeEstimate::add)
+                     .add_hor(SizeEstimate {
+                         size: 2,
+                         min_width: 2,
+                         prefix_size: 0,
+                     });
+                size.prefix_size = 2;
+                size
+            }
             Ol(i, ref v) => {
                 let prefix_size = calc_ol_prefix_size(i, v.len());
                 let mut result =
