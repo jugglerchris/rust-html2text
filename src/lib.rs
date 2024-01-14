@@ -1551,7 +1551,7 @@ fn do_render_node<'a, 'b, T: Write, D: TextDecorator>(
         }
         BlockQuote(children) => {
             let prefix = renderer.quote_prefix();
-            let sub_builder = renderer.new_sub_renderer(renderer.width().checked_sub(prefix.len()).ok_or(Error::TooNarrow)?)?;
+            let sub_builder = renderer.new_sub_renderer(renderer.width_minus(prefix.len())?)?;
             renderer.push(sub_builder);
             pending2(children, move |renderer: &mut TextRenderer<D>, _| {
                 let sub_builder = renderer.pop();

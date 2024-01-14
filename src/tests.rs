@@ -1854,6 +1854,17 @@ fn test_header_overflow() {
     test_html_conf(html_hdr, "> ### Foo\n", 7, |c| c.min_wrap_width(3).allow_width_overflow());
 }
 
+#[test]
+fn test_blockquote_overflow() {
+    let html_hdr = br#"<blockquote><blockquote>Foo</blockquote></blockquote>"#;
+    test_html(html_hdr, "> > Foo\n", 20);
+    test_html_conf(html_hdr, "> > F\n> > o\n> > o\n", 5, |c| c.min_wrap_width(1));
+    test_html_err_conf(html_hdr, Error::TooNarrow, 3, |c| c.min_wrap_width(1));
+    test_html_err_conf(html_hdr, Error::TooNarrow, 4, |c| c.min_wrap_width(3));
+    test_html_conf(html_hdr, "> > F\n> > o\n> > o\n", 3, |c| c.min_wrap_width(1).allow_width_overflow());
+    test_html_conf(html_hdr, "> > Foo\n", 4, |c| c.min_wrap_width(3).allow_width_overflow());
+}
+
 #[cfg(feature = "css")]
 mod css_tests {
     use super::{test_html_css, test_html_style, test_html_coloured};
