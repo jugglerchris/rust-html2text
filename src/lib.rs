@@ -1572,7 +1572,7 @@ fn do_render_node<'a, 'b, T: Write, D: TextDecorator>(
                 children: items,
                 cons: Box::new(|_, _| Ok(Some(None))),
                 prefn: Some(Box::new(move |renderer: &mut TextRenderer<D>, _| {
-                    let sub_builder = renderer.new_sub_renderer(renderer.width().checked_sub(prefix_len).ok_or(Error::TooNarrow)?)?;
+                    let sub_builder = renderer.new_sub_renderer(renderer.width_minus(prefix_len)?)?;
                     renderer.push(sub_builder);
                     Ok(())
                 })),
