@@ -1692,7 +1692,8 @@ fn do_render_node<'a, 'b, T: Write, D: TextDecorator>(
             })
         }
         Dd(children) => {
-            let sub_builder = renderer.new_sub_renderer(renderer.width().checked_sub(2).ok_or(Error::TooNarrow)?)?;
+            let inner_min = size_estimate.min_width - 2;
+            let sub_builder = renderer.new_sub_renderer(renderer.width_minus(2, inner_min)?)?;
             renderer.push(sub_builder);
             pending2(children, |renderer: &mut TextRenderer<D>, _| {
                 let sub_builder = renderer.pop();

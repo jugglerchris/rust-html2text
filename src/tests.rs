@@ -1896,6 +1896,14 @@ fn test_dd_overflow() {
     test_html_err_conf(html_hdr, Error::TooNarrow, 4, |c| c.min_wrap_width(3));
     test_html_conf(html_hdr, "> *Foo*\n>   Hel\n>   lo\n", 4, |c| c.min_wrap_width(3).allow_width_overflow());
 }
+
+#[test]
+fn test_overflow_wide_char() {
+    // The smiley is a width-2 character.
+    let html = "😃".as_bytes();
+    test_html_err_conf(html, Error::TooNarrow, 1, |c| c.min_wrap_width(1));
+    test_html_conf(html, "😃\n", 1, |c| c.min_wrap_width(1).allow_width_overflow());
+}
 #[cfg(feature = "css")]
 mod css_tests {
     use super::{test_html_css, test_html_style, test_html_coloured};

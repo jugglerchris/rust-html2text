@@ -305,10 +305,11 @@ struct WrappedBlock<T> {
     wordlen: usize,
     pre_wrapped: bool, // If true, we've been forced to wrap a <pre> line.
     pad_blocks: bool,
+    allow_overflow: bool,
 }
 
 impl<T: Clone + Eq + Debug + Default> WrappedBlock<T> {
-    pub fn new(width: usize, pad_blocks: bool) -> WrappedBlock<T> {
+    pub fn new(width: usize, pad_blocks: bool, allow_overflow: bool) -> WrappedBlock<T> {
         WrappedBlock {
             width,
             text: Vec::new(),
@@ -320,6 +321,7 @@ impl<T: Clone + Eq + Debug + Default> WrappedBlock<T> {
             wordlen: 0,
             pre_wrapped: false,
             pad_blocks,
+            allow_overflow,
         }
     }
 
@@ -387,7 +389,12 @@ impl<T: Clone + Eq + Debug + Default> WrappedBlock<T> {
                                         // if the first character is 2 cells wide and we
                                         // only have a width of 1.
                                         if idx == 0 && self.line.width() == 0 {
-                                            return Err(Error::TooNarrow);
+                                            if self.allow_overflow {
+                                                split_idx = c.len_utf8();
+                                                break;
+                                            } else {
+                                                return Err(Error::TooNarrow);
+                                            }
                                         }
                                         split_idx = idx;
                                         break;
@@ -399,11 +406,14 @@ impl<T: Clone + Eq + Debug + Default> WrappedBlock<T> {
                                 }));
                                 self.force_flush_line();
                                 lineleft = self.width;
-                                html_trace!("linelen set to zero here");
-                                opt_elt = Some(Str(TaggedString {
-                                    s: piece.s[split_idx..].into(),
-                                    tag: piece.tag,
-                                }));
+                                if split_idx == piece.s.len() {
+                                    opt_elt = None;
+                                } else {
+                                    opt_elt = Some(Str(TaggedString {
+                                        s: piece.s[split_idx..].into(),
+                                        tag: piece.tag,
+                                    }));
+                                }
                             }
                         } else {
                             self.line.push(elt);
@@ -952,7 +962,7 @@ impl<D: TextDecorator> SubRenderer<D> {
                 Some(ww) => ww.min(self.width),
                 None => self.width
             };
-            self.wrapping = Some(WrappedBlock::new(wwidth, self.options.pad_block_width));
+            self.wrapping = Some(WrappedBlock::new(wwidth, self.options.pad_block_width, self.options.allow_width_overflow));
         }
     }
 
