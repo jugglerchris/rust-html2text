@@ -1,3 +1,5 @@
+use crate::config::Config;
+use crate::render::text_renderer::PlainDecorator;
 use crate::{config, Error};
 
 use super::render::text_renderer::{RichAnnotation, TaggedLine, TrivialDecorator};
@@ -12,15 +14,22 @@ macro_rules! assert_eq_str {
         }
     };
 }
+#[track_caller]
 fn test_html(input: &[u8], expected: &str, width: usize) {
     let output = from_read(input, width);
     assert_eq_str!(output, expected);
 }
-fn test_html_maxwrap(input: &[u8], expected: &str, width: usize, wrap_width: usize) {
-    let result = config::plain()
-        .max_wrap_width(wrap_width)
+#[track_caller]
+fn test_html_conf<F>(input: &[u8], expected: &str, width: usize, conf: F)
+    where F: Fn(Config<PlainDecorator>) -> Config<PlainDecorator>
+{
+    let result = conf(config::plain())
         .string_from_read(input, width).unwrap();
     assert_eq_str!(result, expected);
+}
+#[track_caller]
+fn test_html_maxwrap(input: &[u8], expected: &str, width: usize, wrap_width: usize) {
+    test_html_conf(input, expected, width, |conf| conf.max_wrap_width(wrap_width))
 }
 #[cfg(feature = "css")]
 fn test_html_css(input: &[u8], expected: &str, width: usize) {
@@ -92,14 +101,18 @@ fn test_colour_map(annotations: &[RichAnnotation], s: &str) -> String
 }
 
 #[cfg(feature = "css")]
+#[track_caller]
 fn test_html_coloured(input: &[u8], expected: &str, width: usize) {
     let result = config::rich()
         .use_doc_css()
         .coloured(input, width, test_colour_map).unwrap();
     assert_eq_str!(result, expected);
 }
-fn test_html_err(input: &[u8], expected: Error, width: usize) {
-    let result = config::plain()
+#[track_caller]
+fn test_html_err_conf<F>(input: &[u8], expected: Error, width: usize, conf: F)
+    where F: Fn(Config<PlainDecorator>) -> Config<PlainDecorator>
+{
+    let result = conf(config::plain())
         .string_from_read(input, width);
     match result {
         Err(e) => {
@@ -110,8 +123,12 @@ fn test_html_err(input: &[u8], expected: Error, width: usize) {
         }
     }
 }
+fn test_html_err(input: &[u8], expected: Error, width: usize) {
+    test_html_err_conf(input, expected, width, |c| c)
+}
 
 #[cfg(feature = "css")]
+#[track_caller]
 fn test_html_style(input: &[u8], style: &str, expected: &str, width: usize) {
     let result = config::plain()
         .add_css(style)
@@ -120,6 +137,7 @@ fn test_html_style(input: &[u8], style: &str, expected: &str, width: usize) {
     assert_eq_str!(result, expected);
 }
 
+#[track_caller]
 fn test_html_decorator<D>(input: &[u8], expected: &str, width: usize, decorator: D)
 where
     D: TextDecorator,
@@ -1825,6 +1843,67 @@ fn test_superscript() {
     test_html(br#"Exponential 2<sup>32</sup>"#, "Exponential 2³²\n", 80);
 }
 
+#[test]
+fn test_header_overflow() {
+    let html_hdr = br#"<blockquote><h3>Foo</h3></blockquote>"#;
+    test_html(html_hdr, "> ### Foo\n", 20);
+    test_html_conf(html_hdr, "> ### F\n> ### o\n> ### o\n", 7, |c| c.min_wrap_width(1));
+    test_html_err_conf(html_hdr, Error::TooNarrow, 6, |c| c.min_wrap_width(1));
+    test_html_err_conf(html_hdr, Error::TooNarrow, 7, |c| c.min_wrap_width(3));
+    test_html_conf(html_hdr, "> ### F\n> ### o\n> ### o\n", 6, |c| c.min_wrap_width(1).allow_width_overflow());
+    test_html_conf(html_hdr, "> ### Foo\n", 7, |c| c.min_wrap_width(3).allow_width_overflow());
+}
+
+#[test]
+fn test_blockquote_overflow() {
+    let html_hdr = br#"<blockquote><blockquote>Foo</blockquote></blockquote>"#;
+    test_html(html_hdr, "> > Foo\n", 20);
+    test_html_conf(html_hdr, "> > F\n> > o\n> > o\n", 5, |c| c.min_wrap_width(1));
+    test_html_err_conf(html_hdr, Error::TooNarrow, 3, |c| c.min_wrap_width(1));
+    test_html_err_conf(html_hdr, Error::TooNarrow, 4, |c| c.min_wrap_width(3));
+    test_html_conf(html_hdr, "> > F\n> > o\n> > o\n", 3, |c| c.min_wrap_width(1).allow_width_overflow());
+    test_html_conf(html_hdr, "> > Foo\n", 4, |c| c.min_wrap_width(3).allow_width_overflow());
+}
+
+#[test]
+fn test_ul_overflow() {
+    let html_hdr = br#"<ul><li><ul><li>Foo</li></ul></li></ul>"#;
+    test_html(html_hdr, "* * Foo\n", 20);
+    test_html_conf(html_hdr, "* * F\n    o\n    o\n", 5, |c| c.min_wrap_width(1));
+    test_html_err_conf(html_hdr, Error::TooNarrow, 3, |c| c.min_wrap_width(1));
+    test_html_err_conf(html_hdr, Error::TooNarrow, 4, |c| c.min_wrap_width(3));
+    test_html_conf(html_hdr, "* * F\n    o\n    o\n", 3, |c| c.min_wrap_width(1).allow_width_overflow());
+    test_html_conf(html_hdr, "* * Foo\n", 4, |c| c.min_wrap_width(3).allow_width_overflow());
+}
+
+#[test]
+fn test_ol_overflow() {
+    let html_hdr = br#"<ol><li><ol><li>Foo</li></ol></li></ol>"#;
+    test_html(html_hdr, "1. 1. Foo\n", 20);
+    test_html_conf(html_hdr, "1. 1. F\n      o\n      o\n", 7, |c| c.min_wrap_width(1));
+    test_html_err_conf(html_hdr, Error::TooNarrow, 5, |c| c.min_wrap_width(1));
+    test_html_err_conf(html_hdr, Error::TooNarrow, 6, |c| c.min_wrap_width(3));
+    test_html_conf(html_hdr, "1. 1. F\n      o\n      o\n", 5, |c| c.min_wrap_width(1).allow_width_overflow());
+    test_html_conf(html_hdr, "1. 1. Foo\n", 6, |c| c.min_wrap_width(3).allow_width_overflow());
+}
+
+#[test]
+fn test_dd_overflow() {
+    let html_hdr = br#"<blockquote><dl><dt>Foo</dt><dd>Hello</dd></dl></blockquote>"#;
+    test_html(html_hdr, "> *Foo*\n>   Hello\n", 20);
+    test_html_conf(html_hdr, "> *Fo\n> o*\n>   H\n>   e\n>   l\n>   l\n>   o\n", 5, |c| c.min_wrap_width(1));
+    test_html_err_conf(html_hdr, Error::TooNarrow, 3, |c| c.min_wrap_width(1));
+    test_html_err_conf(html_hdr, Error::TooNarrow, 4, |c| c.min_wrap_width(3));
+    test_html_conf(html_hdr, "> *Foo*\n>   Hel\n>   lo\n", 4, |c| c.min_wrap_width(3).allow_width_overflow());
+}
+
+#[test]
+fn test_overflow_wide_char() {
+    // The smiley is a width-2 character.
+    let html = "😃".as_bytes();
+    test_html_err_conf(html, Error::TooNarrow, 1, |c| c.min_wrap_width(1));
+    test_html_conf(html, "😃\n", 1, |c| c.min_wrap_width(1).allow_width_overflow());
+}
 #[cfg(feature = "css")]
 mod css_tests {
     use super::{test_html_css, test_html_style, test_html_coloured};

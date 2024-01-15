@@ -305,10 +305,11 @@ struct WrappedBlock<T> {
     wordlen: usize,
     pre_wrapped: bool, // If true, we've been forced to wrap a <pre> line.
     pad_blocks: bool,
+    allow_overflow: bool,
 }
 
 impl<T: Clone + Eq + Debug + Default> WrappedBlock<T> {
-    pub fn new(width: usize, pad_blocks: bool) -> WrappedBlock<T> {
+    pub fn new(width: usize, pad_blocks: bool, allow_overflow: bool) -> WrappedBlock<T> {
         WrappedBlock {
             width,
             text: Vec::new(),
@@ -320,6 +321,7 @@ impl<T: Clone + Eq + Debug + Default> WrappedBlock<T> {
             wordlen: 0,
             pre_wrapped: false,
             pad_blocks,
+            allow_overflow,
         }
     }
 
@@ -387,7 +389,12 @@ impl<T: Clone + Eq + Debug + Default> WrappedBlock<T> {
                                         // if the first character is 2 cells wide and we
                                         // only have a width of 1.
                                         if idx == 0 && self.line.width() == 0 {
-                                            return Err(Error::TooNarrow);
+                                            if self.allow_overflow {
+                                                split_idx = c.len_utf8();
+                                                break;
+                                            } else {
+                                                return Err(Error::TooNarrow);
+                                            }
                                         }
                                         split_idx = idx;
                                         break;
@@ -399,11 +406,14 @@ impl<T: Clone + Eq + Debug + Default> WrappedBlock<T> {
                                 }));
                                 self.force_flush_line();
                                 lineleft = self.width;
-                                html_trace!("linelen set to zero here");
-                                opt_elt = Some(Str(TaggedString {
-                                    s: piece.s[split_idx..].into(),
-                                    tag: piece.tag,
-                                }));
+                                if split_idx == piece.s.len() {
+                                    opt_elt = None;
+                                } else {
+                                    opt_elt = Some(Str(TaggedString {
+                                        s: piece.s[split_idx..].into(),
+                                        tag: piece.tag,
+                                    }));
+                                }
                             }
                         } else {
                             self.line.push(elt);
@@ -892,7 +902,7 @@ impl<D: TextDecorator + Debug> std::fmt::Debug for SubRenderer<D> {
 }
 
 /// Rendering options.
-#[derive(Clone, Default)]
+#[derive(Clone)]
 #[non_exhaustive]
 pub struct RenderOptions {
     /// The maximum text wrap width.  If set, paragraphs of text will only be wrapped
@@ -900,10 +910,28 @@ pub struct RenderOptions {
     /// blocks or side-by-side table cells).
     pub wrap_width: Option<usize>,
 
+    /// The minimum text width to use when wrapping.
+    pub min_wrap_width: usize,
+
+    /// If true, then allow the output to be wider than specified instead of returning
+    /// `Err(TooNarrow)`.
+    pub allow_width_overflow: bool,
+
     /// Whether to always pad lines out to the full width.
     /// This may give a better output when the parent block
     /// has a background colour set.
     pub pad_block_width: bool,
+}
+
+impl Default for RenderOptions {
+    fn default() -> Self {
+        Self {
+            wrap_width: Default::default(),
+            min_wrap_width: crate::MIN_WIDTH,
+            allow_width_overflow: Default::default(),
+            pad_block_width: Default::default()
+        }
+    }
 }
 
 impl<D: TextDecorator> SubRenderer<D> {
@@ -934,7 +962,7 @@ impl<D: TextDecorator> SubRenderer<D> {
                 Some(ww) => ww.min(self.width),
                 None => self.width
             };
-            self.wrapping = Some(WrappedBlock::new(wwidth, self.options.pad_block_width));
+            self.wrapping = Some(WrappedBlock::new(wwidth, self.options.pad_block_width, self.options.allow_width_overflow));
         }
     }
 
@@ -1058,6 +1086,16 @@ impl<D: TextDecorator> SubRenderer<D> {
         self.flush_wrapping()?;
         self.lines.push_back(RenderLine::Line(line));
         Ok(())
+    }
+
+    pub(crate) fn width_minus(&self, prefix_len: usize, min_width: usize) -> crate::Result<usize> {
+        let new_width = self.width.saturating_sub(prefix_len);
+        if new_width < min_width {
+            if !self.options.allow_width_overflow {
+                return Err(Error::TooNarrow);
+            }
+        }
+        Ok(new_width.max(min_width))
     }
 }
 

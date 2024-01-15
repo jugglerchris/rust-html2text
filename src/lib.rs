@@ -184,6 +184,9 @@ const MIN_WIDTH: usize = 3;
 pub struct SizeEstimate {
     size: usize,      // Rough overall size
     min_width: usize, // The narrowest possible
+
+    // The use is specific to the node type.
+    prefix_size: usize,
 }
 
 impl Default for SizeEstimate {
@@ -191,16 +194,29 @@ impl Default for SizeEstimate {
         SizeEstimate {
             size: 0,
             min_width: 0,
+            prefix_size: 0,
         }
     }
 }
 
 impl SizeEstimate {
-    /// Combine two estimates into one (add size and widest required)
+    /// Combine two estimates into one (add size and take the largest
+    /// min width)
     pub fn add(self, other: SizeEstimate) -> SizeEstimate {
+        let min_width = max(self.min_width, other.min_width);
         SizeEstimate {
             size: self.size + other.size,
-            min_width: max(self.min_width, other.min_width),
+            min_width,
+            prefix_size: 0,
+        }
+    }
+    /// Combine two estimates into one which need to be side by side.
+    /// The min widths are added.
+    pub fn add_hor(self, other: SizeEstimate) -> SizeEstimate {
+        SizeEstimate {
+            size: self.size + other.size,
+            min_width: self.min_width + other.min_width,
+            prefix_size: 0,
         }
     }
 
@@ -209,6 +225,7 @@ impl SizeEstimate {
         SizeEstimate {
             size: max(self.size, other.size),
             min_width: max(self.min_width, other.min_width),
+            prefix_size: 0,
         }
     }
 }
@@ -345,13 +362,15 @@ impl RenderTable {
             .collect()
     }
 
-    fn calc_size_estimate(&self) {
+    fn calc_size_estimate(&self, _context: &HtmlContext) -> SizeEstimate {
         if self.num_columns == 0 {
-            self.size_estimate.set(Some(SizeEstimate {
+            let result = SizeEstimate {
                 size: 0,
                 min_width: 0,
-            }));
-            return;
+                prefix_size: 0,
+            };
+            self.size_estimate.set(Some(result));
+            return result;
         }
         let mut sizes: Vec<SizeEstimate> = vec![Default::default(); self.num_columns];
 
@@ -363,8 +382,8 @@ impl RenderTable {
                 for colnum in 0..cell.colspan {
                     sizes[colno + colnum].size += cellsize.size / cell.colspan;
                     sizes[colno + colnum].min_width = max(
-                        sizes[colno + colnum].min_width / cell.colspan,
-                        cellsize.min_width,
+                        sizes[colno + colnum].min_width,
+                        cellsize.min_width / cell.colspan,
                     );
                 }
                 colno += cell.colspan;
@@ -372,15 +391,14 @@ impl RenderTable {
         }
         let size = sizes.iter().map(|s| s.size).sum(); // Include borders?
         let min_width = sizes.iter().map(|s| s.min_width).sum::<usize>() + self.num_columns - 1;
+        let result = SizeEstimate { size, min_width, prefix_size: 0 };
         self.size_estimate
-            .set(Some(SizeEstimate { size, min_width }));
+            .set(Some(result));
+        result
     }
 
     /// Calculate and store (or return stored value) of estimated size
     pub fn get_size_estimate(&self) -> SizeEstimate {
-        if self.size_estimate.get().is_none() {
-            self.calc_size_estimate();
-        }
         self.size_estimate.get().unwrap()
     }
 }
@@ -467,12 +485,19 @@ impl RenderNode {
 
     /// Get a size estimate
     pub fn get_size_estimate(&self) -> SizeEstimate {
+        self.size_estimate.get().unwrap()
+    }
+
+    /// Calculate the size of this node.
+    fn calc_size_estimate(&self, context: &HtmlContext) -> SizeEstimate {
         // If it's already calculated, then just return the answer.
         if let Some(s) = self.size_estimate.get() {
             return s;
         };
 
         use RenderNodeInfo::*;
+
+        let recurse = |node: &RenderNode| node.calc_size_estimate(context);
 
         // Otherwise, make an estimate.
         let estimate = match self.info {
@@ -500,59 +525,81 @@ impl RenderNode {
                 }
                 SizeEstimate {
                     size: len,
-                    min_width: len.min(MIN_WIDTH),
+                    min_width: len.min(context.min_wrap_width),
+                    prefix_size: 0,
                 }
             }
 
             Container(ref v) | Em(ref v) | Strong(ref v) | Strikeout(ref v) | Code(ref v)
-            | Block(ref v) | Div(ref v) | Pre(ref v) | BlockQuote(ref v) | Dl(ref v)
-            | Dt(ref v) | Dd(ref v) | ListItem(ref v) | Sup(ref v) => v
+            | Block(ref v) | Div(ref v) | Pre(ref v) | Dl(ref v)
+            | Dt(ref v) | ListItem(ref v) | Sup(ref v) => v
                 .iter()
-                .map(RenderNode::get_size_estimate)
+                .map(recurse)
                 .fold(Default::default(), SizeEstimate::add),
             Link(ref _target, ref v) => v
                 .iter()
-                .map(RenderNode::get_size_estimate)
+                .map(recurse)
                 .fold(Default::default(), SizeEstimate::add)
                 .add(SizeEstimate {
                     size: 5,
                     min_width: 5,
+                    prefix_size: 0,
                 }),
-            Ul(ref v) => v
-                .iter()
-                .map(RenderNode::get_size_estimate)
-                .fold(Default::default(), SizeEstimate::add)
-                .add(SizeEstimate {
-                    size: 2,
-                    min_width: 2,
-                }),
-            Ol(i, ref v) => v
-                .iter()
-                .map(RenderNode::get_size_estimate)
-                .fold(Default::default(), SizeEstimate::add)
-                .add(SizeEstimate {
-                    size: i.to_string().len() + 2,
-                    min_width: i.to_string().len() + 2,
-                }),
-            Header(level, ref v) => v
-                .iter()
-                .map(RenderNode::get_size_estimate)
-                .fold(Default::default(), SizeEstimate::add)
-                .add(SizeEstimate {
-                    size: 0,
-                    min_width: MIN_WIDTH + level + 2,
-                }),
+            Dd(ref v) |
+            BlockQuote(ref v) | 
+            Ul(ref v) => {
+                let mut size =
+                    v.iter()
+                     .map(recurse)
+                     .fold(Default::default(), SizeEstimate::add)
+                     .add_hor(SizeEstimate {
+                         size: 2,
+                         min_width: 2,
+                         prefix_size: 0,
+                     });
+                size.prefix_size = 2;
+                size
+            }
+            Ol(i, ref v) => {
+                let prefix_size = calc_ol_prefix_size(i, v.len());
+                let mut result =
+                    v.iter()
+                     .map(recurse)
+                     .fold(Default::default(), SizeEstimate::add)
+                     .add_hor(SizeEstimate {
+                         size: prefix_size,
+                         min_width: prefix_size,
+                         prefix_size: 0,
+                     });
+                result.prefix_size = prefix_size;
+                result
+            }
+            Header(level, ref v) => {
+                let prefix_size = level + 1; // "## "
+                let mut size =
+                    v.iter()
+                     .map(recurse)
+                     .fold(Default::default(), SizeEstimate::add)
+                     .add_hor(SizeEstimate {
+                         size: prefix_size,
+                         min_width: prefix_size,
+                         prefix_size: 0,
+                     });
+                size.prefix_size = prefix_size;
+                size
+            }
             Break => SizeEstimate {
                 size: 1,
                 min_width: 1,
+                prefix_size: 0,
             },
-            Table(ref t) => t.get_size_estimate(),
+            Table(ref t) => t.calc_size_estimate(context),
             TableRow(..) | TableBody(_) | TableCell(_) => unimplemented!(),
             FragStart(_) => Default::default(),
             BgColoured(_, ref v) |
             Coloured(_, ref v) => v
                 .iter()
-                .map(RenderNode::get_size_estimate)
+                .map(recurse)
                 .fold(Default::default(), SizeEstimate::add),
         };
         self.size_estimate.set(Some(estimate));
@@ -600,14 +647,14 @@ impl RenderNode {
     }
 }
 
-fn precalc_size_estimate<'a>(node: &'a RenderNode) -> Result<TreeMapResult<(), &'a RenderNode, ()>> {
+fn precalc_size_estimate<'a>(node: &'a RenderNode, context: &mut HtmlContext) -> Result<TreeMapResult<'a, HtmlContext, &'a RenderNode, ()>> {
     use RenderNodeInfo::*;
     if node.size_estimate.get().is_some() {
         return Ok(TreeMapResult::Nothing);
     }
     Ok(match node.info {
         Text(_) | Img(_, _) | Break | FragStart(_) => {
-            let _ = node.get_size_estimate();
+            let _ = node.calc_size_estimate(context);
             TreeMapResult::Nothing
         }
 
@@ -630,8 +677,8 @@ fn precalc_size_estimate<'a>(node: &'a RenderNode) -> Result<TreeMapResult<(), &
         | Sup(ref v)
         | Header(_, ref v) => TreeMapResult::PendingChildren {
             children: v.iter().collect(),
-            cons: Box::new(move |_, _cs| {
-                node.get_size_estimate();
+            cons: Box::new(move |context, _cs| {
+                node.calc_size_estimate(context);
                 Ok(None)
             }),
             prefn: None,
@@ -647,8 +694,8 @@ fn precalc_size_estimate<'a>(node: &'a RenderNode) -> Result<TreeMapResult<(), &
             }
             TreeMapResult::PendingChildren {
                 children,
-                cons: Box::new(move |_, _cs| {
-                    node.get_size_estimate();
+                cons: Box::new(move |context, _cs| {
+                    node.calc_size_estimate(context);
                     Ok(None)
                 }),
                 prefn: None,
@@ -659,8 +706,8 @@ fn precalc_size_estimate<'a>(node: &'a RenderNode) -> Result<TreeMapResult<(), &
         BgColoured(_, ref v) |
         Coloured(_, ref v) => TreeMapResult::PendingChildren {
             children: v.iter().collect(),
-            cons: Box::new(move |_, _cs| {
-                node.get_size_estimate();
+            cons: Box::new(move |context, _cs| {
+                node.calc_size_estimate(context);
                 Ok(None)
             }),
             prefn: None,
@@ -1005,6 +1052,8 @@ struct HtmlContext {
 
     max_wrap_width: Option<usize>,
     pad_block_width: bool,
+    allow_width_overflow: bool,
+    min_wrap_width: usize,
 }
 
 fn dom_to_render_tree_with_context<T: Write>(
@@ -1411,12 +1460,13 @@ fn process_dom_node<'a, 'b, 'c, T: Write>(
 }
 
 fn render_tree_to_string<T: Write, D: TextDecorator>(
+    context: &mut HtmlContext,
     renderer: SubRenderer<D>,
     tree: RenderNode,
     err_out: &mut T,
 ) -> Result<SubRenderer<D>> {
     /* Phase 1: get size estimates. */
-    tree_map_reduce(&mut (), &tree, |_, node| precalc_size_estimate(&node))?;
+    tree_map_reduce(context, &tree, |context, node| precalc_size_estimate(&node, context))?;
     /* Phase 2: actually render. */
     let mut renderer = TextRenderer::new(renderer);
     tree_map_reduce(&mut renderer, tree, |renderer, node| {
@@ -1457,6 +1507,9 @@ fn do_render_node<'a, 'b, T: Write, D: TextDecorator>(
     html_trace!("do_render_node({:?}", tree);
     use RenderNodeInfo::*;
     use TreeMapResult::*;
+
+    let size_estimate = tree.size_estimate.get().unwrap_or_default();
+
     Ok(match tree.info {
         Text(ref tstr) => {
             renderer.add_inline_text(tstr)?;
@@ -1511,7 +1564,9 @@ fn do_render_node<'a, 'b, T: Write, D: TextDecorator>(
         }
         Header(level, children) => {
             let prefix = renderer.header_prefix(level);
-            let sub_builder = renderer.new_sub_renderer(renderer.width().checked_sub(prefix.len()).ok_or(Error::TooNarrow)?)?;
+            let min_width = size_estimate.min_width;
+            let inner_width = min_width.saturating_sub(prefix.len());
+            let sub_builder = renderer.new_sub_renderer(renderer.width_minus(prefix.len(), inner_width)?)?;
             renderer.push(sub_builder);
             pending2(children, move |renderer: &mut TextRenderer<D>, _| {
                 let sub_builder = renderer.pop();
@@ -1540,7 +1595,8 @@ fn do_render_node<'a, 'b, T: Write, D: TextDecorator>(
         }
         BlockQuote(children) => {
             let prefix = renderer.quote_prefix();
-            let sub_builder = renderer.new_sub_renderer(renderer.width().checked_sub(prefix.len()).ok_or(Error::TooNarrow)?)?;
+            let inner_width = size_estimate.min_width - prefix.len();
+            let sub_builder = renderer.new_sub_renderer(renderer.width_minus(prefix.len(), inner_width)?)?;
             renderer.push(sub_builder);
             pending2(children, move |renderer: &mut TextRenderer<D>, _| {
                 let sub_builder = renderer.pop();
@@ -1561,7 +1617,8 @@ fn do_render_node<'a, 'b, T: Write, D: TextDecorator>(
                 children: items,
                 cons: Box::new(|_, _| Ok(Some(None))),
                 prefn: Some(Box::new(move |renderer: &mut TextRenderer<D>, _| {
-                    let sub_builder = renderer.new_sub_renderer(renderer.width().checked_sub(prefix_len).ok_or(Error::TooNarrow)?)?;
+                    let inner_width = size_estimate.min_width - prefix_len;
+                    let sub_builder = renderer.new_sub_renderer(renderer.width_minus(prefix_len, inner_width)?)?;
                     renderer.push(sub_builder);
                     Ok(())
                 })),
@@ -1597,7 +1654,8 @@ fn do_render_node<'a, 'b, T: Write, D: TextDecorator>(
                 children: items,
                 cons: Box::new(|_, _| Ok(Some(None))),
                 prefn: Some(Box::new(move |renderer: &mut TextRenderer<D>, _| {
-                    let sub_builder = renderer.new_sub_renderer(renderer.width().checked_sub(prefix_width).ok_or(Error::TooNarrow)?)?;
+                    let inner_min = size_estimate.min_width - size_estimate.prefix_size;
+                    let sub_builder = renderer.new_sub_renderer(renderer.width_minus(prefix_width, inner_min)?)?;
                     renderer.push(sub_builder);
                     Ok(())
                 })),
@@ -1634,7 +1692,8 @@ fn do_render_node<'a, 'b, T: Write, D: TextDecorator>(
             })
         }
         Dd(children) => {
-            let sub_builder = renderer.new_sub_renderer(renderer.width().checked_sub(2).ok_or(Error::TooNarrow)?)?;
+            let inner_min = size_estimate.min_width - 2;
+            let sub_builder = renderer.new_sub_renderer(renderer.width_minus(2, inner_min)?)?;
             renderer.push(sub_builder);
             pending2(children, |renderer: &mut TextRenderer<D>, _| {
                 let sub_builder = renderer.pop();
@@ -1884,7 +1943,7 @@ pub mod config {
 
     use crate::{render::text_renderer::{
         PlainDecorator, RichDecorator, TaggedLine, TextDecorator, RichAnnotation
-    }, Result, RenderTree, HtmlContext};
+    }, Result, RenderTree, HtmlContext, MIN_WIDTH};
     #[cfg(feature = "css")]
     use crate::css::StyleData;
     use super::{Discard, Error};
@@ -1901,6 +1960,9 @@ pub mod config {
         use_doc_css: bool,
 
         pad_block_width: bool,
+
+        allow_width_overflow: bool,
+        min_wrap_width: usize,
     }
 
     impl<D: TextDecorator> Config<D> {
@@ -1914,6 +1976,8 @@ pub mod config {
 
                 max_wrap_width: self.max_wrap_width,
                 pad_block_width: self.pad_block_width,
+                allow_width_overflow: self.allow_width_overflow,
+                min_wrap_width: self.min_wrap_width,
             }
         }
         /// Parse with context.
@@ -2012,6 +2076,25 @@ pub mod config {
             self.max_wrap_width = Some(wrap_width);
             self
         }
+
+        /// Allow the output to be wider than the max width.  When enabled,
+        /// then output wider than the specified width will be returned
+        /// instead of returning `Err(TooNarrow)` if the output wouldn't
+        /// otherwise fit.
+        pub fn allow_width_overflow(mut self) -> Self {
+            self.allow_width_overflow = true;
+            self
+        }
+
+        /// Set the minimum width for text wrapping.  The default is 3.
+        /// Blocks of text will be forced to have at least this width
+        /// (unless the text inside is less than that).  Increasing this
+        /// can increase the chance that the width will overflow, leading
+        /// to a TooNarrow error unless `allow_width_overflow()` is set.
+        pub fn min_wrap_width(mut self, min_wrap_width: usize) -> Self {
+            self.min_wrap_width = min_wrap_width;
+            self
+        }
     }
 
     impl Config<RichDecorator> {
@@ -2083,6 +2166,8 @@ pub mod config {
             use_doc_css: false,
             max_wrap_width: None,
             pad_block_width: false,
+            allow_width_overflow: false,
+            min_wrap_width: MIN_WIDTH,
         }
     }
 
@@ -2096,6 +2181,8 @@ pub mod config {
             use_doc_css: false,
             max_wrap_width: None,
             pad_block_width: false,
+            allow_width_overflow: false,
+            min_wrap_width: MIN_WIDTH,
         }
     }
 
@@ -2109,6 +2196,8 @@ pub mod config {
             use_doc_css: false,
             max_wrap_width: None,
             pad_block_width: false,
+            allow_width_overflow: false,
+            min_wrap_width: MIN_WIDTH,
         }
     }
 }
@@ -2129,8 +2218,10 @@ impl RenderTree {
         let mut render_options = RenderOptions::default();
         render_options.wrap_width = context.max_wrap_width;
         render_options.pad_block_width = context.pad_block_width;
+        render_options.min_wrap_width = context.min_wrap_width;
+        render_options.allow_width_overflow = context.allow_width_overflow;
         let builder = SubRenderer::new(width, render_options, decorator);
-        let builder = render_tree_to_string(builder, self.0, &mut Discard {})?;
+        let builder = render_tree_to_string(context, builder, self.0, &mut Discard {})?;
         Ok(RenderedText(builder))
     }
 
@@ -2241,3 +2332,15 @@ pub use ansi_colours::from_read_coloured;
 
 #[cfg(test)]
 mod tests;
+
+fn calc_ol_prefix_size(start: i64, num_items: usize) -> usize {
+    // The prefix width could be at either end if the start is negative.
+    let min_number = start;
+    // Assumption: num_items can't overflow isize.
+    let max_number = start + (num_items as i64) - 1;
+
+    // This assumes that the decorator gives the same width as default.
+    let prefix_width_min = format!("{min_number}. ").len();
+    let prefix_width_max = format!("{max_number}. ").len();
+    max(prefix_width_min, prefix_width_max)
+}
