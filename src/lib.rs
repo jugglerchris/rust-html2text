@@ -81,8 +81,8 @@ mod markup5ever_rcdom;
 use markup5ever_rcdom::{
     Handle,
     NodeData::{Comment, Document, Element},
-    RcDom,
 };
+pub use markup5ever_rcdom::RcDom;
 use std::cell::Cell;
 use std::cmp::{max, min};
 
