@@ -706,8 +706,8 @@ fn precalc_size_estimate<'a>(node: &'a RenderNode, context: &mut HtmlContext) ->
         BgColoured(_, ref v) |
         Coloured(_, ref v) => TreeMapResult::PendingChildren {
             children: v.iter().collect(),
-            cons: Box::new(move |_, _cs| {
-                node.get_size_estimate();
+            cons: Box::new(move |context, _cs| {
+                node.calc_size_estimate(context);
                 Ok(None)
             }),
             prefn: None,
