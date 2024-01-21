@@ -5,7 +5,7 @@ use std::ops::Deref;
 
 use lightningcss::{stylesheet::{
     ParserOptions, StyleSheet, StyleAttribute
-}, rules::CssRule, properties::{Property, display::{self, DisplayKeyword}}, values::color::CssColor, declaration::DeclarationBlock};
+}, rules::CssRule, properties::{Property, display::{self, DisplayKeyword}}, values::color::CssColor, declaration::DeclarationBlock, traits::Parse};
 
 use crate::{Result, TreeMapResult, markup5ever_rcdom::{Handle, NodeData::{Comment, Document, Element, self}}, tree_map_reduce};
 
@@ -294,7 +294,14 @@ impl StyleData {
                     if &attr.name.local == "style" {
                         let rules = parse_style_attribute(&attr.value).unwrap_or_default();
                         result.extend(rules);
-                        break;
+                    } else if &*attr.name.local == "color" {
+                        if let Ok(colour) = CssColor::parse_string(&*attr.value) {
+                            result.push(Style::Colour(colour));
+                        }
+                    } else if &*attr.name.local == "bgcolor" {
+                        if let Ok(colour) = CssColor::parse_string(&*attr.value) {
+                            result.push(Style::BgColour(colour));
+                        }
                     }
                 }
             }
