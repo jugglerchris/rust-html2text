@@ -1441,43 +1441,43 @@ fn test_finalise() {
             Default::default()
         }
 
-        fn decorate_em_start(&mut self) -> (String, Self::Annotation) {
+        fn decorate_em_start(&self) -> (String, Self::Annotation) {
             Default::default()
         }
 
-        fn decorate_em_end(&mut self) -> String {
+        fn decorate_em_end(&self) -> String {
             Default::default()
         }
 
-        fn decorate_strong_start(&mut self) -> (String, Self::Annotation) {
+        fn decorate_strong_start(&self) -> (String, Self::Annotation) {
             Default::default()
         }
 
-        fn decorate_strong_end(&mut self) -> String {
+        fn decorate_strong_end(&self) -> String {
             Default::default()
         }
 
-        fn decorate_strikeout_start(&mut self) -> (String, Self::Annotation) {
+        fn decorate_strikeout_start(&self) -> (String, Self::Annotation) {
             Default::default()
         }
 
-        fn decorate_strikeout_end(&mut self) -> String {
+        fn decorate_strikeout_end(&self) -> String {
             Default::default()
         }
 
-        fn decorate_code_start(&mut self) -> (String, Self::Annotation) {
+        fn decorate_code_start(&self) -> (String, Self::Annotation) {
             Default::default()
         }
 
-        fn decorate_code_end(&mut self) -> String {
+        fn decorate_code_end(&self) -> String {
             Default::default()
         }
 
-        fn decorate_preformat_first(&mut self) -> Self::Annotation {
+        fn decorate_preformat_first(&self) -> Self::Annotation {
             Default::default()
         }
 
-        fn decorate_preformat_cont(&mut self) -> Self::Annotation {
+        fn decorate_preformat_cont(&self) -> Self::Annotation {
             Default::default()
         }
 
@@ -1485,19 +1485,19 @@ fn test_finalise() {
             Default::default()
         }
 
-        fn header_prefix(&mut self, level: usize) -> String {
+        fn header_prefix(&self, level: usize) -> String {
             "#".repeat(level) + " "
         }
 
-        fn quote_prefix(&mut self) -> String {
+        fn quote_prefix(&self) -> String {
             "> ".to_string()
         }
 
-        fn unordered_item_prefix(&mut self) -> String {
+        fn unordered_item_prefix(&self) -> String {
             "* ".to_string()
         }
 
-        fn ordered_item_prefix(&mut self, i: i64) -> String {
+        fn ordered_item_prefix(&self, i: i64) -> String {
             format!("{}. ", i)
         }
 

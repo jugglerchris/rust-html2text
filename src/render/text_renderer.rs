@@ -597,50 +597,50 @@ pub trait TextDecorator {
     fn decorate_link_end(&mut self) -> String;
 
     /// Return an annotation and rendering prefix for em
-    fn decorate_em_start(&mut self) -> (String, Self::Annotation);
+    fn decorate_em_start(&self) -> (String, Self::Annotation);
 
     /// Return a suffix for after an em.
-    fn decorate_em_end(&mut self) -> String;
+    fn decorate_em_end(&self) -> String;
 
     /// Return an annotation and rendering prefix for strong
-    fn decorate_strong_start(&mut self) -> (String, Self::Annotation);
+    fn decorate_strong_start(&self) -> (String, Self::Annotation);
 
     /// Return a suffix for after a strong.
-    fn decorate_strong_end(&mut self) -> String;
+    fn decorate_strong_end(&self) -> String;
 
     /// Return an annotation and rendering prefix for strikeout
-    fn decorate_strikeout_start(&mut self) -> (String, Self::Annotation);
+    fn decorate_strikeout_start(&self) -> (String, Self::Annotation);
 
     /// Return a suffix for after a strikeout.
-    fn decorate_strikeout_end(&mut self) -> String;
+    fn decorate_strikeout_end(&self) -> String;
 
     /// Return an annotation and rendering prefix for code
-    fn decorate_code_start(&mut self) -> (String, Self::Annotation);
+    fn decorate_code_start(&self) -> (String, Self::Annotation);
 
     /// Return a suffix for after a code.
-    fn decorate_code_end(&mut self) -> String;
+    fn decorate_code_end(&self) -> String;
 
     /// Return an annotation for the initial part of a preformatted line
-    fn decorate_preformat_first(&mut self) -> Self::Annotation;
+    fn decorate_preformat_first(&self) -> Self::Annotation;
 
     /// Return an annotation for a continuation line when a preformatted
     /// line doesn't fit.
-    fn decorate_preformat_cont(&mut self) -> Self::Annotation;
+    fn decorate_preformat_cont(&self) -> Self::Annotation;
 
     /// Return an annotation and rendering prefix for a link.
     fn decorate_image(&mut self, src: &str, title: &str) -> (String, Self::Annotation);
 
     /// Return prefix string of header in specific level.
-    fn header_prefix(&mut self, level: usize) -> String;
+    fn header_prefix(&self, level: usize) -> String;
 
     /// Return prefix string of quoted block.
-    fn quote_prefix(&mut self) -> String;
+    fn quote_prefix(&self) -> String;
 
     /// Return prefix string of unordered list item.
-    fn unordered_item_prefix(&mut self) -> String;
+    fn unordered_item_prefix(&self) -> String;
 
     /// Return prefix string of ith ordered list item.
-    fn ordered_item_prefix(&mut self, i: i64) -> String;
+    fn ordered_item_prefix(&self, i: i64) -> String;
 
     /// Return a new decorator of the same type which can be used
     /// for sub blocks.
@@ -667,12 +667,12 @@ pub trait TextDecorator {
     }
 
     /// Return an annotation and rendering prefix for superscript text
-    fn decorate_superscript_start(&mut self) -> (String, Self::Annotation) {
+    fn decorate_superscript_start(&self) -> (String, Self::Annotation) {
         ("^{".into(), Default::default())
     }
 
     /// Return a suffix for after a superscript.
-    fn decorate_superscript_end(&mut self) -> String {
+    fn decorate_superscript_end(&self) -> String {
         "}".into()
     }
 
@@ -845,7 +845,7 @@ impl<T: PartialEq + Eq + Clone + Debug + Default> RenderLine<T> {
                 let tag = border.tag.clone();
                 tagged.push(Str(TaggedString {
                     s: border.into_string(),
-                    tag: tag,
+                    tag,
                 }));
                 tagged
             }
@@ -1659,42 +1659,42 @@ impl TextDecorator for PlainDecorator {
         format!("][{}]", self.nlinks.get())
     }
 
-    fn decorate_em_start(&mut self) -> (String, Self::Annotation) {
+    fn decorate_em_start(&self) -> (String, Self::Annotation) {
         ("*".to_string(), ())
     }
 
-    fn decorate_em_end(&mut self) -> String {
+    fn decorate_em_end(&self) -> String {
         "*".to_string()
     }
 
-    fn decorate_strong_start(&mut self) -> (String, Self::Annotation) {
+    fn decorate_strong_start(&self) -> (String, Self::Annotation) {
         ("**".to_string(), ())
     }
 
-    fn decorate_strong_end(&mut self) -> String {
+    fn decorate_strong_end(&self) -> String {
         "**".to_string()
     }
 
-    fn decorate_strikeout_start(&mut self) -> (String, Self::Annotation) {
+    fn decorate_strikeout_start(&self) -> (String, Self::Annotation) {
         ("".to_string(), ())
     }
 
-    fn decorate_strikeout_end(&mut self) -> String {
+    fn decorate_strikeout_end(&self) -> String {
         "".to_string()
     }
 
-    fn decorate_code_start(&mut self) -> (String, Self::Annotation) {
+    fn decorate_code_start(&self) -> (String, Self::Annotation) {
         ("`".to_string(), ())
     }
 
-    fn decorate_code_end(&mut self) -> String {
+    fn decorate_code_end(&self) -> String {
         "`".to_string()
     }
 
-    fn decorate_preformat_first(&mut self) -> Self::Annotation {
+    fn decorate_preformat_first(&self) -> Self::Annotation {
         ()
     }
-    fn decorate_preformat_cont(&mut self) -> Self::Annotation {
+    fn decorate_preformat_cont(&self) -> Self::Annotation {
         ()
     }
 
@@ -1702,19 +1702,19 @@ impl TextDecorator for PlainDecorator {
         (format!("[{}]", title), ())
     }
 
-    fn header_prefix(&mut self, level: usize) -> String {
+    fn header_prefix(&self, level: usize) -> String {
         "#".repeat(level) + " "
     }
 
-    fn quote_prefix(&mut self) -> String {
+    fn quote_prefix(&self) -> String {
         "> ".to_string()
     }
 
-    fn unordered_item_prefix(&mut self) -> String {
+    fn unordered_item_prefix(&self) -> String {
         "* ".to_string()
     }
 
-    fn ordered_item_prefix(&mut self, i: i64) -> String {
+    fn ordered_item_prefix(&self, i: i64) -> String {
         format!("{}. ", i)
     }
 
@@ -1755,42 +1755,42 @@ impl TextDecorator for TrivialDecorator {
         "".to_string()
     }
 
-    fn decorate_em_start(&mut self) -> (String, Self::Annotation) {
+    fn decorate_em_start(&self) -> (String, Self::Annotation) {
         ("".to_string(), ())
     }
 
-    fn decorate_em_end(&mut self) -> String {
+    fn decorate_em_end(&self) -> String {
         "".to_string()
     }
 
-    fn decorate_strong_start(&mut self) -> (String, Self::Annotation) {
+    fn decorate_strong_start(&self) -> (String, Self::Annotation) {
         ("".to_string(), ())
     }
 
-    fn decorate_strong_end(&mut self) -> String {
+    fn decorate_strong_end(&self) -> String {
         "".to_string()
     }
 
-    fn decorate_strikeout_start(&mut self) -> (String, Self::Annotation) {
+    fn decorate_strikeout_start(&self) -> (String, Self::Annotation) {
         ("".to_string(), ())
     }
 
-    fn decorate_strikeout_end(&mut self) -> String {
+    fn decorate_strikeout_end(&self) -> String {
         "".to_string()
     }
 
-    fn decorate_code_start(&mut self) -> (String, Self::Annotation) {
+    fn decorate_code_start(&self) -> (String, Self::Annotation) {
         ("".to_string(), ())
     }
 
-    fn decorate_code_end(&mut self) -> String {
+    fn decorate_code_end(&self) -> String {
         "".to_string()
     }
 
-    fn decorate_preformat_first(&mut self) -> Self::Annotation {
+    fn decorate_preformat_first(&self) -> Self::Annotation {
         ()
     }
-    fn decorate_preformat_cont(&mut self) -> Self::Annotation {
+    fn decorate_preformat_cont(&self) -> Self::Annotation {
         ()
     }
 
@@ -1799,19 +1799,19 @@ impl TextDecorator for TrivialDecorator {
         (title.to_string(), ())
     }
 
-    fn header_prefix(&mut self, _level: usize) -> String {
+    fn header_prefix(&self, _level: usize) -> String {
         "".to_string()
     }
 
-    fn quote_prefix(&mut self) -> String {
+    fn quote_prefix(&self) -> String {
         "".to_string()
     }
 
-    fn unordered_item_prefix(&mut self) -> String {
+    fn unordered_item_prefix(&self) -> String {
         "".to_string()
     }
 
-    fn ordered_item_prefix(&mut self, _i: i64) -> String {
+    fn ordered_item_prefix(&self, _i: i64) -> String {
         "".to_string()
     }
 
@@ -1881,43 +1881,43 @@ impl TextDecorator for RichDecorator {
         "".to_string()
     }
 
-    fn decorate_em_start(&mut self) -> (String, Self::Annotation) {
+    fn decorate_em_start(&self) -> (String, Self::Annotation) {
         ("".to_string(), RichAnnotation::Emphasis)
     }
 
-    fn decorate_em_end(&mut self) -> String {
+    fn decorate_em_end(&self) -> String {
         "".to_string()
     }
 
-    fn decorate_strong_start(&mut self) -> (String, Self::Annotation) {
+    fn decorate_strong_start(&self) -> (String, Self::Annotation) {
         ("*".to_string(), RichAnnotation::Strong)
     }
 
-    fn decorate_strong_end(&mut self) -> String {
+    fn decorate_strong_end(&self) -> String {
         "*".to_string()
     }
 
-    fn decorate_strikeout_start(&mut self) -> (String, Self::Annotation) {
+    fn decorate_strikeout_start(&self) -> (String, Self::Annotation) {
         ("".to_string(), RichAnnotation::Strikeout)
     }
 
-    fn decorate_strikeout_end(&mut self) -> String {
+    fn decorate_strikeout_end(&self) -> String {
         "".to_string()
     }
 
-    fn decorate_code_start(&mut self) -> (String, Self::Annotation) {
+    fn decorate_code_start(&self) -> (String, Self::Annotation) {
         ("`".to_string(), RichAnnotation::Code)
     }
 
-    fn decorate_code_end(&mut self) -> String {
+    fn decorate_code_end(&self) -> String {
         "`".to_string()
     }
 
-    fn decorate_preformat_first(&mut self) -> Self::Annotation {
+    fn decorate_preformat_first(&self) -> Self::Annotation {
         RichAnnotation::Preformat(false)
     }
 
-    fn decorate_preformat_cont(&mut self) -> Self::Annotation {
+    fn decorate_preformat_cont(&self) -> Self::Annotation {
         RichAnnotation::Preformat(true)
     }
 
@@ -1925,19 +1925,19 @@ impl TextDecorator for RichDecorator {
         (title.to_string(), RichAnnotation::Image(src.to_string()))
     }
 
-    fn header_prefix(&mut self, level: usize) -> String {
+    fn header_prefix(&self, level: usize) -> String {
         "#".repeat(level) + " "
     }
 
-    fn quote_prefix(&mut self) -> String {
+    fn quote_prefix(&self) -> String {
         "> ".to_string()
     }
 
-    fn unordered_item_prefix(&mut self) -> String {
+    fn unordered_item_prefix(&self) -> String {
         "* ".to_string()
     }
 
-    fn ordered_item_prefix(&mut self, i: i64) -> String {
+    fn ordered_item_prefix(&self, i: i64) -> String {
         format!("{}. ", i)
     }
 
