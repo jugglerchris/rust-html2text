@@ -9,6 +9,19 @@ Possible log types:
 - `[fixed]` for any bug fixes.
 - `[security]` to invite users to upgrade in case of vulnerabilities.
 
+### 0.12.0
+
+- [changed] Updated termion dev-dependency
+- [added] Support `<sup>` HTML elements
+- [added] Export `RcDom` publically.  It was already returned by a pub function.
+- [added] Update handling of width overflow:
+          With `Config::allow_width_overflow()`, prefer returning output wider
+          than requested, instead of returning `Err(TooNarrow)`.
+          `Config::min_wrap_width()` sets the minimum text wrap width (default
+          3).  The minimum width (before overflow or `TooNarrow`) is now
+          handled more cleanly.
+- [added] CSS: use color/bgcolor attributes on elements.
+
 ### 0.11.0
 
 - [fixed] CSS: rules marked !important were ignored.

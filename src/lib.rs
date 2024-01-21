@@ -83,6 +83,7 @@ use markup5ever_rcdom::{
     NodeData::{Comment, Document, Element},
 };
 pub use markup5ever_rcdom::RcDom;
+use unicode_width::UnicodeWidthStr;
 use std::cell::Cell;
 use std::cmp::{max, min};
 
@@ -489,7 +490,7 @@ impl RenderNode {
     }
 
     /// Calculate the size of this node.
-    fn calc_size_estimate(&self, context: &HtmlContext) -> SizeEstimate {
+    fn calc_size_estimate<D: TextDecorator>(&self, context: &HtmlContext, decorator: &'_ D) -> SizeEstimate {
         // If it's already calculated, then just return the answer.
         if let Some(s) = self.size_estimate.get() {
             return s;
@@ -497,7 +498,7 @@ impl RenderNode {
 
         use RenderNodeInfo::*;
 
-        let recurse = |node: &RenderNode| node.calc_size_estimate(context);
+        let recurse = |node: &RenderNode| node.calc_size_estimate(context, decorator);
 
         // Otherwise, make an estimate.
         let estimate = match self.info {
@@ -548,20 +549,27 @@ impl RenderNode {
             Dd(ref v) |
             BlockQuote(ref v) | 
             Ul(ref v) => {
+                let prefix = match self.info {
+                    Dd(_) => "  ".into(),
+                    BlockQuote(_) => decorator.quote_prefix(),
+                    Ul(_) => decorator.unordered_item_prefix(),
+                    _ => unreachable!(),
+                };
+                let prefix_width = UnicodeWidthStr::width(prefix.as_str());
                 let mut size =
                     v.iter()
                      .map(recurse)
                      .fold(Default::default(), SizeEstimate::add)
                      .add_hor(SizeEstimate {
-                         size: 2,
-                         min_width: 2,
+                         size: prefix_width,
+                         min_width: prefix_width,
                          prefix_size: 0,
                      });
-                size.prefix_size = 2;
+                size.prefix_size = prefix_width;
                 size
             }
             Ol(i, ref v) => {
-                let prefix_size = calc_ol_prefix_size(i, v.len());
+                let prefix_size = calc_ol_prefix_size(i, v.len(), decorator);
                 let mut result =
                     v.iter()
                      .map(recurse)
@@ -575,7 +583,7 @@ impl RenderNode {
                 result
             }
             Header(level, ref v) => {
-                let prefix_size = level + 1; // "## "
+                let prefix_size = decorator.header_prefix(level).len();
                 let mut size =
                     v.iter()
                      .map(recurse)
@@ -647,14 +655,17 @@ impl RenderNode {
     }
 }
 
-fn precalc_size_estimate<'a>(node: &'a RenderNode, context: &mut HtmlContext) -> Result<TreeMapResult<'a, HtmlContext, &'a RenderNode, ()>> {
+fn precalc_size_estimate<'a, 'b: 'a, D: TextDecorator>(node: &'a RenderNode,
+                             context: &mut HtmlContext,
+                             decorator: &'b D,
+                             ) -> Result<TreeMapResult<'a, HtmlContext, &'a RenderNode, ()>> {
     use RenderNodeInfo::*;
     if node.size_estimate.get().is_some() {
         return Ok(TreeMapResult::Nothing);
     }
     Ok(match node.info {
         Text(_) | Img(_, _) | Break | FragStart(_) => {
-            let _ = node.calc_size_estimate(context);
+            let _ = node.calc_size_estimate(context, decorator);
             TreeMapResult::Nothing
         }
 
@@ -678,7 +689,7 @@ fn precalc_size_estimate<'a>(node: &'a RenderNode, context: &mut HtmlContext) ->
         | Header(_, ref v) => TreeMapResult::PendingChildren {
             children: v.iter().collect(),
             cons: Box::new(move |context, _cs| {
-                node.calc_size_estimate(context);
+                node.calc_size_estimate(context, decorator);
                 Ok(None)
             }),
             prefn: None,
@@ -695,7 +706,7 @@ fn precalc_size_estimate<'a>(node: &'a RenderNode, context: &mut HtmlContext) ->
             TreeMapResult::PendingChildren {
                 children,
                 cons: Box::new(move |context, _cs| {
-                    node.calc_size_estimate(context);
+                    node.calc_size_estimate(context, decorator);
                     Ok(None)
                 }),
                 prefn: None,
@@ -707,7 +718,7 @@ fn precalc_size_estimate<'a>(node: &'a RenderNode, context: &mut HtmlContext) ->
         Coloured(_, ref v) => TreeMapResult::PendingChildren {
             children: v.iter().collect(),
             cons: Box::new(move |context, _cs| {
-                node.calc_size_estimate(context);
+                node.calc_size_estimate(context, decorator);
                 Ok(None)
             }),
             prefn: None,
@@ -1441,11 +1452,12 @@ fn process_dom_node<'a, 'b, 'c, T: Write>(
 fn render_tree_to_string<T: Write, D: TextDecorator>(
     context: &mut HtmlContext,
     renderer: SubRenderer<D>,
+    decorator: &D,
     tree: RenderNode,
     err_out: &mut T,
 ) -> Result<SubRenderer<D>> {
     /* Phase 1: get size estimates. */
-    tree_map_reduce(context, &tree, |context, node| precalc_size_estimate(&node, context))?;
+    tree_map_reduce(context, &tree, |context, node| precalc_size_estimate(&node, context, decorator))?;
     /* Phase 2: actually render. */
     let mut renderer = TextRenderer::new(renderer);
     tree_map_reduce(&mut renderer, tree, |renderer, node| {
@@ -1543,9 +1555,11 @@ fn do_render_node<'a, 'b, T: Write, D: TextDecorator>(
         }
         Header(level, children) => {
             let prefix = renderer.header_prefix(level);
+            let prefix_size = size_estimate.prefix_size;
+            debug_assert!(prefix.len() == prefix_size);
             let min_width = size_estimate.min_width;
-            let inner_width = min_width.saturating_sub(prefix.len());
-            let sub_builder = renderer.new_sub_renderer(renderer.width_minus(prefix.len(), inner_width)?)?;
+            let inner_width = min_width.saturating_sub(prefix_size);
+            let sub_builder = renderer.new_sub_renderer(renderer.width_minus(prefix_size, inner_width)?)?;
             renderer.push(sub_builder);
             pending2(children, move |renderer: &mut TextRenderer<D>, _| {
                 let sub_builder = renderer.pop();
@@ -1574,6 +1588,7 @@ fn do_render_node<'a, 'b, T: Write, D: TextDecorator>(
         }
         BlockQuote(children) => {
             let prefix = renderer.quote_prefix();
+            debug_assert!(size_estimate.prefix_size == prefix.len());
             let inner_width = size_estimate.min_width - prefix.len();
             let sub_builder = renderer.new_sub_renderer(renderer.width_minus(prefix.len(), inner_width)?)?;
             renderer.push(sub_builder);
@@ -2199,8 +2214,9 @@ impl RenderTree {
         render_options.pad_block_width = context.pad_block_width;
         render_options.min_wrap_width = context.min_wrap_width;
         render_options.allow_width_overflow = context.allow_width_overflow;
+        let test_decorator = decorator.make_subblock_decorator();
         let builder = SubRenderer::new(width, render_options, decorator);
-        let builder = render_tree_to_string(context, builder, self.0, &mut Discard {})?;
+        let builder = render_tree_to_string(context, builder, &test_decorator, self.0, &mut Discard {})?;
         Ok(RenderedText(builder))
     }
 
@@ -2312,14 +2328,14 @@ pub use ansi_colours::from_read_coloured;
 #[cfg(test)]
 mod tests;
 
-fn calc_ol_prefix_size(start: i64, num_items: usize) -> usize {
+fn calc_ol_prefix_size<D: TextDecorator>(start: i64, num_items: usize, decorator: &D) -> usize {
     // The prefix width could be at either end if the start is negative.
     let min_number = start;
     // Assumption: num_items can't overflow isize.
     let max_number = start + (num_items as i64) - 1;
 
     // This assumes that the decorator gives the same width as default.
-    let prefix_width_min = format!("{min_number}. ").len();
-    let prefix_width_max = format!("{max_number}. ").len();
+    let prefix_width_min = decorator.ordered_item_prefix(min_number).len();
+    let prefix_width_max = decorator.ordered_item_prefix(max_number).len();
     max(prefix_width_min, prefix_width_max)
 }
