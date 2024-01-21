@@ -2044,6 +2044,16 @@ There
     }
 
     #[test]
+    fn test_color_attr()
+    {
+        test_html_coloured(br##"
+        <p>Test <font color="red">red</font></p>
+        "##,
+        r#"Test <R>red</R>
+"#, 20);
+    }
+
+    #[test]
     fn test_css_lists()
     {
         test_html_coloured(br##"
