@@ -78,26 +78,26 @@ mod top {
 
     impl LinkMap {
         pub fn link_at(&self, x: usize, y: usize) -> Option<&str> {
-            if let Some(ref linevec) = self.lines.get(y) {
-                if let Some(&Some(ref text)) = linevec.get(x) {
-                    return Some(&text);
+            if let Some(linevec) = self.lines.get(y) {
+                if let Some(Some(text)) = linevec.get(x) {
+                    return Some(text);
                 }
             }
             None
         }
     }
 
-    fn link_from_tag(tag: &Vec<RichAnnotation>) -> Option<String> {
+    fn link_from_tag(tag: &[RichAnnotation]) -> Option<String> {
         let mut link = None;
         for annotation in tag {
-            if let RichAnnotation::Link(ref text) = *annotation {
+            if let RichAnnotation::Link(text) = annotation {
                 link = Some(text.clone());
             }
         }
         link
     }
 
-    fn find_links(lines: &Vec<TaggedLine<Vec<RichAnnotation>>>) -> LinkMap {
+    fn find_links(lines: &[TaggedLine<Vec<RichAnnotation>>]) -> LinkMap {
         let mut map = Vec::new();
         for line in lines {
             let mut linevec = Vec::new();
@@ -118,12 +118,11 @@ mod top {
         start_xy: HashMap<String, (usize, usize)>,
     }
 
-    fn find_frags(lines: &Vec<TaggedLine<Vec<RichAnnotation>>>) -> FragMap {
+    fn find_frags(lines: &[TaggedLine<Vec<RichAnnotation>>]) -> FragMap {
         use self::TaggedLineElement::*;
 
         let mut map = HashMap::new();
-        let mut y = 0;
-        for line in lines {
+        for (y, line) in lines.iter().enumerate() {
             let mut x = 0;
             for tli in line.iter() {
                 match tli {
@@ -135,7 +134,6 @@ mod top {
                     }
                 }
             }
-            y += 1;
         }
         FragMap { start_xy: map }
     }
@@ -153,7 +151,7 @@ mod top {
         let (width, height) = (width as usize, height as usize);
 
         let mut file = std::fs::File::open(filename).expect("Tried to open file");
-        let annotated = html2text::from_read_rich(&mut file, width as usize);
+        let annotated = html2text::from_read_rich(&mut file, width);
 
         let link_map = find_links(&annotated);
         let frag_map = find_frags(&annotated);
@@ -225,14 +223,10 @@ mod top {
                         }
                     }
                     Key::Char('k') | Key::Up => {
-                        if doc_y > 0 {
-                            doc_y -= 1;
-                        }
+                        doc_y = doc_y.saturating_sub(1);
                     }
                     Key::Char('h') | Key::Left => {
-                        if doc_x > 0 {
-                            doc_x -= 1;
-                        }
+                        doc_x = doc_x.saturating_sub(1);
                     }
                     Key::Char('l') | Key::Right => {
                         if doc_x + 1 < width {
@@ -268,8 +262,8 @@ mod top {
                     Key::Char('\t') => {}
                     Key::Char('\r') | Key::Char('\n') => {
                         if let Some(url) = opt_url {
-                            if url.starts_with("#") {
-                                let start = frag_map.start_xy.get(&url[1..]);
+                            if let Some(u) = url.strip_prefix('#') {
+                                let start = frag_map.start_xy.get(u);
                                 if let Some((x, y)) = start {
                                     doc_x = *x;
                                     doc_y = *y;

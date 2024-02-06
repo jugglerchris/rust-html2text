@@ -58,7 +58,6 @@ struct ReadMe;
 
 #[macro_use]
 extern crate html5ever;
-extern crate unicode_width;
 
 #[macro_use]
 mod macros;
@@ -179,23 +178,13 @@ impl Write for Discard {
 const MIN_WIDTH: usize = 3;
 
 /// Size information/estimate
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Default, Copy, Clone)]
 pub struct SizeEstimate {
     size: usize,      // Rough overall size
     min_width: usize, // The narrowest possible
 
     // The use is specific to the node type.
     prefix_size: usize,
-}
-
-impl Default for SizeEstimate {
-    fn default() -> SizeEstimate {
-        SizeEstimate {
-            size: 0,
-            min_width: 0,
-            prefix_size: 0,
-        }
-    }
 }
 
 impl SizeEstimate {
@@ -882,7 +871,7 @@ fn td_to_render_tree<'a, 'b, T: Write>(
     if let Element { ref attrs, .. } = handle.data {
         for attr in attrs.borrow().iter() {
             if &attr.name.local == "colspan" {
-                let v: &str = &*attr.value;
+                let v: &str = &attr.value;
                 colspan = v.parse().unwrap_or(1);
             }
         }
@@ -1171,7 +1160,7 @@ fn prepend_marker(prefix: RenderNode, mut orig: RenderNode) -> RenderNode {
         TableRow(ref mut rrow, _) => {
             // If the row is empty, then there isn't really anything
             // to attach the fragment start to.
-            if rrow.cells.len() > 0 {
+            if !rrow.cells.is_empty() {
                 rrow.cells[0].content.insert(0, prefix);
             }
         }
@@ -1179,9 +1168,9 @@ fn prepend_marker(prefix: RenderNode, mut orig: RenderNode) -> RenderNode {
         TableBody(ref mut rows) | Table(RenderTable { ref mut rows, .. }) => {
             // If the row is empty, then there isn't really anything
             // to attach the fragment start to.
-            if rows.len() > 0 {
+            if !rows.is_empty() {
                 let rrow = &mut rows[0];
-                if rrow.cells.len() > 0 {
+                if !rrow.cells.is_empty() {
                     rrow.cells[0].content.insert(0, prefix);
                 }
             }
@@ -1380,10 +1369,7 @@ fn process_dom_node<'a, 'b, 'c, T: Write>(
                     pending_noempty(handle, move |_, cs| {
                         let cs = cs
                             .into_iter()
-                            .filter(|n| match &n.info {
-                                RenderNodeInfo::ListItem(..) => true,
-                                _ => false,
-                            })
+                            .filter(|n| matches!(n.info, RenderNodeInfo::ListItem(..)))
                             .collect();
                         Ok(Some(RenderNode::new(Ol(start, cs))))
                     })
@@ -1418,21 +1404,18 @@ fn process_dom_node<'a, 'b, 'c, T: Write>(
                         cons,
                         prefn,
                         postfn,
-                    } => {
-                        let fragname: String = fragname.into();
-                        PendingChildren {
-                            children,
-                            prefn,
-                            postfn,
-                            cons: Box::new(move |ctx, ch| {
-                                let fragnode = RenderNode::new(FragStart(fragname));
-                                match cons(ctx, ch)? {
-                                    None => Ok(Some(fragnode)),
-                                    Some(node) => Ok(Some(prepend_marker(fragnode, node))),
-                                }
-                            }),
-                        }
-                    }
+                    } => PendingChildren {
+                        children,
+                        prefn,
+                        postfn,
+                        cons: Box::new(move |ctx, ch| {
+                            let fragnode = RenderNode::new(FragStart(fragname));
+                            match cons(ctx, ch)? {
+                                None => Ok(Some(fragnode)),
+                                Some(node) => Ok(Some(prepend_marker(fragnode, node))),
+                            }
+                        }),
+                    },
                 }
             } else {
                 result
@@ -1460,7 +1443,7 @@ fn process_dom_node<'a, 'b, 'c, T: Write>(
         }
         _ => {
             // NodeData doesn't have a Debug impl.
-            write!(err_out, "Unhandled node type.\n").unwrap();
+            writeln!(err_out, "Unhandled node type.").unwrap();
             Nothing
         }
     })
@@ -1475,7 +1458,7 @@ fn render_tree_to_string<T: Write, D: TextDecorator>(
 ) -> Result<SubRenderer<D>> {
     /* Phase 1: get size estimates. */
     tree_map_reduce(context, &tree, |context, node| {
-        precalc_size_estimate(&node, context, decorator)
+        precalc_size_estimate(node, context, decorator)
     })?;
     /* Phase 2: actually render. */
     let mut renderer = TextRenderer::new(renderer);
@@ -1512,7 +1495,7 @@ fn pending2<
     }
 }
 
-fn do_render_node<'a, 'b, T: Write, D: TextDecorator>(
+fn do_render_node<'b, T: Write, D: TextDecorator>(
     renderer: &mut TextRenderer<D>,
     tree: RenderNode,
     err_out: &'b mut T,
@@ -2041,13 +2024,13 @@ pub mod config {
 
         /// Render an existing RenderTree into a string.
         pub fn render_to_string(&self, render_tree: RenderTree, width: usize) -> Result<String> {
-            Ok(render_tree
+            render_tree
                 .render_with_context(
                     &mut self.make_context(),
                     width,
                     self.decorator.make_subblock_decorator(),
                 )?
-                .into_string()?)
+                .into_string()
         }
 
         /// Take an existing RenderTree, and returns text wrapped to `width` columns.
@@ -2059,13 +2042,13 @@ pub mod config {
             render_tree: RenderTree,
             width: usize,
         ) -> Result<Vec<TaggedLine<Vec<D::Annotation>>>> {
-            Ok(render_tree
+            render_tree
                 .render_with_context(
                     &mut self.make_context(),
                     width,
                     self.decorator.make_subblock_decorator(),
                 )?
-                .into_lines()?)
+                .into_lines()
         }
 
         /// Reads HTML from `input`, and returns a `String` with text wrapped to
@@ -2076,9 +2059,9 @@ pub mod config {
             width: usize,
         ) -> Result<String> {
             let mut context = self.make_context();
-            Ok(self.do_parse(&mut context, input)?
-               .render_with_context(&mut context, width, self.decorator)?
-               .into_string()?)
+            self.do_parse(&mut context, input)?
+                .render_with_context(&mut context, width, self.decorator)?
+                .into_string()
         }
 
         /// Reads HTML from `input`, and returns text wrapped to `width` columns.
@@ -2091,10 +2074,9 @@ pub mod config {
             width: usize,
         ) -> Result<Vec<TaggedLine<Vec<D::Annotation>>>> {
             let mut context = self.make_context();
-            Ok(self
-                .do_parse(&mut context, input)?
+            self.do_parse(&mut context, input)?
                 .render_with_context(&mut context, width, self.decorator)?
-                .into_lines()?)
+                .into_lines()
         }
 
         #[cfg(feature = "css")]

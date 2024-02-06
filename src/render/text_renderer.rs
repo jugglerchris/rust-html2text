@@ -142,7 +142,7 @@ impl<T: Debug + Eq + PartialEq + Clone + Default> TaggedLine<T> {
     pub fn from_string(s: String, tag: &T) -> TaggedLine<T> {
         TaggedLine {
             v: vec![TaggedLineElement::Str(TaggedString {
-                s: s,
+                s,
                 tag: tag.clone(),
             })],
         }
@@ -709,7 +709,7 @@ pub enum BorderSegHoriz {
 /// A dividing line between table rows which tracks intersections
 /// with vertical lines.
 #[derive(Clone, Debug)]
-pub struct BorderHoriz<T: Clone> {
+pub struct BorderHoriz<T> {
     /// The segments for the line.
     pub segments: Vec<BorderSegHoriz>,
     /// The tag associated with the lines
@@ -826,7 +826,7 @@ impl<T: Clone> BorderHoriz<T> {
 
 /// A line, which can either be text or a line.
 #[derive(Clone, Debug)]
-pub enum RenderLine<T: PartialEq + Eq + Clone + Debug + Default> {
+pub enum RenderLine<T> {
     /// Some rendered text
     Text(TaggedLine<T>),
     /// A table border line
@@ -1103,10 +1103,8 @@ impl<D: TextDecorator> SubRenderer<D> {
 
     pub(crate) fn width_minus(&self, prefix_len: usize, min_width: usize) -> crate::Result<usize> {
         let new_width = self.width.saturating_sub(prefix_len);
-        if new_width < min_width {
-            if !self.options.allow_width_overflow {
-                return Err(Error::TooNarrow);
-            }
+        if new_width < min_width && !self.options.allow_width_overflow {
+            return Err(Error::TooNarrow);
         }
         Ok(new_width.max(min_width))
     }
@@ -1225,16 +1223,12 @@ impl<D: TextDecorator> Renderer for SubRenderer<D> {
         let mut s = None;
         // Do any filtering of the text
         for filter in &self.text_filter_stack {
-            // When we stop supporting Rust < 1.40, this can become:
-            //let srctext = s.as_deref().unwrap_or(text);
-            let srctext = s.as_ref().map(Deref::deref).unwrap_or(text);
+            let srctext = s.as_deref().unwrap_or(text);
             if let Some(filtered) = filter(srctext) {
                 s = Some(filtered);
             }
         }
-        // When we stop supporting Rust < 1.40, this can become:
-        //let filtered_text = s.as_deref().unwrap_or(text);
-        let filtered_text = s.as_ref().map(Deref::deref).unwrap_or(text);
+        let filtered_text = s.as_deref().unwrap_or(text);
         if self.pre_depth == 0 {
             self.wrapping
                 .as_mut()
@@ -1376,15 +1370,7 @@ impl<D: TextDecorator> Renderer for SubRenderer<D> {
             /* Collapse any top border */
             let mut pos = 0;
             for &mut (w, ref mut sublines) in &mut line_sets {
-                let starts_border = if sublines.len() > 0 {
-                    if let RenderLine::Line(_) = sublines[0] {
-                        true
-                    } else {
-                        false
-                    }
-                } else {
-                    false
-                };
+                let starts_border = matches!(sublines.first(), Some(RenderLine::Line(_)));
                 if starts_border {
                     html_trace!("Starts border");
                     if let &mut RenderLine::Line(ref mut prev_border) =
@@ -1409,15 +1395,7 @@ impl<D: TextDecorator> Renderer for SubRenderer<D> {
             /* Collapse any bottom border */
             let mut pos = 0;
             for (col_no, &mut (w, ref mut sublines)) in line_sets.iter_mut().enumerate() {
-                let ends_border = if sublines.len() > 0 {
-                    if let Some(&RenderLine::Line(_)) = sublines.last() {
-                        true
-                    } else {
-                        false
-                    }
-                } else {
-                    false
-                };
+                let ends_border = matches!(sublines.last(), Some(RenderLine::Line(_)));
                 if ends_border {
                     html_trace!("Ends border");
                     if let RenderLine::Line(line) = sublines.pop().unwrap() {
@@ -1429,11 +1407,7 @@ impl<D: TextDecorator> Renderer for SubRenderer<D> {
             }
         }
 
-        let cell_height = line_sets
-            .iter()
-            .map(|&(_, ref v)| v.len())
-            .max()
-            .unwrap_or(0);
+        let cell_height = line_sets.iter().map(|(_, v)| v.len()).max().unwrap_or(0);
         let spaces: String = (0..tot_width).map(|_| ' ').collect();
         let last_cellno = line_sets.len() - 1;
         for i in 0..cell_height {
@@ -1441,10 +1415,10 @@ impl<D: TextDecorator> Renderer for SubRenderer<D> {
             for (cellno, &mut (width, ref mut ls)) in line_sets.iter_mut().enumerate() {
                 if let Some(piece) = ls.get_mut(i) {
                     match piece {
-                        &mut RenderLine::Text(ref mut tline) => {
+                        RenderLine::Text(tline) => {
                             line.consume(tline);
                         }
-                        &mut RenderLine::Line(ref bord) => {
+                        RenderLine::Line(bord) => {
                             line.push(Str(TaggedString {
                                 s: bord.to_string(),
                                 tag: self.ann_stack.clone(),
@@ -1454,8 +1428,7 @@ impl<D: TextDecorator> Renderer for SubRenderer<D> {
                 } else {
                     line.push(Str(TaggedString {
                         s: column_padding[cellno]
-                            .as_ref()
-                            .map(|s| s.clone())
+                            .clone()
                             .unwrap_or_else(|| spaces[0..width].to_string()),
 
                         tag: self.ann_stack.clone(),
@@ -1718,12 +1691,8 @@ impl TextDecorator for PlainDecorator {
         "`".to_string()
     }
 
-    fn decorate_preformat_first(&self) -> Self::Annotation {
-        ()
-    }
-    fn decorate_preformat_cont(&self) -> Self::Annotation {
-        ()
-    }
+    fn decorate_preformat_first(&self) -> Self::Annotation {}
+    fn decorate_preformat_cont(&self) -> Self::Annotation {}
 
     fn decorate_image(&mut self, _src: &str, title: &str) -> (String, Self::Annotation) {
         (format!("[{}]", title), ())
@@ -1814,12 +1783,8 @@ impl TextDecorator for TrivialDecorator {
         "".to_string()
     }
 
-    fn decorate_preformat_first(&self) -> Self::Annotation {
-        ()
-    }
-    fn decorate_preformat_cont(&self) -> Self::Annotation {
-        ()
-    }
+    fn decorate_preformat_first(&self) -> Self::Annotation {}
+    fn decorate_preformat_cont(&self) -> Self::Annotation {}
 
     fn decorate_image(&mut self, _src: &str, title: &str) -> (String, Self::Annotation) {
         // FIXME: this should surely be the alt text, not the title text
@@ -1858,10 +1823,11 @@ pub struct RichDecorator {}
 
 /// Annotation type for "rich" text.  Text is associated with a set of
 /// these.
-#[derive(PartialEq, Eq, Clone, Debug)]
+#[derive(PartialEq, Eq, Clone, Debug, Default)]
 #[non_exhaustive]
 pub enum RichAnnotation {
     /// Normal text.
+    #[default]
     Default,
     /// A link with the target.
     Link(String),
@@ -1881,12 +1847,6 @@ pub enum RichAnnotation {
     Colour(crate::Colour),
     /// Background Colour information
     BgColour(crate::Colour),
-}
-
-impl Default for RichAnnotation {
-    fn default() -> Self {
-        RichAnnotation::Default
-    }
 }
 
 impl RichDecorator {
