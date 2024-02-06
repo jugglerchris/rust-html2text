@@ -1135,9 +1135,6 @@ impl<D: TextDecorator> Renderer for SubRenderer<D> {
     }
 
     fn new_sub_renderer(&self, width: usize) -> crate::Result<Self> {
-        if width < 1 {
-            return Err(Error::TooNarrow);
-        }
         let mut result = SubRenderer::new(
             width,
             self.options.clone(),
