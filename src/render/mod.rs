@@ -12,7 +12,9 @@ pub trait Renderer {
     fn add_empty_line(&mut self) -> crate::Result<()>;
 
     /// Create a sub-renderer for nested blocks.
-    fn new_sub_renderer(&self, width: usize) -> crate::Result<Self> where Self: Sized;
+    fn new_sub_renderer(&self, width: usize) -> crate::Result<Self>
+    where
+        Self: Sized;
 
     /// Start a new block.
     fn start_block(&mut self) -> crate::Result<()>;
@@ -30,8 +32,10 @@ pub trait Renderer {
     fn add_horizontal_border(&mut self) -> Result<(), Error>;
 
     /// Add a horizontal border which is not the full width
-    fn add_horizontal_border_width(&mut self, #[allow(unused_variables)] width: usize)
-    -> Result<(), Error> {
+    fn add_horizontal_border_width(
+        &mut self,
+        #[allow(unused_variables)] width: usize,
+    ) -> Result<(), Error> {
         self.add_horizontal_border()
     }
 
@@ -54,8 +58,7 @@ pub trait Renderer {
 
     /// Add a new block from a sub renderer, and prefix every line by the
     /// corresponding text from each iteration of prefixes.
-    fn append_subrender<'a, I>(&mut self, other: Self, prefixes: I)
-    -> Result<(), Error>
+    fn append_subrender<'a, I>(&mut self, other: Self, prefixes: I) -> Result<(), Error>
     where
         I: Iterator<Item = &'a str>;
 
@@ -63,8 +66,7 @@ pub trait Renderer {
     /// and add a horizontal line below.
     /// If collapse is true, then merge top/bottom borders of the subrenderer
     /// with the surrounding one.
-    fn append_columns_with_borders<I>(&mut self, cols: I, collapse: bool)
-    -> Result<(), Error>
+    fn append_columns_with_borders<I>(&mut self, cols: I, collapse: bool) -> Result<(), Error>
     where
         I: IntoIterator<Item = Self>,
         Self: Sized;
