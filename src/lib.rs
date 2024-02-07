@@ -1074,6 +1074,7 @@ struct HtmlContext {
     pad_block_width: bool,
     allow_width_overflow: bool,
     min_wrap_width: usize,
+    raw: bool,
 }
 
 fn dom_to_render_tree_with_context<T: Write>(
@@ -1581,8 +1582,11 @@ fn do_render_node<'a, 'b, T: Write, D: TextDecorator>(
             debug_assert!(prefix.len() == prefix_size);
             let min_width = size_estimate.min_width;
             let inner_width = min_width.saturating_sub(prefix_size);
-            let sub_builder =
-                renderer.new_sub_renderer(renderer.width_minus(prefix_size, inner_width)?)?;
+            let sub_builder = renderer.new_sub_renderer(if renderer.options.raw {
+                renderer.width
+            } else {
+                renderer.width_minus(prefix_size, inner_width)?
+            })?;
             renderer.push(sub_builder);
             pending2(children, move |renderer: &mut TextRenderer<D>, _| {
                 let sub_builder = renderer.pop();
@@ -1613,8 +1617,11 @@ fn do_render_node<'a, 'b, T: Write, D: TextDecorator>(
             let prefix = renderer.quote_prefix();
             debug_assert!(size_estimate.prefix_size == prefix.len());
             let inner_width = size_estimate.min_width - prefix.len();
-            let sub_builder =
-                renderer.new_sub_renderer(renderer.width_minus(prefix.len(), inner_width)?)?;
+            let sub_builder = renderer.new_sub_renderer(if renderer.options.raw {
+                renderer.width
+            } else {
+                renderer.width_minus(prefix.len(), inner_width)?
+            })?;
             renderer.push(sub_builder);
             pending2(children, move |renderer: &mut TextRenderer<D>, _| {
                 let sub_builder = renderer.pop();
@@ -1636,8 +1643,11 @@ fn do_render_node<'a, 'b, T: Write, D: TextDecorator>(
                 cons: Box::new(|_, _| Ok(Some(None))),
                 prefn: Some(Box::new(move |renderer: &mut TextRenderer<D>, _| {
                     let inner_width = size_estimate.min_width - prefix_len;
-                    let sub_builder = renderer
-                        .new_sub_renderer(renderer.width_minus(prefix_len, inner_width)?)?;
+                    let sub_builder = renderer.new_sub_renderer(if renderer.options.raw {
+                        renderer.width
+                    } else {
+                        renderer.width_minus(prefix_len, inner_width)?
+                    })?;
                     renderer.push(sub_builder);
                     Ok(())
                 })),
@@ -1674,8 +1684,11 @@ fn do_render_node<'a, 'b, T: Write, D: TextDecorator>(
                 cons: Box::new(|_, _| Ok(Some(None))),
                 prefn: Some(Box::new(move |renderer: &mut TextRenderer<D>, _| {
                     let inner_min = size_estimate.min_width - size_estimate.prefix_size;
-                    let sub_builder = renderer
-                        .new_sub_renderer(renderer.width_minus(prefix_width, inner_min)?)?;
+                    let sub_builder = renderer.new_sub_renderer(if renderer.options.raw {
+                        renderer.width
+                    } else {
+                        renderer.width_minus(prefix_width, inner_min)?
+                    })?;
                     renderer.push(sub_builder);
                     Ok(())
                 })),
@@ -1713,7 +1726,11 @@ fn do_render_node<'a, 'b, T: Write, D: TextDecorator>(
         }
         Dd(children) => {
             let inner_min = size_estimate.min_width - 2;
-            let sub_builder = renderer.new_sub_renderer(renderer.width_minus(2, inner_min)?)?;
+            let sub_builder = renderer.new_sub_renderer(if renderer.options.raw {
+                renderer.width
+            } else {
+                renderer.width_minus(2, inner_min)?
+            })?;
             renderer.push(sub_builder);
             pending2(children, |renderer: &mut TextRenderer<D>, _| {
                 let sub_builder = renderer.pop();
@@ -1884,7 +1901,9 @@ fn render_table_tree<T: Write, D: TextDecorator>(
 
     renderer.start_block()?;
 
-    renderer.add_horizontal_border_width(table_width)?;
+    if !renderer.options.raw {
+        renderer.add_horizontal_border_width(table_width)?;
+    }
 
     Ok(TreeMapResult::PendingChildren {
         children: table.into_rows(col_widths, vert_row),
@@ -1899,18 +1918,23 @@ fn render_table_row<T: Write, D: TextDecorator>(
     row: RenderTableRow,
     _err_out: &mut T,
 ) -> TreeMapResult<'static, TextRenderer<D>, RenderNode, Option<SubRenderer<D>>> {
+    let raw = _renderer.options.raw;
     TreeMapResult::PendingChildren {
         children: row.into_cells(false),
-        cons: Box::new(|builders, children| {
+        cons: Box::new(move |builders, children| {
             let children: Vec<_> = children.into_iter().map(Option::unwrap).collect();
             if children.iter().any(|c| !c.empty()) {
-                builders.append_columns_with_borders(children, true)?;
+                builders.append_columns_with_borders(children, true, raw)?;
             }
             Ok(Some(None))
         }),
-        prefn: Some(Box::new(|renderer: &mut TextRenderer<D>, node| {
+        prefn: Some(Box::new(move |renderer: &mut TextRenderer<D>, node| {
             if let RenderNodeInfo::TableCell(ref cell) = node.info {
-                let sub_builder = renderer.new_sub_renderer(cell.col_width.unwrap())?;
+                let sub_builder = renderer.new_sub_renderer(if renderer.options.raw {
+                    renderer.width
+                } else {
+                    cell.col_width.unwrap()
+                })?;
                 renderer.push(sub_builder);
                 Ok(())
             } else {
@@ -1933,9 +1957,13 @@ fn render_table_row_vert<T: Write, D: TextDecorator>(
             builders.append_vert_row(children)?;
             Ok(Some(None))
         }),
-        prefn: Some(Box::new(|renderer: &mut TextRenderer<D>, node| {
+        prefn: Some(Box::new(move |renderer: &mut TextRenderer<D>, node| {
             if let RenderNodeInfo::TableCell(ref cell) = node.info {
-                let sub_builder = renderer.new_sub_renderer(cell.col_width.unwrap())?;
+                let sub_builder = renderer.new_sub_renderer(if renderer.options.raw {
+                    renderer.width
+                } else {
+                    cell.col_width.unwrap()
+                })?;
                 renderer.push(sub_builder);
                 Ok(())
             } else {
@@ -1986,6 +2014,7 @@ pub mod config {
 
         allow_width_overflow: bool,
         min_wrap_width: usize,
+        raw: bool,
     }
 
     impl<D: TextDecorator> Config<D> {
@@ -2001,6 +2030,7 @@ pub mod config {
                 pad_block_width: self.pad_block_width,
                 allow_width_overflow: self.allow_width_overflow,
                 min_wrap_width: self.min_wrap_width,
+                raw: self.raw,
             }
         }
         /// Parse with context.
@@ -2145,6 +2175,13 @@ pub mod config {
             self.min_wrap_width = min_wrap_width;
             self
         }
+
+        /// Raw extraction, ensures text in table cells ends up rendered together
+        /// This traverses tables as if they had a single column and every cell is its own row.
+        pub fn raw_mode(mut self, raw: bool) -> Self {
+            self.raw = raw;
+            self
+        }
     }
 
     impl Config<RichDecorator> {
@@ -2219,6 +2256,7 @@ pub mod config {
             pad_block_width: false,
             allow_width_overflow: false,
             min_wrap_width: MIN_WIDTH,
+            raw: false,
         }
     }
 
@@ -2234,6 +2272,7 @@ pub mod config {
             pad_block_width: false,
             allow_width_overflow: false,
             min_wrap_width: MIN_WIDTH,
+            raw: false,
         }
     }
 
@@ -2249,6 +2288,7 @@ pub mod config {
             pad_block_width: false,
             allow_width_overflow: false,
             min_wrap_width: MIN_WIDTH,
+            raw: false,
         }
     }
 }
@@ -2276,6 +2316,7 @@ impl RenderTree {
         render_options.pad_block_width = context.pad_block_width;
         render_options.min_wrap_width = context.min_wrap_width;
         render_options.allow_width_overflow = context.allow_width_overflow;
+        render_options.raw = context.raw;
         let test_decorator = decorator.make_subblock_decorator();
         let builder = SubRenderer::new(width, render_options, decorator);
         let builder =
