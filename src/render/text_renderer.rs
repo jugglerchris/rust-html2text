@@ -1395,13 +1395,11 @@ impl<D: TextDecorator> Renderer for SubRenderer<D> {
             /* Collapse any bottom border */
             let mut pos = 0;
             for (col_no, &mut (w, ref mut sublines)) in line_sets.iter_mut().enumerate() {
-                let ends_border = matches!(sublines.last(), Some(RenderLine::Line(_)));
-                if ends_border {
+                if let Some(RenderLine::Line(line)) = sublines.last() {
                     html_trace!("Ends border");
-                    if let RenderLine::Line(line) = sublines.pop().unwrap() {
-                        next_border.merge_from_above(&line, pos);
-                        column_padding[col_no] = Some(line.to_vertical_lines_above())
-                    }
+                    next_border.merge_from_above(&line, pos);
+                    column_padding[col_no] = Some(line.to_vertical_lines_above());
+                    sublines.pop();
                 }
                 pos += w + 1;
             }
@@ -1413,27 +1411,19 @@ impl<D: TextDecorator> Renderer for SubRenderer<D> {
         for i in 0..cell_height {
             let mut line = TaggedLine::new();
             for (cellno, &mut (width, ref mut ls)) in line_sets.iter_mut().enumerate() {
-                if let Some(piece) = ls.get_mut(i) {
-                    match piece {
-                        RenderLine::Text(tline) => {
-                            line.consume(tline);
-                        }
-                        RenderLine::Line(bord) => {
-                            line.push(Str(TaggedString {
-                                s: bord.to_string(),
-                                tag: self.ann_stack.clone(),
-                            }));
-                        }
-                    };
-                } else {
-                    line.push(Str(TaggedString {
+                match ls.get_mut(i) {
+                    Some(RenderLine::Text(tline)) => line.consume(tline),
+                    Some(RenderLine::Line(bord)) => line.push(Str(TaggedString {
+                        s: bord.to_string(),
+                        tag: self.ann_stack.clone(),
+                    })),
+                    None => line.push(Str(TaggedString {
                         s: column_padding[cellno]
                             .clone()
                             .unwrap_or_else(|| spaces[0..width].to_string()),
-
                         tag: self.ann_stack.clone(),
-                    }));
-                }
+                    })),
+                };
                 if cellno != last_cellno {
                     line.push_char('│', &self.ann_stack);
                 }
