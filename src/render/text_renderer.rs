@@ -169,6 +169,18 @@ impl<T: Debug + Eq + PartialEq + Clone + Default> TaggedLine<T> {
         true
     }
 
+    /// Return true if the line is non-empty
+    fn is_whitespace(&self) -> bool {
+        for elt in &self.v {
+            if let TaggedLineElement::Str(s) = elt {
+                if !s.s.trim().is_empty() {
+                    return false;
+                }
+            }
+        }
+        true
+    }
+
     /// Add a new tagged string fragment to the line
     pub fn push_str(&mut self, ts: TaggedString<T>) {
         use self::TaggedLineElement::Str;
@@ -884,8 +896,10 @@ impl<T: PartialEq + Eq + Clone + Debug + Default> RenderLine<T> {
 /// annotations depending on a decorator.
 #[derive(Clone)]
 pub struct SubRenderer<D: TextDecorator> {
-    width: usize,
-    options: RenderOptions,
+    /// Text width
+    pub width: usize,
+    /// Rendering options
+    pub options: RenderOptions,
     lines: LinkedList<RenderLine<Vec<D::Annotation>>>,
     /// True at the end of a block, meaning we should add
     /// a blank line if any other text is added.
@@ -930,6 +944,10 @@ pub struct RenderOptions {
     /// This may give a better output when the parent block
     /// has a background colour set.
     pub pad_block_width: bool,
+
+    /// Raw extraction, ensures text in table cells ends up rendered together
+    /// This traverses tables as if they had a single column and every cell is its own row.
+    pub raw: bool,
 }
 
 impl Default for RenderOptions {
@@ -939,6 +957,7 @@ impl Default for RenderOptions {
             min_wrap_width: crate::MIN_WIDTH,
             allow_width_overflow: Default::default(),
             pad_block_width: Default::default(),
+            raw: false,
         }
     }
 }
@@ -1293,7 +1312,12 @@ impl<D: TextDecorator> Renderer for SubRenderer<D> {
         Ok(())
     }
 
-    fn append_columns_with_borders<I>(&mut self, cols: I, collapse: bool) -> Result<(), Error>
+    fn append_columns_with_borders<I>(
+        &mut self,
+        cols: I,
+        collapse: bool,
+        raw: bool,
+    ) -> Result<(), Error>
     where
         I: IntoIterator<Item = Self>,
         Self: Sized,
@@ -1338,18 +1362,14 @@ impl<D: TextDecorator> Renderer for SubRenderer<D> {
         let mut next_border = BorderHoriz::new(tot_width, self.ann_stack.clone());
 
         // Join the vertical lines to all the borders
-        {
+        if let Some(RenderLine::Line(prev_border)) = self.lines.back_mut() {
             let mut pos = 0;
-            if let &mut RenderLine::Line(ref mut prev_border) = self.lines.back_mut().unwrap() {
-                html_trace!("Merging with last line:\n{}", prev_border.to_string());
-                for &(w, _) in &line_sets[..line_sets.len() - 1] {
-                    html_trace!("pos={}, w={}", pos, w);
-                    prev_border.join_below(pos + w);
-                    next_border.join_above(pos + w);
-                    pos += w + 1;
-                }
-            } else {
-                panic!("Expected a border line");
+            html_trace!("Merging with last line:\n{}", prev_border.to_string());
+            for &(w, _) in &line_sets[..line_sets.len() - 1] {
+                html_trace!("pos={}, w={}", pos, w);
+                prev_border.join_below(pos + w);
+                next_border.join_above(pos + w);
+                pos += w + 1;
             }
         }
 
@@ -1405,27 +1425,46 @@ impl<D: TextDecorator> Renderer for SubRenderer<D> {
         let cell_height = line_sets.iter().map(|(_, v)| v.len()).max().unwrap_or(0);
         let spaces: String = (0..tot_width).map(|_| ' ').collect();
         let last_cellno = line_sets.len() - 1;
-        for i in 0..cell_height {
-            let mut line = TaggedLine::new();
+        let mut line = TaggedLine::new();
+        let attach_line =
+            |cellno: usize,
+             width: usize,
+             line: &mut TaggedLine<Vec<D::Annotation>>,
+             opt: Option<&mut RenderLine<Vec<D::Annotation>>>| match opt {
+                Some(RenderLine::Text(tline)) => line.consume(tline),
+                Some(RenderLine::Line(bord)) if !raw => line.push(Str(TaggedString {
+                    s: bord.to_string(),
+                    tag: self.ann_stack.clone(),
+                })),
+                Some(RenderLine::Line(_)) => {}
+                None => line.push(Str(TaggedString {
+                    s: column_padding[cellno]
+                        .clone()
+                        .unwrap_or_else(|| spaces[0..width].to_string()),
+                    tag: self.ann_stack.clone(),
+                })),
+            };
+        if raw {
             for (cellno, &mut (width, ref mut ls)) in line_sets.iter_mut().enumerate() {
-                match ls.get_mut(i) {
-                    Some(RenderLine::Text(tline)) => line.consume(tline),
-                    Some(RenderLine::Line(bord)) => line.push(Str(TaggedString {
-                        s: bord.to_string(),
-                        tag: self.ann_stack.clone(),
-                    })),
-                    None => line.push(Str(TaggedString {
-                        s: column_padding[cellno]
-                            .clone()
-                            .unwrap_or_else(|| spaces[0..width].to_string()),
-                        tag: self.ann_stack.clone(),
-                    })),
-                };
+                for i in 0..cell_height {
+                    attach_line(cellno, width, &mut line, ls.get_mut(i));
+                    if !line.is_whitespace() {
+                        self.lines.push_back(RenderLine::Text(line));
+                    }
+                    line = TaggedLine::new();
+                }
+            }
+            return Ok(());
+        }
+        for i in 0..cell_height {
+            for (cellno, &mut (width, ref mut ls)) in line_sets.iter_mut().enumerate() {
+                attach_line(cellno, width, &mut line, ls.get_mut(i));
                 if cellno != last_cellno {
                     line.push_char('│', &self.ann_stack);
                 }
             }
             self.lines.push_back(RenderLine::Text(line));
+            line = TaggedLine::new();
         }
         self.lines.push_back(RenderLine::Line(next_border));
         Ok(())

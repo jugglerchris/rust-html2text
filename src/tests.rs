@@ -1689,6 +1689,37 @@ der
     );
 }
 
+const MULTILINE_CELLS: &str = "<table><tr>
+    <td><ol><li></li></ol></td>
+    <td><ol><li>
+        Aliquam erat volutpat.  Nunc eleifend leo vitae magna.  In id erat non orci commodo lobortis.
+    </li>
+    <li>
+        Aliquam erat volutpat.
+    </li>
+    <li></li>
+    </ol></td>
+    <td><ol><li>
+        Lorem ipsum dolor sit amet, consectetuer adipiscing elit.  Donec hendrerit tempor tellus.
+    </li></ol></td>
+</tr>
+</table>";
+
+#[test]
+fn test_table_raw_mode() {
+    let expected =
+        "Aliquam erat volutpat. Nunc eleifend leo vitae magna. In id erat non orci       
+commodo lobortis.                                                               
+Aliquam erat volutpat.                                                          
+Lorem ipsum dolor sit amet, consectetuer adipiscing elit. Donec hendrerit tempor
+tellus.                                                                         \n";
+    let s = config::with_decorator(TrivialDecorator::new())
+        .raw_mode(true)
+        .string_from_read(MULTILINE_CELLS.as_bytes(), 80)
+        .unwrap();
+    assert_eq!(s, expected);
+}
+
 #[test]
 fn test_unicode() {
     test_html(

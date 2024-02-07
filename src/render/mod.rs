@@ -66,7 +66,12 @@ pub trait Renderer {
     /// and add a horizontal line below.
     /// If collapse is true, then merge top/bottom borders of the subrenderer
     /// with the surrounding one.
-    fn append_columns_with_borders<I>(&mut self, cols: I, collapse: bool) -> Result<(), Error>
+    fn append_columns_with_borders<I>(
+        &mut self,
+        cols: I,
+        collapse: bool,
+        raw: bool,
+    ) -> Result<(), Error>
     where
         I: IntoIterator<Item = Self>,
         Self: Sized;
