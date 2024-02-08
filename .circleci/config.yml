@@ -18,9 +18,11 @@ jobs:
           rustup component add rustfmt clippy
       - run:
         name: Check formatting
+        command: |
           cargo fmt --all -- --check --color=auto
       - run:
         name: Clippy
+        command: |
           cargo clippy
   build-css:
     docker:
