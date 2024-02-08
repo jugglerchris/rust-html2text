@@ -1,13 +1,27 @@
 //! Some basic CSS support.
-use std::io::Write;
 use std::convert::TryFrom;
+use std::io::Write;
 use std::ops::Deref;
 
-use lightningcss::{stylesheet::{
-    ParserOptions, StyleSheet, StyleAttribute
-}, rules::CssRule, properties::{Property, display::{self, DisplayKeyword}}, values::color::CssColor, declaration::DeclarationBlock, traits::Parse};
+use lightningcss::{
+    declaration::DeclarationBlock,
+    properties::{
+        display::{self, DisplayKeyword},
+        Property,
+    },
+    rules::CssRule,
+    stylesheet::{ParserOptions, StyleAttribute, StyleSheet},
+    traits::Parse,
+    values::color::CssColor,
+};
 
-use crate::{Result, TreeMapResult, markup5ever_rcdom::{Handle, NodeData::{Comment, Document, Element, self}}, tree_map_reduce};
+use crate::{
+    markup5ever_rcdom::{
+        Handle,
+        NodeData::{self, Comment, Document, Element},
+    },
+    tree_map_reduce, Result, TreeMapResult,
+};
 
 #[derive(Debug, Clone)]
 enum SelectorComponent {
@@ -28,78 +42,72 @@ impl Selector {
     fn do_matches(comps: &[SelectorComponent], node: &Handle) -> bool {
         match comps.first() {
             None => return true,
-            Some(comp) => {
-                match comp {
-                    SelectorComponent::Class(class) => {
-                        match &node.data {
-                            Document |
-                                NodeData::Doctype { .. } |
-                                NodeData::Text { .. } |
-                                Comment { .. } |
-                                NodeData::ProcessingInstruction { .. } => {
-                                    return false;
-                                }
-                            Element { attrs, .. } => {
-                                let attrs = attrs.borrow();
-                                for attr in attrs.iter() {
-                                    if &attr.name.local == "class" {
-                                        for cls in attr.value.split_whitespace() {
-                                            if cls == class {
-                                                return Self::do_matches(&comps[1..], node);
-                                            }
-                                        }
+            Some(comp) => match comp {
+                SelectorComponent::Class(class) => match &node.data {
+                    Document
+                    | NodeData::Doctype { .. }
+                    | NodeData::Text { .. }
+                    | Comment { .. }
+                    | NodeData::ProcessingInstruction { .. } => {
+                        return false;
+                    }
+                    Element { attrs, .. } => {
+                        let attrs = attrs.borrow();
+                        for attr in attrs.iter() {
+                            if &attr.name.local == "class" {
+                                for cls in attr.value.split_whitespace() {
+                                    if cls == class {
+                                        return Self::do_matches(&comps[1..], node);
                                     }
                                 }
-                                return false;
                             }
                         }
+                        return false;
                     }
-                    SelectorComponent::Element(name) => {
-                        match &node.data {
-                            Element { name: eltname, .. } => {
-                                if name == eltname.expanded().local.deref() {
-                                    return Self::do_matches(&comps[1..], node);
-                                } else {
-                                    return false;
-                                }
-                            }
-                            _ => {
-                                return false;
-                            }
-                        }
-                    }
-                    SelectorComponent::Star => {
-                        return Self::do_matches(&comps[1..], node);
-                    }
-                    SelectorComponent::CombChild => {
-                        if let Some(parent) = node.parent.take() {
-                            let parent_handle = parent.upgrade();
-                            node.parent.set(Some(parent));
-                            if let Some(ph) = parent_handle {
-                                return Self::do_matches(&comps[1..], &ph);
-                            } else {
-                                return false;
-                            }
+                },
+                SelectorComponent::Element(name) => match &node.data {
+                    Element { name: eltname, .. } => {
+                        if name == eltname.expanded().local.deref() {
+                            return Self::do_matches(&comps[1..], node);
                         } else {
                             return false;
                         }
                     }
-                    SelectorComponent::CombDescendant => {
-                        if let Some(parent) = node.parent.take() {
-                            let parent_handle = parent.upgrade();
-                            node.parent.set(Some(parent));
-                            if let Some(ph) = parent_handle {
-                                return Self::do_matches(&comps[1..], &ph) ||
-                                    Self::do_matches(comps, &ph);
-                            } else {
-                                return false;
-                            }
+                    _ => {
+                        return false;
+                    }
+                },
+                SelectorComponent::Star => {
+                    return Self::do_matches(&comps[1..], node);
+                }
+                SelectorComponent::CombChild => {
+                    if let Some(parent) = node.parent.take() {
+                        let parent_handle = parent.upgrade();
+                        node.parent.set(Some(parent));
+                        if let Some(ph) = parent_handle {
+                            return Self::do_matches(&comps[1..], &ph);
                         } else {
                             return false;
                         }
+                    } else {
+                        return false;
                     }
                 }
-            }
+                SelectorComponent::CombDescendant => {
+                    if let Some(parent) = node.parent.take() {
+                        let parent_handle = parent.upgrade();
+                        node.parent.set(Some(parent));
+                        if let Some(ph) = parent_handle {
+                            return Self::do_matches(&comps[1..], &ph)
+                                || Self::do_matches(comps, &ph);
+                        } else {
+                            return false;
+                        }
+                    } else {
+                        return false;
+                    }
+                }
+            },
         }
     }
     fn matches(&self, node: &Handle) -> bool {
@@ -110,11 +118,13 @@ impl Selector {
 impl<'r, 'i> TryFrom<&'r lightningcss::selector::Selector<'i>> for Selector {
     type Error = ();
 
-    fn try_from(selector: &'r lightningcss::selector::Selector<'i>) -> std::result::Result<Self, Self::Error> {
+    fn try_from(
+        selector: &'r lightningcss::selector::Selector<'i>,
+    ) -> std::result::Result<Self, Self::Error> {
         let mut components = Vec::new();
 
-        use lightningcss::selector::Component;
         use lightningcss::selector::Combinator;
+        use lightningcss::selector::Component;
 
         let mut si = selector.iter();
         loop {
@@ -124,7 +134,9 @@ impl<'r, 'i> TryFrom<&'r lightningcss::selector::Selector<'i>> for Selector {
                         components.push(SelectorComponent::Class(String::from(id.deref())));
                     }
                     Component::LocalName(name) => {
-                        components.push(SelectorComponent::Element(String::from(name.lower_name.deref())));
+                        components.push(SelectorComponent::Element(String::from(
+                            name.lower_name.deref(),
+                        )));
                     }
                     Component::ExplicitUniversalType => {
                         components.push(SelectorComponent::Star);
@@ -152,9 +164,7 @@ impl<'r, 'i> TryFrom<&'r lightningcss::selector::Selector<'i>> for Selector {
                 break;
             }
         }
-        Ok(Selector {
-            components
-        })
+        Ok(Selector { components })
     }
 }
 
@@ -190,9 +200,7 @@ pub(crate) fn parse_style_attribute(text: &str) -> Result<Vec<Style>> {
 fn is_transparent(color: &CssColor) -> bool {
     match color {
         CssColor::CurrentColor => false,
-        CssColor::RGBA(rgba) => {
-            rgba.alpha == 0
-        }
+        CssColor::RGBA(rgba) => rgba.alpha == 0,
         CssColor::LAB(_) => false,
         CssColor::Predefined(_) => false,
         CssColor::Float(_) => false,
@@ -202,7 +210,11 @@ fn is_transparent(color: &CssColor) -> bool {
 fn styles_from_properties(decls: &DeclarationBlock<'_>) -> Vec<Style> {
     let mut styles = Vec::new();
     html_trace_quiet!("styles:from_properties: {decls:?}");
-    for decl in decls.declarations.iter().chain(decls.important_declarations.iter()) {
+    for decl in decls
+        .declarations
+        .iter()
+        .chain(decls.important_declarations.iter())
+    {
         html_trace_quiet!("styles:from_properties: {decl:?}");
         match decl {
             Property::Color(color) => {
@@ -254,7 +266,7 @@ impl StyleData {
                                 Ok(selector) => {
                                     let ruleset = Ruleset {
                                         selector,
-                                        styles: styles.clone()
+                                        styles: styles.clone(),
                                     };
                                     html_trace_quiet!("Adding ruleset {ruleset:?}");
                                     self.rules.push(ruleset);
@@ -346,10 +358,7 @@ fn extract_style_nodes<'a, 'b, T: Write>(
     match handle.clone().data {
         Document => pending(handle, |&mut (), cs| Ok(Some(combine_vecs(cs)))),
         Comment { .. } => Nothing,
-        Element {
-            ref name,
-            ..
-        } => {
+        Element { ref name, .. } => {
             match name.expanded() {
                 expanded_name!(html "style") => {
                     let mut result = String::new();
@@ -361,14 +370,12 @@ fn extract_style_nodes<'a, 'b, T: Write>(
                     }
                     Finished(vec![result])
                 }
-                _ => {
-                    pending(handle, |_, cs| Ok(Some(combine_vecs(cs))))
-                }
+                _ => pending(handle, |_, cs| Ok(Some(combine_vecs(cs)))),
             }
         }
-        NodeData::Text { contents: ref _tstr } => {
-            Nothing
-        }
+        NodeData::Text {
+            contents: ref _tstr,
+        } => Nothing,
         _ => {
             // NodeData doesn't have a Debug impl.
             Nothing
@@ -391,4 +398,3 @@ pub fn dom_to_stylesheet<T: Write>(handle: Handle, err_out: &mut T) -> Result<St
     }
     Ok(result)
 }
-

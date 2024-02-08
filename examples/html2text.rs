@@ -1,11 +1,11 @@
 extern crate argparse;
 extern crate html2text;
 use argparse::{ArgumentParser, Store, StoreOption, StoreTrue};
-use html2text::config::{Config, self};
+use html2text::config::{self, Config};
 use html2text::render::text_renderer::{TextDecorator, TrivialDecorator};
+use log::trace;
 use std::io;
 use std::io::Write;
-use log::trace;
 
 #[cfg(unix)]
 use html2text::render::text_renderer::RichAnnotation;
@@ -105,20 +105,19 @@ where
         if flags.use_colour {
             let conf = config::rich();
             let conf = update_config(conf, &flags);
-            return conf.coloured(input, flags.width, default_colour_map)
-                    .unwrap()
+            return conf
+                .coloured(input, flags.width, default_colour_map)
+                .unwrap();
         }
     }
     if literal {
         let conf = config::with_decorator(TrivialDecorator::new());
         let conf = update_config(conf, &flags);
-        conf.string_from_read(input, flags.width)
-            .unwrap()
+        conf.string_from_read(input, flags.width).unwrap()
     } else {
         let conf = config::plain();
         let conf = update_config(conf, &flags);
-        conf.string_from_read(input, flags.width)
-            .unwrap()
+        conf.string_from_read(input, flags.width).unwrap()
     }
 }
 
@@ -174,8 +173,11 @@ fn main() {
             "Output only literal text (no decorations)",
         );
         #[cfg(unix)]
-        ap.refer(&mut flags.use_colour)
-            .add_option(&["--colour"], StoreTrue, "Use ANSI terminal colours");
+        ap.refer(&mut flags.use_colour).add_option(
+            &["--colour"],
+            StoreTrue,
+            "Use ANSI terminal colours",
+        );
         #[cfg(feature = "css")]
         ap.refer(&mut flags.use_css)
             .add_option(&["--css"], StoreTrue, "Enable CSS");

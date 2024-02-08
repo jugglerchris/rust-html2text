@@ -21,80 +21,80 @@ fn test_html(input: &[u8], expected: &str, width: usize) {
 }
 #[track_caller]
 fn test_html_conf<F>(input: &[u8], expected: &str, width: usize, conf: F)
-    where F: Fn(Config<PlainDecorator>) -> Config<PlainDecorator>
+where
+    F: Fn(Config<PlainDecorator>) -> Config<PlainDecorator>,
 {
     let result = conf(config::plain())
-        .string_from_read(input, width).unwrap();
+        .string_from_read(input, width)
+        .unwrap();
     assert_eq_str!(result, expected);
 }
 #[track_caller]
 fn test_html_maxwrap(input: &[u8], expected: &str, width: usize, wrap_width: usize) {
-    test_html_conf(input, expected, width, |conf| conf.max_wrap_width(wrap_width))
+    test_html_conf(input, expected, width, |conf| {
+        conf.max_wrap_width(wrap_width)
+    })
 }
 #[cfg(feature = "css")]
 fn test_html_css(input: &[u8], expected: &str, width: usize) {
     let result = config::plain()
         .use_doc_css()
-        .string_from_read(input, width).unwrap();
+        .string_from_read(input, width)
+        .unwrap();
     assert_eq_str!(result, expected);
 }
 #[cfg(feature = "css")]
-fn test_colour_map(annotations: &[RichAnnotation], s: &str) -> String
-{
+fn test_colour_map(annotations: &[RichAnnotation], s: &str) -> String {
     let mut tags = ("", "");
     let mut bgtags = ("", "");
     for ann in annotations {
         match ann {
-            RichAnnotation::Colour(c) => {
-                match c {
-                    crate::Colour{
-                        r: 0xff,
-                        g: 0,
-                        b: 0
-                    } => {
-                        tags = ("<R>", "</R>");
-                    }
-                    crate::Colour{
-                        r: 0xff,
-                        g: 0xff,
-                        b: 0xff
-                    } => {
-                        tags = ("<W>", "</W>");
-                    }
-                    crate::Colour{
-                        r: 0,
-                        g: 0xff,
-                        b: 0
-                    } => {
-                        tags = ("<G>", "</G>");
-                    }
-                    _ => {
-                        tags = ("<?>", "</?>");
-                    }
+            RichAnnotation::Colour(c) => match c {
+                crate::Colour {
+                    r: 0xff,
+                    g: 0,
+                    b: 0,
+                } => {
+                    tags = ("<R>", "</R>");
                 }
-            }
-            RichAnnotation::BgColour(c) => {
-                match c {
-                    crate::Colour{
-                        r: 0xff,
-                        g: 0,
-                        b: 0
-                    } => {
-                        bgtags = ("<r>", "</r>");
-                    }
-                    crate::Colour{
-                        r: 0,
-                        g: 0xff,
-                        b: 0
-                    } => {
-                        bgtags = ("<g>", "</g>");
-                    }
-                    _ => {
-                        bgtags = ("<.>", "</.>");
-                    }
+                crate::Colour {
+                    r: 0xff,
+                    g: 0xff,
+                    b: 0xff,
+                } => {
+                    tags = ("<W>", "</W>");
                 }
-            }
-            _ => ()
+                crate::Colour {
+                    r: 0,
+                    g: 0xff,
+                    b: 0,
+                } => {
+                    tags = ("<G>", "</G>");
+                }
+                _ => {
+                    tags = ("<?>", "</?>");
+                }
+            },
+            RichAnnotation::BgColour(c) => match c {
+                crate::Colour {
+                    r: 0xff,
+                    g: 0,
+                    b: 0,
+                } => {
+                    bgtags = ("<r>", "</r>");
+                }
+                crate::Colour {
+                    r: 0,
+                    g: 0xff,
+                    b: 0,
+                } => {
+                    bgtags = ("<g>", "</g>");
+                }
+                _ => {
+                    bgtags = ("<.>", "</.>");
+                }
+            },
+            _ => (),
         }
     }
     format!("{}{}{}{}{}", bgtags.0, tags.0, s, tags.1, bgtags.1)
@@ -105,15 +105,16 @@ fn test_colour_map(annotations: &[RichAnnotation], s: &str) -> String
 fn test_html_coloured(input: &[u8], expected: &str, width: usize) {
     let result = config::rich()
         .use_doc_css()
-        .coloured(input, width, test_colour_map).unwrap();
+        .coloured(input, width, test_colour_map)
+        .unwrap();
     assert_eq_str!(result, expected);
 }
 #[track_caller]
 fn test_html_err_conf<F>(input: &[u8], expected: Error, width: usize, conf: F)
-    where F: Fn(Config<PlainDecorator>) -> Config<PlainDecorator>
+where
+    F: Fn(Config<PlainDecorator>) -> Config<PlainDecorator>,
 {
-    let result = conf(config::plain())
-        .string_from_read(input, width);
+    let result = conf(config::plain()).string_from_read(input, width);
     match result {
         Err(e) => {
             assert_eq!(e, expected);
@@ -133,7 +134,8 @@ fn test_html_style(input: &[u8], style: &str, expected: &str, width: usize) {
     let result = config::plain()
         .add_css(style)
         .unwrap()
-        .string_from_read(input, width).unwrap();
+        .string_from_read(input, width)
+        .unwrap();
     assert_eq_str!(result, expected);
 }
 
@@ -713,7 +715,8 @@ wrapped.
 
 #[test]
 fn test_wrap_max() {
-    test_html_maxwrap(br#"
+    test_html_maxwrap(
+        br#"
         <p>This is a bit of text to wrap<p>
         <ul>
           <li>This is a bit of text to wrap too</li>
@@ -729,12 +732,16 @@ wrap
   bit of
   text to
   wrap too
-"#, 20, 10)
+"#,
+        20,
+        10,
+    )
 }
 
 #[test]
 fn test_wrap_max2() {
-    test_html_maxwrap(br#"
+    test_html_maxwrap(
+        br#"
         <p>plain para at the full screen width</p>
         <ul>
           <li>bullet point uses same width so its margin is 2 chars further right
@@ -758,77 +765,48 @@ full screen width
     * result: you never
       get text squashed
       too narrow
-"#, 80, 17);
+"#,
+        80,
+        17,
+    );
 }
 
 #[test]
 fn test_wrap_word_boundaries() {
-    test_html(br#"Hello there boo"#,
-              "Hello there boo\n",
-              20);
-    test_html(br#"Hello there boo"#,
-              "Hello there boo\n",
-              15);
-    test_html(br#"Hello there boo"#,
-              "Hello there\nboo\n",
-              14);
-    test_html(br#"Hello there boo"#,
-              "Hello there\nboo\n",
-              13);
-    test_html(br#"Hello there boo"#,
-              "Hello there\nboo\n",
-              12);
-    test_html(br#"Hello there boo"#,
-              "Hello there\nboo\n",
-              11);
-    test_html(br#"Hello there boo"#,
-              "Hello\nthere boo\n",
-              10);
-    test_html(br#"Hello there boo"#,
-              "Hello\nthere\nboo\n",
-              6);
-    test_html(br#"Hello there boo"#,
-              "Hello\nthere\nboo\n",
-              5);
-    test_html(br#"Hello there boo"#,
-              "Hell\no\nther\ne\nboo\n",
-              4);
-    test_html(br#"Hello there boo"#,
-              "H\ne\nl\nl\no\nt\nh\ne\nr\ne\nb\no\no\n",
-              1);
-    test_html(br#"Hello <em>there</em> boo"#,
-              "Hello *there* boo\n",
-              20);
-    test_html(br#"Hello <em>there</em> boo"#,
-              "Hello *there*\nboo\n",
-              15);
-    test_html(br#"Hello <em>there</em> boo"#,
-              "Hello *there*\nboo\n",
-              14);
-    test_html(br#"Hello <em>there</em> boo"#,
-              "Hello *there*\nboo\n",
-              13);
-    test_html(br#"Hello <em>there</em> boo"#,
-              "Hello\n*there* boo\n",
-              12);
-    test_html(br#"Hello <em>there</em> boo"#,
-              "Hello\n*there* boo\n",
-              11);
-    test_html(br#"Hello <em>there</em> boo"#,
-              "Hello\n*there*\nboo\n",
-              10);
-    test_html(br#"Hello <em>there</em> boo"#,
-              "Hello\n*there\n* boo\n",
-              6);
-    test_html(br#"Hello <em>there</em> boo"#,
-              "Hello\n*ther\ne*\nboo\n",
-              5);
-    test_html(br#"Hello <em>there</em> boo"#,
-              "Hell\no\n*the\nre*\nboo\n",
-              4);
-    test_html(br#"Hello <em>there</em> boo"#,
-              "H\ne\nl\nl\no\n*\nt\nh\ne\nr\ne\n*\nb\no\no\n",
-              1);
+    test_html(br#"Hello there boo"#, "Hello there boo\n", 20);
+    test_html(br#"Hello there boo"#, "Hello there boo\n", 15);
+    test_html(br#"Hello there boo"#, "Hello there\nboo\n", 14);
+    test_html(br#"Hello there boo"#, "Hello there\nboo\n", 13);
+    test_html(br#"Hello there boo"#, "Hello there\nboo\n", 12);
+    test_html(br#"Hello there boo"#, "Hello there\nboo\n", 11);
+    test_html(br#"Hello there boo"#, "Hello\nthere boo\n", 10);
+    test_html(br#"Hello there boo"#, "Hello\nthere\nboo\n", 6);
+    test_html(br#"Hello there boo"#, "Hello\nthere\nboo\n", 5);
+    test_html(br#"Hello there boo"#, "Hell\no\nther\ne\nboo\n", 4);
+    test_html(
+        br#"Hello there boo"#,
+        "H\ne\nl\nl\no\nt\nh\ne\nr\ne\nb\no\no\n",
+        1,
+    );
+    test_html(br#"Hello <em>there</em> boo"#, "Hello *there* boo\n", 20);
+    test_html(br#"Hello <em>there</em> boo"#, "Hello *there*\nboo\n", 15);
+    test_html(br#"Hello <em>there</em> boo"#, "Hello *there*\nboo\n", 14);
+    test_html(br#"Hello <em>there</em> boo"#, "Hello *there*\nboo\n", 13);
+    test_html(br#"Hello <em>there</em> boo"#, "Hello\n*there* boo\n", 12);
+    test_html(br#"Hello <em>there</em> boo"#, "Hello\n*there* boo\n", 11);
+    test_html(br#"Hello <em>there</em> boo"#, "Hello\n*there*\nboo\n", 10);
+    test_html(br#"Hello <em>there</em> boo"#, "Hello\n*there\n* boo\n", 6);
+    test_html(br#"Hello <em>there</em> boo"#, "Hello\n*ther\ne*\nboo\n", 5);
+    test_html(
+        br#"Hello <em>there</em> boo"#,
+        "Hell\no\n*the\nre*\nboo\n",
+        4,
+    );
+    test_html(
+        br#"Hello <em>there</em> boo"#,
+        "H\ne\nl\nl\no\n*\nt\nh\ne\nr\ne\n*\nb\no\no\n",
+        1,
+    );
 }
 
 #[test]
@@ -1831,7 +1809,42 @@ fn test_narrow_width_nested() {
 
 #[test]
 fn test_issue_93_x() {
-    let data=[60, 116, 97, 98, 108, 101, 62, 60, 116, 114, 62, 60, 116, 100, 62, 120, 105, 60, 48, 62, 0, 0, 0, 60, 116, 97, 98, 108, 101, 62, 58, 58, 58, 62, 58, 62, 62, 62, 58, 60, 112, 32, 32, 32, 32, 32, 32, 32, 71, 87, 85, 78, 16, 16, 62, 60, 15, 16, 16, 16, 16, 16, 16, 15, 38, 16, 16, 16, 15, 1, 16, 16, 16, 16, 16, 16, 162, 111, 107, 99, 91, 112, 57, 64, 94, 100, 60, 111, 108, 47, 62, 127, 60, 108, 73, 62, 125, 109, 121, 102, 99, 122, 110, 102, 114, 98, 60, 97, 32, 104, 114, 101, 102, 61, 98, 111, 103, 32, 105, 100, 61, 100, 62, 60, 111, 15, 15, 15, 15, 15, 15, 15, 39, 15, 15, 15, 106, 102, 59, 99, 32, 32, 32, 86, 102, 122, 110, 104, 93, 108, 71, 114, 117, 110, 100, 96, 121, 57, 60, 107, 116, 109, 247, 62, 60, 32, 60, 122, 98, 99, 98, 97, 32, 119, 127, 127, 62, 60, 112, 62, 121, 116, 60, 47, 116, 100, 62, 62, 60, 111, 98, 62, 123, 110, 109, 97, 101, 105, 119, 60, 112, 101, 101, 122, 102, 63, 120, 97, 62, 60, 101, 62, 60, 120, 109, 112, 32, 28, 52, 55, 50, 50, 49, 52, 185, 150, 99, 62, 255, 112, 76, 85, 60, 112, 62, 73, 100, 116, 116, 60, 75, 50, 73, 116, 120, 110, 127, 255, 118, 32, 42, 40, 49, 33, 112, 32, 36, 107, 57, 60, 5, 163, 62, 49, 55, 32, 33, 118, 99, 63, 60, 109, 107, 43, 119, 100, 62, 60, 104, 58, 101, 163, 163, 163, 163, 220, 220, 220, 220, 220, 220, 220, 220, 220, 220, 220, 220, 1, 107, 117, 107, 108, 44, 102, 58, 60, 116, 101, 97, 106, 98, 59, 60, 115, 109, 52, 58, 115, 98, 62, 232, 110, 114, 32, 60, 117, 93, 120, 112, 119, 111, 59, 98, 120, 61, 206, 19, 61, 206, 19, 59, 1, 110, 102, 60, 115, 0, 242, 64, 203, 8, 111, 50, 59, 121, 122, 32, 42, 35, 32, 37, 101, 120, 104, 121, 0, 242, 59, 63, 121, 231, 130, 130, 130, 170, 170, 1, 32, 0, 0, 0, 28, 134, 200, 90, 119, 48, 60, 111, 108, 118, 119, 116, 113, 59, 100, 60, 117, 43, 110, 99, 9, 216, 157, 137, 216, 157, 246, 167, 62, 60, 104, 61, 43, 28, 134, 200, 105, 119, 48, 60, 122, 110, 0, 242, 61, 61, 114, 231, 130, 130, 130, 170, 170, 170, 233, 222, 222, 162, 163, 163, 163, 163, 163, 163, 163, 85, 100, 116, 99, 61, 60, 163, 163, 163, 163, 163, 220, 220, 1, 109, 112, 105, 10, 59, 105, 220, 215, 10, 59, 122, 100, 100, 121, 97, 43, 43, 43, 102, 122, 100, 60, 62, 114, 116, 122, 115, 61, 60, 115, 101, 62, 215, 215, 215, 215, 215, 98, 59, 60, 109, 120, 57, 60, 97, 102, 113, 229, 43, 43, 43, 43, 43, 43, 43, 43, 43, 35, 43, 43, 101, 58, 60, 116, 98, 101, 107, 98, 43, 43, 43, 43, 43, 43, 43, 43, 43, 43, 43, 43, 43, 43, 43, 43, 43, 43, 43, 43, 43, 43, 43, 43, 43, 43, 43, 43, 43, 43, 43, 43, 98, 99, 62, 60, 112, 102, 59, 124, 107, 111, 97, 98, 108, 118, 60, 116, 102, 101, 104, 97, 62, 60, 255, 127, 46, 60, 116, 101, 62, 60, 105, 102, 63, 116, 116, 60, 47, 116, 101, 62, 62, 60, 115, 98, 62, 123, 109, 108, 97, 100, 119, 118, 60, 111, 99, 97, 103, 99, 62, 60, 255, 127, 46, 60, 103, 99, 62, 60, 116, 98, 63, 60, 101, 62, 60, 109, 109, 231, 130, 130, 130, 213, 213, 213, 233, 222, 222, 59, 101, 103, 58, 60, 100, 111, 61, 65, 114, 104, 60, 47, 101, 109, 62, 60, 99, 99, 172, 97, 97, 58, 60, 119, 99, 64, 126, 118, 104, 100, 100, 107, 105, 60, 120, 98, 255, 255, 255, 0, 60, 255, 127, 46, 60, 113, 127];
+    let data = [
+        60, 116, 97, 98, 108, 101, 62, 60, 116, 114, 62, 60, 116, 100, 62, 120, 105, 60, 48, 62, 0,
+        0, 0, 60, 116, 97, 98, 108, 101, 62, 58, 58, 58, 62, 58, 62, 62, 62, 58, 60, 112, 32, 32,
+        32, 32, 32, 32, 32, 71, 87, 85, 78, 16, 16, 62, 60, 15, 16, 16, 16, 16, 16, 16, 15, 38, 16,
+        16, 16, 15, 1, 16, 16, 16, 16, 16, 16, 162, 111, 107, 99, 91, 112, 57, 64, 94, 100, 60,
+        111, 108, 47, 62, 127, 60, 108, 73, 62, 125, 109, 121, 102, 99, 122, 110, 102, 114, 98, 60,
+        97, 32, 104, 114, 101, 102, 61, 98, 111, 103, 32, 105, 100, 61, 100, 62, 60, 111, 15, 15,
+        15, 15, 15, 15, 15, 39, 15, 15, 15, 106, 102, 59, 99, 32, 32, 32, 86, 102, 122, 110, 104,
+        93, 108, 71, 114, 117, 110, 100, 96, 121, 57, 60, 107, 116, 109, 247, 62, 60, 32, 60, 122,
+        98, 99, 98, 97, 32, 119, 127, 127, 62, 60, 112, 62, 121, 116, 60, 47, 116, 100, 62, 62, 60,
+        111, 98, 62, 123, 110, 109, 97, 101, 105, 119, 60, 112, 101, 101, 122, 102, 63, 120, 97,
+        62, 60, 101, 62, 60, 120, 109, 112, 32, 28, 52, 55, 50, 50, 49, 52, 185, 150, 99, 62, 255,
+        112, 76, 85, 60, 112, 62, 73, 100, 116, 116, 60, 75, 50, 73, 116, 120, 110, 127, 255, 118,
+        32, 42, 40, 49, 33, 112, 32, 36, 107, 57, 60, 5, 163, 62, 49, 55, 32, 33, 118, 99, 63, 60,
+        109, 107, 43, 119, 100, 62, 60, 104, 58, 101, 163, 163, 163, 163, 220, 220, 220, 220, 220,
+        220, 220, 220, 220, 220, 220, 220, 1, 107, 117, 107, 108, 44, 102, 58, 60, 116, 101, 97,
+        106, 98, 59, 60, 115, 109, 52, 58, 115, 98, 62, 232, 110, 114, 32, 60, 117, 93, 120, 112,
+        119, 111, 59, 98, 120, 61, 206, 19, 61, 206, 19, 59, 1, 110, 102, 60, 115, 0, 242, 64, 203,
+        8, 111, 50, 59, 121, 122, 32, 42, 35, 32, 37, 101, 120, 104, 121, 0, 242, 59, 63, 121, 231,
+        130, 130, 130, 170, 170, 1, 32, 0, 0, 0, 28, 134, 200, 90, 119, 48, 60, 111, 108, 118, 119,
+        116, 113, 59, 100, 60, 117, 43, 110, 99, 9, 216, 157, 137, 216, 157, 246, 167, 62, 60, 104,
+        61, 43, 28, 134, 200, 105, 119, 48, 60, 122, 110, 0, 242, 61, 61, 114, 231, 130, 130, 130,
+        170, 170, 170, 233, 222, 222, 162, 163, 163, 163, 163, 163, 163, 163, 85, 100, 116, 99, 61,
+        60, 163, 163, 163, 163, 163, 220, 220, 1, 109, 112, 105, 10, 59, 105, 220, 215, 10, 59,
+        122, 100, 100, 121, 97, 43, 43, 43, 102, 122, 100, 60, 62, 114, 116, 122, 115, 61, 60, 115,
+        101, 62, 215, 215, 215, 215, 215, 98, 59, 60, 109, 120, 57, 60, 97, 102, 113, 229, 43, 43,
+        43, 43, 43, 43, 43, 43, 43, 35, 43, 43, 101, 58, 60, 116, 98, 101, 107, 98, 43, 43, 43, 43,
+        43, 43, 43, 43, 43, 43, 43, 43, 43, 43, 43, 43, 43, 43, 43, 43, 43, 43, 43, 43, 43, 43, 43,
+        43, 43, 43, 43, 43, 98, 99, 62, 60, 112, 102, 59, 124, 107, 111, 97, 98, 108, 118, 60, 116,
+        102, 101, 104, 97, 62, 60, 255, 127, 46, 60, 116, 101, 62, 60, 105, 102, 63, 116, 116, 60,
+        47, 116, 101, 62, 62, 60, 115, 98, 62, 123, 109, 108, 97, 100, 119, 118, 60, 111, 99, 97,
+        103, 99, 62, 60, 255, 127, 46, 60, 103, 99, 62, 60, 116, 98, 63, 60, 101, 62, 60, 109, 109,
+        231, 130, 130, 130, 213, 213, 213, 233, 222, 222, 59, 101, 103, 58, 60, 100, 111, 61, 65,
+        114, 104, 60, 47, 101, 109, 62, 60, 99, 99, 172, 97, 97, 58, 60, 119, 99, 64, 126, 118,
+        104, 100, 100, 107, 105, 60, 120, 98, 255, 255, 255, 0, 60, 255, 127, 46, 60, 113, 127,
+    ];
     let _local0 = crate::parse(&data[..]).unwrap();
     let d1 = TrivialDecorator::new();
     let _local1 = crate::RenderTree::render(_local0, 1, d1);
@@ -1847,54 +1860,85 @@ fn test_superscript() {
 fn test_header_overflow() {
     let html_hdr = br#"<blockquote><h3>Foo</h3></blockquote>"#;
     test_html(html_hdr, "> ### Foo\n", 20);
-    test_html_conf(html_hdr, "> ### F\n> ### o\n> ### o\n", 7, |c| c.min_wrap_width(1));
+    test_html_conf(html_hdr, "> ### F\n> ### o\n> ### o\n", 7, |c| {
+        c.min_wrap_width(1)
+    });
     test_html_err_conf(html_hdr, Error::TooNarrow, 6, |c| c.min_wrap_width(1));
     test_html_err_conf(html_hdr, Error::TooNarrow, 7, |c| c.min_wrap_width(3));
-    test_html_conf(html_hdr, "> ### F\n> ### o\n> ### o\n", 6, |c| c.min_wrap_width(1).allow_width_overflow());
-    test_html_conf(html_hdr, "> ### Foo\n", 7, |c| c.min_wrap_width(3).allow_width_overflow());
+    test_html_conf(html_hdr, "> ### F\n> ### o\n> ### o\n", 6, |c| {
+        c.min_wrap_width(1).allow_width_overflow()
+    });
+    test_html_conf(html_hdr, "> ### Foo\n", 7, |c| {
+        c.min_wrap_width(3).allow_width_overflow()
+    });
 }
 
 #[test]
 fn test_blockquote_overflow() {
     let html_hdr = br#"<blockquote><blockquote>Foo</blockquote></blockquote>"#;
     test_html(html_hdr, "> > Foo\n", 20);
-    test_html_conf(html_hdr, "> > F\n> > o\n> > o\n", 5, |c| c.min_wrap_width(1));
+    test_html_conf(html_hdr, "> > F\n> > o\n> > o\n", 5, |c| {
+        c.min_wrap_width(1)
+    });
     test_html_err_conf(html_hdr, Error::TooNarrow, 3, |c| c.min_wrap_width(1));
     test_html_err_conf(html_hdr, Error::TooNarrow, 4, |c| c.min_wrap_width(3));
-    test_html_conf(html_hdr, "> > F\n> > o\n> > o\n", 3, |c| c.min_wrap_width(1).allow_width_overflow());
-    test_html_conf(html_hdr, "> > Foo\n", 4, |c| c.min_wrap_width(3).allow_width_overflow());
+    test_html_conf(html_hdr, "> > F\n> > o\n> > o\n", 3, |c| {
+        c.min_wrap_width(1).allow_width_overflow()
+    });
+    test_html_conf(html_hdr, "> > Foo\n", 4, |c| {
+        c.min_wrap_width(3).allow_width_overflow()
+    });
 }
 
 #[test]
 fn test_ul_overflow() {
     let html_hdr = br#"<ul><li><ul><li>Foo</li></ul></li></ul>"#;
     test_html(html_hdr, "* * Foo\n", 20);
-    test_html_conf(html_hdr, "* * F\n    o\n    o\n", 5, |c| c.min_wrap_width(1));
+    test_html_conf(html_hdr, "* * F\n    o\n    o\n", 5, |c| {
+        c.min_wrap_width(1)
+    });
     test_html_err_conf(html_hdr, Error::TooNarrow, 3, |c| c.min_wrap_width(1));
     test_html_err_conf(html_hdr, Error::TooNarrow, 4, |c| c.min_wrap_width(3));
-    test_html_conf(html_hdr, "* * F\n    o\n    o\n", 3, |c| c.min_wrap_width(1).allow_width_overflow());
-    test_html_conf(html_hdr, "* * Foo\n", 4, |c| c.min_wrap_width(3).allow_width_overflow());
+    test_html_conf(html_hdr, "* * F\n    o\n    o\n", 3, |c| {
+        c.min_wrap_width(1).allow_width_overflow()
+    });
+    test_html_conf(html_hdr, "* * Foo\n", 4, |c| {
+        c.min_wrap_width(3).allow_width_overflow()
+    });
 }
 
 #[test]
 fn test_ol_overflow() {
     let html_hdr = br#"<ol><li><ol><li>Foo</li></ol></li></ol>"#;
     test_html(html_hdr, "1. 1. Foo\n", 20);
-    test_html_conf(html_hdr, "1. 1. F\n      o\n      o\n", 7, |c| c.min_wrap_width(1));
+    test_html_conf(html_hdr, "1. 1. F\n      o\n      o\n", 7, |c| {
+        c.min_wrap_width(1)
+    });
     test_html_err_conf(html_hdr, Error::TooNarrow, 5, |c| c.min_wrap_width(1));
     test_html_err_conf(html_hdr, Error::TooNarrow, 6, |c| c.min_wrap_width(3));
-    test_html_conf(html_hdr, "1. 1. F\n      o\n      o\n", 5, |c| c.min_wrap_width(1).allow_width_overflow());
-    test_html_conf(html_hdr, "1. 1. Foo\n", 6, |c| c.min_wrap_width(3).allow_width_overflow());
+    test_html_conf(html_hdr, "1. 1. F\n      o\n      o\n", 5, |c| {
+        c.min_wrap_width(1).allow_width_overflow()
+    });
+    test_html_conf(html_hdr, "1. 1. Foo\n", 6, |c| {
+        c.min_wrap_width(3).allow_width_overflow()
+    });
 }
 
 #[test]
 fn test_dd_overflow() {
     let html_hdr = br#"<blockquote><dl><dt>Foo</dt><dd>Hello</dd></dl></blockquote>"#;
     test_html(html_hdr, "> *Foo*\n>   Hello\n", 20);
-    test_html_conf(html_hdr, "> *Fo\n> o*\n>   H\n>   e\n>   l\n>   l\n>   o\n", 5, |c| c.min_wrap_width(1));
+    test_html_conf(
+        html_hdr,
+        "> *Fo\n> o*\n>   H\n>   e\n>   l\n>   l\n>   o\n",
+        5,
+        |c| c.min_wrap_width(1),
+    );
     test_html_err_conf(html_hdr, Error::TooNarrow, 3, |c| c.min_wrap_width(1));
     test_html_err_conf(html_hdr, Error::TooNarrow, 4, |c| c.min_wrap_width(3));
-    test_html_conf(html_hdr, "> *Foo*\n>   Hel\n>   lo\n", 4, |c| c.min_wrap_width(3).allow_width_overflow());
+    test_html_conf(html_hdr, "> *Foo*\n>   Hel\n>   lo\n", 4, |c| {
+        c.min_wrap_width(3).allow_width_overflow()
+    });
 }
 
 #[test]
@@ -1902,58 +1946,68 @@ fn test_overflow_wide_char() {
     // The smiley is a width-2 character.
     let html = "😃".as_bytes();
     test_html_err_conf(html, Error::TooNarrow, 1, |c| c.min_wrap_width(1));
-    test_html_conf(html, "😃\n", 1, |c| c.min_wrap_width(1).allow_width_overflow());
+    test_html_conf(html, "😃\n", 1, |c| {
+        c.min_wrap_width(1).allow_width_overflow()
+    });
 }
 #[cfg(feature = "css")]
 mod css_tests {
-    use super::{test_html_css, test_html_style, test_html_coloured};
+    use super::{test_html_coloured, test_html_css, test_html_style};
 
     #[test]
     fn test_disp_none() {
-        test_html_css(br#"
+        test_html_css(
+            br#"
           <style>
               .hide { display: none; }
           </style>
         <p>Hello</p>
         <p class="hide">Ignore</p>
         <p>There</p>"#,
-        r#"Hello
+            r#"Hello
 
 There
-"#, 20);
+"#,
+            20,
+        );
 
         // Same as above, but style supplied separately.
-        test_html_style(br#"
+        test_html_style(
+            br#"
         <p>Hello</p>
         <p class="hide">Ignore</p>
         <p>There</p>"#,
-        " .hide { display: none; }",
-        r#"Hello
+            " .hide { display: none; }",
+            r#"Hello
 
 There
-"#, 20);
+"#,
+            20,
+        );
     }
 
     #[test]
-    fn test_selector_elementname()
-    {
-        test_html_css(br#"
+    fn test_selector_elementname() {
+        test_html_css(
+            br#"
           <style>
               div { display: none; }
           </style>
         <p>Hello</p>
         <div>Ignore</div>
         <p>There</p>"#,
-        r#"Hello
+            r#"Hello
 
 There
-"#, 20);
+"#,
+            20,
+        );
     }
 
     #[test]
-    fn test_selector_aoc()
-    {
-        test_html_css(br#"
+    fn test_selector_aoc() {
+        test_html_css(
+            br#"
           <style>
               .someclass > * > span > span {
                   display: none;
@@ -1969,7 +2023,7 @@ There
         </div>
         </div>
         <p>There</p>"#,
-        r#"Hello
+            r#"Hello
 
 Ok
 
@@ -1978,13 +2032,15 @@ Span1
 Span1
 
 There
-"#, 20);
+"#,
+            20,
+        );
     }
 
     #[test]
-    fn test_coloured_a()
-    {
-        test_html_coloured(br##"
+    fn test_coloured_a() {
+        test_html_coloured(
+            br##"
           <style>
               .red {
                   color:#FF0000;
@@ -1992,14 +2048,16 @@ There
           </style>
         <p>Test <a class="red" href="foo">red</a></p>
         "##,
-        r#"Test <R>red</R>
-"#, 20);
+            r#"Test <R>red</R>
+"#,
+            20,
+        );
     }
 
     #[test]
-    fn test_bgcoloured()
-    {
-        test_html_coloured(br##"
+    fn test_bgcoloured() {
+        test_html_coloured(
+            br##"
           <style>
               .red {
                   color:#FF0000;
@@ -2008,14 +2066,16 @@ There
           </style>
         <p>Test <span class="red">red</span></p>
         "##,
-        r#"Test <g><R>red</R></g>
-"#, 20);
+            r#"Test <g><R>red</R></g>
+"#,
+            20,
+        );
     }
 
     #[test]
-    fn test_bgcoloured2()
-    {
-        test_html_coloured(br##"
+    fn test_bgcoloured2() {
+        test_html_coloured(
+            br##"
           <style>
               .red {
                   color:#FF0000;
@@ -2024,14 +2084,16 @@ There
           </style>
         <p>Test <span class="red">red</span> and <span style="color: #00ff00">green</span></p>
         "##,
-        r#"Test <g><R>red</R></g> and <G>green</G>
-"#, 20);
+            r#"Test <g><R>red</R></g> and <G>green</G>
+"#,
+            20,
+        );
     }
 
     #[test]
-    fn test_coloured_element()
-    {
-        test_html_coloured(br##"
+    fn test_coloured_element() {
+        test_html_coloured(
+            br##"
           <style>
               .red {
                   color:#FF0000;
@@ -2039,24 +2101,28 @@ There
           </style>
         <p>Test <blah class="red" href="foo">red</blah></p>
         "##,
-        r#"Test <R>red</R>
-"#, 20);
+            r#"Test <R>red</R>
+"#,
+            20,
+        );
     }
 
     #[test]
-    fn test_color_attr()
-    {
-        test_html_coloured(br##"
+    fn test_color_attr() {
+        test_html_coloured(
+            br##"
         <p>Test <font color="red">red</font></p>
         "##,
-        r#"Test <R>red</R>
-"#, 20);
+            r#"Test <R>red</R>
+"#,
+            20,
+        );
     }
 
     #[test]
-    fn test_css_lists()
-    {
-        test_html_coloured(br##"
+    fn test_css_lists() {
+        test_html_coloured(
+            br##"
           <style>
               .red {
                   color:#FF0000;
@@ -2067,10 +2133,13 @@ There
           <li>Line <span class="red">two</span></li>
         </ul>
         "##,
-        r#"* <R>Line one</R>
+            r#"* <R>Line one</R>
 * Line <R>two</R>
-"#, 20);
-        test_html_coloured(br##"
+"#,
+            20,
+        );
+        test_html_coloured(
+            br##"
           <style>
               .red {
                   color:#FF0000;
@@ -2081,61 +2150,83 @@ There
           <li>Line <span class="red">two</span></li>
         </ul>
         "##,
-        r#"1. <R>Line one</R>
+            r#"1. <R>Line one</R>
 2. Line <R>two</R>
-"#, 20);
+"#,
+            20,
+        );
     }
 
     #[test]
-    fn test_coloured_multi()
-    {
+    fn test_coloured_multi() {
         use super::test_colour_map;
-        let config = crate::config::rich()
-                    .use_doc_css();
-        let dom = config.parse_html(&br##"
+        let config = crate::config::rich().use_doc_css();
+        let dom = config
+            .parse_html(
+                &br##"
           <style>
               .red {
                   color:#FF0000;
               }
           </style>
         <p>Test paragraph with <span class="red">red</span> text</p>
-        "##[..]).unwrap();
+        "##[..],
+            )
+            .unwrap();
         let rt = config.dom_to_render_tree(&dom).unwrap();
-        assert_eq!(config.render_coloured(rt.clone(), 10, test_colour_map).unwrap(),
-        r#"Test
+        assert_eq!(
+            config
+                .render_coloured(rt.clone(), 10, test_colour_map)
+                .unwrap(),
+            r#"Test
 paragraph
 with <R>red</R>
 text
-"#);
-        assert_eq!(config.render_coloured(rt.clone(), 100, test_colour_map).unwrap(),
-        r#"Test paragraph with <R>red</R> text
-"#);
+"#
+        );
+        assert_eq!(
+            config
+                .render_coloured(rt.clone(), 100, test_colour_map)
+                .unwrap(),
+            r#"Test paragraph with <R>red</R> text
+"#
+        );
     }
 
     #[test]
-    fn test_coloured_important()
-    {
+    fn test_coloured_important() {
         use super::test_colour_map;
-        let config = crate::config::rich()
-                    .use_doc_css();
-        let dom = config.parse_html(&br##"
+        let config = crate::config::rich().use_doc_css();
+        let dom = config
+            .parse_html(
+                &br##"
           <style>
               .red {
                   color:#FF0000 !important;
               }
           </style>
         <p>Test paragraph with <span class="red">red</span> text</p>
-        "##[..]).unwrap();
+        "##[..],
+            )
+            .unwrap();
         let rt = config.dom_to_render_tree(&dom).unwrap();
-        assert_eq!(config.render_coloured(rt.clone(), 10, test_colour_map).unwrap(),
-        r#"Test
+        assert_eq!(
+            config
+                .render_coloured(rt.clone(), 10, test_colour_map)
+                .unwrap(),
+            r#"Test
 paragraph
 with <R>red</R>
 text
-"#);
-        assert_eq!(config.render_coloured(rt.clone(), 100, test_colour_map).unwrap(),
-        r#"Test paragraph with <R>red</R> text
-"#);
+"#
+        );
+        assert_eq!(
+            config
+                .render_coloured(rt.clone(), 100, test_colour_map)
+                .unwrap(),
+            r#"Test paragraph with <R>red</R> text
+"#
+        );
     }
 
     #[test]
@@ -2143,39 +2234,17 @@ text
         let html = br#"<head><style>em { color: white; }</style></head>
             <body>
                 Hello *<em>there</em>* boo"#;
-        test_html_coloured(html,
-                  "Hello *<W>there</W>* boo\n",
-                  20);
-        test_html_coloured(html,
-                  "Hello *<W>there</W>*\nboo\n",
-                  15);
-        test_html_coloured(html,
-                  "Hello *<W>there</W>*\nboo\n",
-                  14);
-        test_html_coloured(html,
-                  "Hello *<W>there</W>*\nboo\n",
-                  13);
-        test_html_coloured(html,
-                  "Hello\n*<W>there</W>* boo\n",
-                  12);
-        test_html_coloured(html,
-                  "Hello\n*<W>there</W>* boo\n",
-                  11);
-        test_html_coloured(html,
-                  "Hello\n*<W>there</W>*\nboo\n",
-                  10);
-        test_html_coloured(html,
-                  "Hello\n*<W>there</W>*\nboo\n",
-                  7);
-        test_html_coloured(html,
-                  "Hello\n*<W>there</W>\n* boo\n",
-                  6);
-        test_html_coloured(html,
-                  "Hello\n*<W>ther</W>\n<W>e</W>*\nboo\n",
-                  5);
-        test_html_coloured(html,
-                  "Hell\no\n*<W>the</W>\n<W>re</W>*\nboo\n",
-                  4);
+        test_html_coloured(html, "Hello *<W>there</W>* boo\n", 20);
+        test_html_coloured(html, "Hello *<W>there</W>*\nboo\n", 15);
+        test_html_coloured(html, "Hello *<W>there</W>*\nboo\n", 14);
+        test_html_coloured(html, "Hello *<W>there</W>*\nboo\n", 13);
+        test_html_coloured(html, "Hello\n*<W>there</W>* boo\n", 12);
+        test_html_coloured(html, "Hello\n*<W>there</W>* boo\n", 11);
+        test_html_coloured(html, "Hello\n*<W>there</W>*\nboo\n", 10);
+        test_html_coloured(html, "Hello\n*<W>there</W>*\nboo\n", 7);
+        test_html_coloured(html, "Hello\n*<W>there</W>\n* boo\n", 6);
+        test_html_coloured(html, "Hello\n*<W>ther</W>\n<W>e</W>*\nboo\n", 5);
+        test_html_coloured(html, "Hell\no\n*<W>the</W>\n<W>re</W>*\nboo\n", 4);
         test_html_coloured(html,
                   "H\ne\nl\nl\no\n*<W></W>\n<W>t</W>\n<W>h</W>\n<W>e</W>\n<W>r</W>\n<W>e</W>\n*\nb\no\no\n",
                   1);
