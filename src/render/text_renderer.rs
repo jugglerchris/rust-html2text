@@ -3,8 +3,8 @@
 //! This module implements helpers and concrete types for rendering from HTML
 //! into different text formats.
 
-use crate::Error;
 use crate::Colour;
+use crate::Error;
 
 use super::Renderer;
 use std::cell::Cell;
@@ -65,16 +65,21 @@ impl<D: TextDecorator> TextRenderer<D> {
     /// Pop off the top builder and return it.
     /// Panics if empty
     pub fn pop(&mut self) -> SubRenderer<D> {
-        self.subrender.pop().expect("Attempt to pop a subrender from empty stack")
+        self.subrender
+            .pop()
+            .expect("Attempt to pop a subrender from empty stack")
     }
 
     /// Pop off the only builder and return it.
     /// panics if there aren't exactly 1 available.
     pub fn into_inner(mut self) -> (SubRenderer<D>, Vec<String>) {
         assert_eq!(self.subrender.len(), 1);
-        (self.subrender.pop().expect(
-                "Attempt to pop a subrenderer from an empty stack"),
-        self.links)
+        (
+            self.subrender
+                .pop()
+                .expect("Attempt to pop a subrenderer from an empty stack"),
+            self.links,
+        )
     }
 }
 
@@ -486,7 +491,7 @@ impl<T: Clone + Eq + Debug + Default> WrappedBlock<T> {
             if c.is_whitespace() {
                 /* Whitespace is mostly ignored, except to terminate words. */
                 self.flush_word()?;
-        self.spacetag = Some(tag.clone());
+                self.spacetag = Some(tag.clone());
             } else if let Some(charwidth) = UnicodeWidthChar::width(c) {
                 /* Not whitespace; add to the current word. */
                 self.word.push_char(c, tag);
@@ -497,8 +502,12 @@ impl<T: Clone + Eq + Debug + Default> WrappedBlock<T> {
         Ok(())
     }
 
-    pub fn add_preformatted_text(&mut self, text: &str, tag_main: &T, tag_wrapped: &T)
-    -> Result<(), Error> {
+    pub fn add_preformatted_text(
+        &mut self,
+        text: &str,
+        tag_main: &T,
+        tag_wrapped: &T,
+    ) -> Result<(), Error> {
         html_trace!(
             "WrappedBlock::add_preformatted_text({}), {:?}/{:?}",
             text,
@@ -712,7 +721,7 @@ impl<T: Clone> BorderHoriz<T> {
     pub fn new(width: usize, tag: T) -> Self {
         BorderHoriz {
             segments: vec![BorderSegHoriz::Straight; width],
-            tag
+            tag,
         }
     }
 
@@ -929,7 +938,7 @@ impl Default for RenderOptions {
             wrap_width: Default::default(),
             min_wrap_width: crate::MIN_WIDTH,
             allow_width_overflow: Default::default(),
-            pad_block_width: Default::default()
+            pad_block_width: Default::default(),
         }
     }
 }
@@ -960,9 +969,13 @@ impl<D: TextDecorator> SubRenderer<D> {
         if self.wrapping.is_none() {
             let wwidth = match self.options.wrap_width {
                 Some(ww) => ww.min(self.width),
-                None => self.width
+                None => self.width,
             };
-            self.wrapping = Some(WrappedBlock::new(wwidth, self.options.pad_block_width, self.options.allow_width_overflow));
+            self.wrapping = Some(WrappedBlock::new(
+                wwidth,
+                self.options.pad_block_width,
+                self.options.allow_width_overflow,
+            ));
         }
     }
 
@@ -1127,7 +1140,11 @@ impl<D: TextDecorator> Renderer for SubRenderer<D> {
         if width < 1 {
             return Err(Error::TooNarrow);
         }
-        let mut result = SubRenderer::new(width, self.options.clone(), self.decorator.make_subblock_decorator());
+        let mut result = SubRenderer::new(
+            width,
+            self.options.clone(),
+            self.decorator.make_subblock_decorator(),
+        );
         // Copy the annotation stack
         result.ann_stack = self.ann_stack.clone();
         Ok(result)
@@ -1162,15 +1179,19 @@ impl<D: TextDecorator> Renderer for SubRenderer<D> {
 
     fn add_horizontal_border(&mut self) -> Result<(), Error> {
         self.flush_wrapping()?;
-        self.lines
-            .push_back(RenderLine::Line(BorderHoriz::new(self.width, self.ann_stack.clone())));
+        self.lines.push_back(RenderLine::Line(BorderHoriz::new(
+            self.width,
+            self.ann_stack.clone(),
+        )));
         Ok(())
     }
 
     fn add_horizontal_border_width(&mut self, width: usize) -> Result<(), Error> {
         self.flush_wrapping()?;
-        self.lines
-            .push_back(RenderLine::Line(BorderHoriz::new(width, self.ann_stack.clone())));
+        self.lines.push_back(RenderLine::Line(BorderHoriz::new(
+            width,
+            self.ann_stack.clone(),
+        )));
         Ok(())
     }
 
@@ -1467,7 +1488,11 @@ impl<D: TextDecorator> Renderer for SubRenderer<D> {
             if first {
                 first = false;
             } else {
-                let border = BorderHoriz::new_type(width, BorderSegHoriz::StraightVert, self.ann_stack.clone());
+                let border = BorderHoriz::new_type(
+                    width,
+                    BorderSegHoriz::StraightVert,
+                    self.ann_stack.clone(),
+                );
                 self.add_horizontal_line(border)?;
             }
             self.append_subrender(col, std::iter::repeat(""))?;
@@ -1540,7 +1565,9 @@ impl<D: TextDecorator> Renderer for SubRenderer<D> {
         Ok(())
     }
     fn end_strikeout(&mut self) -> crate::Result<()> {
-        self.text_filter_stack.pop().expect("end_strikeout() called without a corresponding start_strokeout()");
+        self.text_filter_stack
+            .pop()
+            .expect("end_strikeout() called without a corresponding start_strokeout()");
         let s = self.decorator.decorate_strikeout_end();
         self.add_inline_text(&s)?;
         self.ann_stack.pop();
@@ -1827,7 +1854,7 @@ impl TextDecorator for TrivialDecorator {
 /// A decorator to generate rich text (styled) rather than
 /// pure text output.
 #[derive(Clone, Debug)]
-pub struct RichDecorator { }
+pub struct RichDecorator {}
 
 /// Annotation type for "rich" text.  Text is associated with a set of
 /// these.
@@ -1866,7 +1893,7 @@ impl RichDecorator {
     /// Create a new `RichDecorator`.
     #[cfg_attr(feature = "clippy", allow(new_without_default_derive))]
     pub fn new() -> RichDecorator {
-        RichDecorator { }
+        RichDecorator {}
     }
 }
 
