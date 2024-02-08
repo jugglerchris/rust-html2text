@@ -71,6 +71,7 @@ pub trait Renderer {
         cols: I,
         collapse: bool,
         raw: bool,
+        draw_borders: bool,
     ) -> Result<(), Error>
     where
         I: IntoIterator<Item = Self>,

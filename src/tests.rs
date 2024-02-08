@@ -1706,6 +1706,19 @@ const MULTILINE_CELLS: &str = "<table><tr>
 </table>";
 
 #[test]
+fn test_table_without_borders() {
+    let expected = "Aliquam erat volutpat. Nunc eleifend leo     Lorem ipsum dolor sit amet,       
+vitae magna. In id erat non orci commodo     consectetuer adipiscing elit.     
+lobortis.                                    Donec hendrerit tempor tellus.    
+Aliquam erat volutpat.                                                         \n";
+    let s = config::with_decorator(TrivialDecorator::new())
+        .no_table_borders()
+        .string_from_read(MULTILINE_CELLS.as_bytes(), 80)
+        .unwrap();
+    assert_eq!(s, expected);
+}
+
+#[test]
 fn test_table_raw_mode() {
     let expected =
         "Aliquam erat volutpat. Nunc eleifend leo vitae magna. In id erat non orci       
