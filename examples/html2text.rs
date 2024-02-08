@@ -10,7 +10,7 @@ use std::io::Write;
 #[cfg(unix)]
 use html2text::render::text_renderer::RichAnnotation;
 #[cfg(unix)]
-use termion;
+
 
 #[cfg(unix)]
 fn default_colour_map(annotations: &[RichAnnotation], s: &str) -> String {
@@ -187,8 +187,8 @@ fn main() {
     let data = match infile {
         None => {
             let stdin = io::stdin();
-            let data = translate(&mut stdin.lock(), flags, literal);
-            data
+            
+            translate(&mut stdin.lock(), flags, literal)
         }
         Some(name) => {
             let mut file = std::fs::File::open(name).expect("Tried to open file");
