@@ -10,9 +10,6 @@ use std::io::Write;
 #[cfg(unix)]
 use html2text::render::text_renderer::RichAnnotation;
 #[cfg(unix)]
-
-
-#[cfg(unix)]
 fn default_colour_map(annotations: &[RichAnnotation], s: &str) -> String {
     use termion::color::*;
     use RichAnnotation::*;
@@ -187,7 +184,7 @@ fn main() {
     let data = match infile {
         None => {
             let stdin = io::stdin();
-            
+
             translate(&mut stdin.lock(), flags, literal)
         }
         Some(name) => {
