@@ -13,17 +13,17 @@ jobs:
       - run: cargo build
       - run: cargo test
       - run:
-        name: Install tools
-        command: |
-          rustup component add rustfmt clippy
+          name: Install tools
+          command: |
+            rustup component add rustfmt clippy
       - run:
-        name: Check formatting
-        command: |
-          cargo fmt --all -- --check --color=auto
+          name: Check formatting
+          command: |
+            cargo fmt --all -- --check --color=auto
       - run:
-        name: Clippy
-        command: |
-          cargo clippy
+          name: Clippy
+          command: |
+            cargo clippy
   build-css:
     docker:
       - image: cimg/rust:1.73
