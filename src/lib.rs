@@ -1064,6 +1064,7 @@ struct HtmlContext {
     allow_width_overflow: bool,
     min_wrap_width: usize,
     raw: bool,
+    draw_borders: bool,
 }
 
 fn dom_to_render_tree_with_context<T: Write>(
@@ -1883,7 +1884,7 @@ fn render_table_tree<T: Write, D: TextDecorator>(
 
     renderer.start_block()?;
 
-    if !renderer.options.raw {
+    if renderer.options.draw_borders {
         renderer.add_horizontal_border_width(table_width)?;
     }
 
@@ -1901,12 +1902,13 @@ fn render_table_row<T: Write, D: TextDecorator>(
     _err_out: &mut T,
 ) -> TreeMapResult<'static, TextRenderer<D>, RenderNode, Option<SubRenderer<D>>> {
     let raw = _renderer.options.raw;
+    let draw_borders = _renderer.options.draw_borders;
     TreeMapResult::PendingChildren {
         children: row.into_cells(false),
         cons: Box::new(move |builders, children| {
             let children: Vec<_> = children.into_iter().map(Option::unwrap).collect();
             if children.iter().any(|c| !c.empty()) {
-                builders.append_columns_with_borders(children, true, raw)?;
+                builders.append_columns_with_borders(children, true, raw, draw_borders)?;
             }
             Ok(Some(None))
         }),
@@ -1997,6 +1999,7 @@ pub mod config {
         allow_width_overflow: bool,
         min_wrap_width: usize,
         raw: bool,
+        draw_borders: bool,
     }
 
     impl<D: TextDecorator> Config<D> {
@@ -2013,6 +2016,7 @@ pub mod config {
                 allow_width_overflow: self.allow_width_overflow,
                 min_wrap_width: self.min_wrap_width,
                 raw: self.raw,
+                draw_borders: self.draw_borders,
             }
         }
         /// Parse with context.
@@ -2158,8 +2162,16 @@ pub mod config {
 
         /// Raw extraction, ensures text in table cells ends up rendered together
         /// This traverses tables as if they had a single column and every cell is its own row.
+        /// Implies `no_table_borders()`
         pub fn raw_mode(mut self, raw: bool) -> Self {
             self.raw = raw;
+            self.draw_borders = false;
+            self
+        }
+
+        /// Do not render table borders
+        pub fn no_table_borders(mut self) -> Self {
+            self.draw_borders = false;
             self
         }
     }
@@ -2237,6 +2249,7 @@ pub mod config {
             allow_width_overflow: false,
             min_wrap_width: MIN_WIDTH,
             raw: false,
+            draw_borders: true,
         }
     }
 
@@ -2253,6 +2266,7 @@ pub mod config {
             allow_width_overflow: false,
             min_wrap_width: MIN_WIDTH,
             raw: false,
+            draw_borders: true,
         }
     }
 
@@ -2269,6 +2283,7 @@ pub mod config {
             allow_width_overflow: false,
             min_wrap_width: MIN_WIDTH,
             raw: false,
+            draw_borders: true,
         }
     }
 }
@@ -2297,6 +2312,7 @@ impl RenderTree {
         render_options.min_wrap_width = context.min_wrap_width;
         render_options.allow_width_overflow = context.allow_width_overflow;
         render_options.raw = context.raw;
+        render_options.draw_borders = context.draw_borders;
         let test_decorator = decorator.make_subblock_decorator();
         let builder = SubRenderer::new(width, render_options, decorator);
         let builder =
