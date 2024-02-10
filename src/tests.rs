@@ -1950,6 +1950,22 @@ fn test_overflow_wide_char() {
         c.min_wrap_width(1).allow_width_overflow()
     });
 }
+
+#[test]
+fn test_table_too_narrow() {
+    let tbl = "<table><tr>
+    <td><ol><li></li></ol></td>
+    <td>
+        <ol><li>Aliquam erat volutpat. Lorem ipsum dolor sit amet,</li></ol>
+    </td>
+    <td>
+        <ol><li>Lorem ipsum dolor sit</li></ol>
+    </td>
+</tr></table>"
+        .as_bytes();
+    from_read(tbl, 80);
+}
+
 #[cfg(feature = "css")]
 mod css_tests {
     use super::{test_html_coloured, test_html_css, test_html_style};
