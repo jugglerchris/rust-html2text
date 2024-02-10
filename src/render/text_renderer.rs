@@ -169,7 +169,8 @@ impl<T: Debug + Eq + PartialEq + Clone + Default> TaggedLine<T> {
         true
     }
 
-    /// Return true if the line is non-empty
+    /// Return true if the line contains only whitespace or
+    /// table borders.
     fn is_whitespace(&self) -> bool {
         for elt in &self.v {
             if let TaggedLineElement::Str(s) = elt {
