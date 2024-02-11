@@ -1583,9 +1583,8 @@ fn do_render_node<'a, 'b, T: Write, D: TextDecorator>(
             debug_assert!(prefix.len() == prefix_size);
             let min_width = size_estimate.min_width;
             let inner_width = min_width.saturating_sub(prefix_size);
-            let sub_builder = renderer.new_sub_renderer(
-                renderer.width_minus(prefix_size, inner_width)?
-            )?;
+            let sub_builder =
+                renderer.new_sub_renderer(renderer.width_minus(prefix_size, inner_width)?)?;
             renderer.push(sub_builder);
             pending2(children, move |renderer: &mut TextRenderer<D>, _| {
                 let sub_builder = renderer.pop();
@@ -1616,9 +1615,8 @@ fn do_render_node<'a, 'b, T: Write, D: TextDecorator>(
             let prefix = renderer.quote_prefix();
             debug_assert!(size_estimate.prefix_size == prefix.len());
             let inner_width = size_estimate.min_width - prefix.len();
-            let sub_builder = renderer.new_sub_renderer(
-                renderer.width_minus(prefix.len(), inner_width)?
-            )?;
+            let sub_builder =
+                renderer.new_sub_renderer(renderer.width_minus(prefix.len(), inner_width)?)?;
             renderer.push(sub_builder);
             pending2(children, move |renderer: &mut TextRenderer<D>, _| {
                 let sub_builder = renderer.pop();
@@ -1640,9 +1638,8 @@ fn do_render_node<'a, 'b, T: Write, D: TextDecorator>(
                 cons: Box::new(|_, _| Ok(Some(None))),
                 prefn: Some(Box::new(move |renderer: &mut TextRenderer<D>, _| {
                     let inner_width = size_estimate.min_width - prefix_len;
-                    let sub_builder = renderer.new_sub_renderer(
-                        renderer.width_minus(prefix_len, inner_width)?
-                    )?;
+                    let sub_builder = renderer
+                        .new_sub_renderer(renderer.width_minus(prefix_len, inner_width)?)?;
                     renderer.push(sub_builder);
                     Ok(())
                 })),
@@ -1679,9 +1676,8 @@ fn do_render_node<'a, 'b, T: Write, D: TextDecorator>(
                 cons: Box::new(|_, _| Ok(Some(None))),
                 prefn: Some(Box::new(move |renderer: &mut TextRenderer<D>, _| {
                     let inner_min = size_estimate.min_width - size_estimate.prefix_size;
-                    let sub_builder = renderer.new_sub_renderer(
-                        renderer.width_minus(prefix_width, inner_min)?
-                    )?;
+                    let sub_builder = renderer
+                        .new_sub_renderer(renderer.width_minus(prefix_width, inner_min)?)?;
                     renderer.push(sub_builder);
                     Ok(())
                 })),
@@ -1719,9 +1715,7 @@ fn do_render_node<'a, 'b, T: Write, D: TextDecorator>(
         }
         Dd(children) => {
             let inner_min = size_estimate.min_width - 2;
-            let sub_builder = renderer.new_sub_renderer(
-                renderer.width_minus(2, inner_min)?
-            )?;
+            let sub_builder = renderer.new_sub_renderer(renderer.width_minus(2, inner_min)?)?;
             renderer.push(sub_builder);
             pending2(children, |renderer: &mut TextRenderer<D>, _| {
                 let sub_builder = renderer.pop();
@@ -1922,9 +1916,7 @@ fn render_table_row<T: Write, D: TextDecorator>(
         }),
         prefn: Some(Box::new(move |renderer: &mut TextRenderer<D>, node| {
             if let RenderNodeInfo::TableCell(ref cell) = node.info {
-                let sub_builder = renderer.new_sub_renderer(
-                    cell.col_width.unwrap()
-                )?;
+                let sub_builder = renderer.new_sub_renderer(cell.col_width.unwrap())?;
                 renderer.push(sub_builder);
                 Ok(())
             } else {
@@ -1949,9 +1941,7 @@ fn render_table_row_vert<T: Write, D: TextDecorator>(
         }),
         prefn: Some(Box::new(move |renderer: &mut TextRenderer<D>, node| {
             if let RenderNodeInfo::TableCell(ref cell) = node.info {
-                let sub_builder = renderer.new_sub_renderer(
-                    cell.col_width.unwrap()
-                )?;
+                let sub_builder = renderer.new_sub_renderer(cell.col_width.unwrap())?;
                 renderer.push(sub_builder);
                 Ok(())
             } else {

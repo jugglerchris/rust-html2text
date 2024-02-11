@@ -30,8 +30,13 @@ where
     assert_eq_str!(result, expected);
 }
 #[track_caller]
-fn test_html_conf_dec<D: TextDecorator, F>(decorator: D, input: &[u8], expected: &str, width: usize, conf: F)
-where
+fn test_html_conf_dec<D: TextDecorator, F>(
+    decorator: D,
+    input: &[u8],
+    expected: &str,
+    width: usize,
+    conf: F,
+) where
     F: Fn(Config<D>) -> Config<D>,
 {
     let result = conf(config::with_decorator(decorator))
@@ -1721,20 +1726,29 @@ fn test_table_without_borders() {
 vitae magna. In id erat non orci commodo     consectetuer adipiscing elit.     
 lobortis.                                    Donec hendrerit tempor tellus.    
 Aliquam erat volutpat.                                                         \n";
-    test_html_conf_dec(TrivialDecorator::new(), MULTILINE_CELLS, expected, 80, |c|
-                   c.no_table_borders());
+    test_html_conf_dec(
+        TrivialDecorator::new(),
+        MULTILINE_CELLS,
+        expected,
+        80,
+        |c| c.no_table_borders(),
+    );
 }
 
 #[test]
 fn test_table_raw_mode() {
-    let expected =
-        "Aliquam erat volutpat. Nunc eleifend leo vitae magna. In id erat non orci
+    let expected = "Aliquam erat volutpat. Nunc eleifend leo vitae magna. In id erat non orci
 commodo lobortis.
 Aliquam erat volutpat.
 Lorem ipsum dolor sit amet, consectetuer adipiscing elit. Donec hendrerit tempor
 tellus.\n";
-    test_html_conf_dec(TrivialDecorator::new(), MULTILINE_CELLS, expected, 80, |c|
-                   c.raw_mode(true));
+    test_html_conf_dec(
+        TrivialDecorator::new(),
+        MULTILINE_CELLS,
+        expected,
+        80,
+        |c| c.raw_mode(true),
+    );
 }
 
 #[test]
