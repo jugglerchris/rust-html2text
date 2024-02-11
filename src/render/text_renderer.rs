@@ -1522,7 +1522,7 @@ impl<D: TextDecorator> Renderer for SubRenderer<D> {
         for col in cols {
             if first {
                 first = false;
-            } else {
+            } else if !self.options.raw {
                 let border = BorderHoriz::new_type(
                     width,
                     BorderSegHoriz::StraightVert,
