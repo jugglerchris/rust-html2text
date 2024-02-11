@@ -1728,11 +1728,11 @@ Aliquam erat volutpat.                                                         \
 #[test]
 fn test_table_raw_mode() {
     let expected =
-        "Aliquam erat volutpat. Nunc eleifend leo vitae magna. In id erat non orci       
-commodo lobortis.                                                               
-Aliquam erat volutpat.                                                          
+        "Aliquam erat volutpat. Nunc eleifend leo vitae magna. In id erat non orci
+commodo lobortis.
+Aliquam erat volutpat.
 Lorem ipsum dolor sit amet, consectetuer adipiscing elit. Donec hendrerit tempor
-tellus.                                                                         \n";
+tellus.\n";
     test_html_conf_dec(TrivialDecorator::new(), MULTILINE_CELLS, expected, 80, |c|
                    c.raw_mode(true));
 }

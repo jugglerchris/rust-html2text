@@ -169,19 +169,6 @@ impl<T: Debug + Eq + PartialEq + Clone + Default> TaggedLine<T> {
         true
     }
 
-    /// Return true if the line contains only whitespace or
-    /// table borders.
-    fn is_whitespace(&self) -> bool {
-        for elt in &self.v {
-            if let TaggedLineElement::Str(s) = elt {
-                if !s.s.trim().is_empty() {
-                    return false;
-                }
-            }
-        }
-        true
-    }
-
     /// Add a new tagged string fragment to the line
     pub fn push_str(&mut self, ts: TaggedString<T>) {
         use self::TaggedLineElement::Str;
@@ -1478,18 +1465,6 @@ impl<D: TextDecorator> Renderer for SubRenderer<D> {
                     tag: self.ann_stack.clone(),
                 })),
             };
-        if raw {
-            for (cellno, &mut (width, ref mut ls)) in line_sets.iter_mut().enumerate() {
-                for i in 0..cell_height {
-                    attach_line(cellno, width, &mut line, ls.get_mut(i));
-                    if !line.is_whitespace() {
-                        self.lines.push_back(RenderLine::Text(line));
-                    }
-                    line = TaggedLine::new();
-                }
-            }
-            return Ok(());
-        }
         for i in 0..cell_height {
             for (cellno, &mut (width, ref mut ls)) in line_sets.iter_mut().enumerate() {
                 attach_line(cellno, width, &mut line, ls.get_mut(i));
@@ -1522,7 +1497,7 @@ impl<D: TextDecorator> Renderer for SubRenderer<D> {
         for col in cols {
             if first {
                 first = false;
-            } else if !self.options.raw {
+            } else if self.options.draw_borders {
                 let border = BorderHoriz::new_type(
                     width,
                     BorderSegHoriz::StraightVert,
@@ -1532,7 +1507,9 @@ impl<D: TextDecorator> Renderer for SubRenderer<D> {
             }
             self.append_subrender(col, std::iter::repeat(""))?;
         }
-        self.add_horizontal_border()?;
+        if self.options.draw_borders {
+            self.add_horizontal_border()?;
+        }
         Ok(())
     }
 
