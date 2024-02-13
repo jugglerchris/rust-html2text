@@ -1304,13 +1304,7 @@ impl<D: TextDecorator> Renderer for SubRenderer<D> {
         Ok(())
     }
 
-    fn append_columns_with_borders<I>(
-        &mut self,
-        cols: I,
-        collapse: bool,
-        raw: bool,
-        draw_borders: bool,
-    ) -> Result<(), Error>
+    fn append_columns_with_borders<I>(&mut self, cols: I, collapse: bool) -> Result<(), Error>
     where
         I: IntoIterator<Item = Self>,
         Self: Sized,
@@ -1419,35 +1413,36 @@ impl<D: TextDecorator> Renderer for SubRenderer<D> {
         let spaces: String = (0..tot_width).map(|_| ' ').collect();
         let last_cellno = line_sets.len() - 1;
         let mut line = TaggedLine::new();
-        let attach_line =
-            |cellno: usize,
-             width: usize,
-             line: &mut TaggedLine<Vec<D::Annotation>>,
-             opt: Option<&mut RenderLine<Vec<D::Annotation>>>| match opt {
-                Some(RenderLine::Text(tline)) => line.consume(tline),
-                Some(RenderLine::Line(_)) if !draw_borders || raw => {}
-                Some(RenderLine::Line(bord)) => line.push(Str(TaggedString {
-                    s: bord.to_string(),
-                    tag: self.ann_stack.clone(),
-                })),
-                None => line.push(Str(TaggedString {
-                    s: column_padding[cellno]
-                        .clone()
-                        .unwrap_or_else(|| spaces[0..width].to_string()),
-                    tag: self.ann_stack.clone(),
-                })),
-            };
         for i in 0..cell_height {
             for (cellno, &mut (width, ref mut ls)) in line_sets.iter_mut().enumerate() {
-                attach_line(cellno, width, &mut line, ls.get_mut(i));
+                match ls.get_mut(i) {
+                    Some(RenderLine::Text(tline)) => line.consume(tline),
+                    Some(RenderLine::Line(bord)) => line.push(Str(TaggedString {
+                        s: bord.to_string(),
+                        tag: self.ann_stack.clone(),
+                    })),
+                    None => line.push(Str(TaggedString {
+                        s: column_padding[cellno]
+                            .clone()
+                            .unwrap_or_else(|| spaces[0..width].to_string()),
+                        tag: self.ann_stack.clone(),
+                    })),
+                }
                 if cellno != last_cellno {
-                    line.push_char(if draw_borders { '│' } else { ' ' }, &self.ann_stack);
+                    line.push_char(
+                        if self.options.draw_borders {
+                            '│'
+                        } else {
+                            ' '
+                        },
+                        &self.ann_stack,
+                    );
                 }
             }
             self.lines.push_back(RenderLine::Text(line));
             line = TaggedLine::new();
         }
-        if draw_borders {
+        if self.options.draw_borders {
             self.lines.push_back(RenderLine::Line(next_border));
         }
         Ok(())

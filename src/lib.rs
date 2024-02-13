@@ -1882,18 +1882,16 @@ fn render_table_row<T: Write, D: TextDecorator>(
     row: RenderTableRow,
     _err_out: &mut T,
 ) -> TreeMapResult<'static, TextRenderer<D>, RenderNode, Option<SubRenderer<D>>> {
-    let raw = _renderer.options.raw;
-    let draw_borders = _renderer.options.draw_borders;
     TreeMapResult::PendingChildren {
         children: row.into_cells(false),
-        cons: Box::new(move |builders, children| {
+        cons: Box::new(|builders, children| {
             let children: Vec<_> = children.into_iter().map(Option::unwrap).collect();
             if children.iter().any(|c| !c.empty()) {
-                builders.append_columns_with_borders(children, true, raw, draw_borders)?;
+                builders.append_columns_with_borders(children, true)?;
             }
             Ok(Some(None))
         }),
-        prefn: Some(Box::new(move |renderer: &mut TextRenderer<D>, node| {
+        prefn: Some(Box::new(|renderer: &mut TextRenderer<D>, node| {
             if let RenderNodeInfo::TableCell(ref cell) = node.info {
                 let sub_builder = renderer.new_sub_renderer(cell.col_width.unwrap())?;
                 renderer.push(sub_builder);
@@ -1918,7 +1916,7 @@ fn render_table_row_vert<T: Write, D: TextDecorator>(
             builders.append_vert_row(children)?;
             Ok(Some(None))
         }),
-        prefn: Some(Box::new(move |renderer: &mut TextRenderer<D>, node| {
+        prefn: Some(Box::new(|renderer: &mut TextRenderer<D>, node| {
             if let RenderNodeInfo::TableCell(ref cell) = node.info {
                 let sub_builder = renderer.new_sub_renderer(cell.col_width.unwrap())?;
                 renderer.push(sub_builder);
