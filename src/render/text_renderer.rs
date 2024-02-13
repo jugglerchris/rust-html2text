@@ -709,7 +709,7 @@ pub enum BorderSegHoriz {
 /// A dividing line between table rows which tracks intersections
 /// with vertical lines.
 #[derive(Clone, Debug)]
-pub struct BorderHoriz<T: Clone> {
+pub struct BorderHoriz<T> {
     /// The segments for the line.
     pub segments: Vec<BorderSegHoriz>,
     /// The tag associated with the lines
@@ -826,7 +826,7 @@ impl<T: Clone> BorderHoriz<T> {
 
 /// A line, which can either be text or a line.
 #[derive(Clone, Debug)]
-pub enum RenderLine<T: PartialEq + Eq + Clone + Debug + Default> {
+pub enum RenderLine<T> {
     /// Some rendered text
     Text(TaggedLine<T>),
     /// A table border line
