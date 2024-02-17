@@ -30,6 +30,21 @@ where
     assert_eq_str!(result, expected);
 }
 #[track_caller]
+fn test_html_conf_dec<D: TextDecorator, F>(
+    decorator: D,
+    input: &[u8],
+    expected: &str,
+    width: usize,
+    conf: F,
+) where
+    F: Fn(Config<D>) -> Config<D>,
+{
+    let result = conf(config::with_decorator(decorator))
+        .string_from_read(input, width)
+        .unwrap();
+    assert_eq_str!(result, expected);
+}
+#[track_caller]
 fn test_html_maxwrap(input: &[u8], expected: &str, width: usize, wrap_width: usize) {
     test_html_conf(input, expected, width, |conf| {
         conf.max_wrap_width(wrap_width)
@@ -1686,6 +1701,53 @@ der
 ─────
 ",
         5,
+    );
+}
+
+const MULTILINE_CELLS: &[u8] = b"<table><tr>
+    <td><ol><li></li></ol></td>
+    <td><ol><li>
+        Aliquam erat volutpat.  Nunc eleifend leo vitae magna.  In id erat non orci commodo lobortis.
+    </li>
+    <li>
+        Aliquam erat volutpat.
+    </li>
+    <li></li>
+    </ol></td>
+    <td><ol><li>
+        Lorem ipsum dolor sit amet, consectetuer adipiscing elit.  Donec hendrerit tempor tellus.
+    </li></ol></td>
+</tr>
+</table>";
+
+#[test]
+fn test_table_without_borders() {
+    let expected = "Aliquam erat volutpat. Nunc eleifend leo     Lorem ipsum dolor sit amet,       
+vitae magna. In id erat non orci commodo     consectetuer adipiscing elit.     
+lobortis.                                    Donec hendrerit tempor tellus.    
+Aliquam erat volutpat.                                                         \n";
+    test_html_conf_dec(
+        TrivialDecorator::new(),
+        MULTILINE_CELLS,
+        expected,
+        80,
+        |c| c.no_table_borders(),
+    );
+}
+
+#[test]
+fn test_table_raw_mode() {
+    let expected = "Aliquam erat volutpat. Nunc eleifend leo vitae magna. In id erat non orci
+commodo lobortis.
+Aliquam erat volutpat.
+Lorem ipsum dolor sit amet, consectetuer adipiscing elit. Donec hendrerit tempor
+tellus.\n";
+    test_html_conf_dec(
+        TrivialDecorator::new(),
+        MULTILINE_CELLS,
+        expected,
+        80,
+        |c| c.raw_mode(true),
     );
 }
 

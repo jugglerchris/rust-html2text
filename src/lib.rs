@@ -58,7 +58,6 @@ struct ReadMe;
 
 #[macro_use]
 extern crate html5ever;
-extern crate unicode_width;
 
 #[macro_use]
 mod macros;
@@ -95,8 +94,6 @@ use std::convert::TryFrom;
 use std::io;
 use std::io::Write;
 use std::iter::{once, repeat};
-#[allow(unused)] // Only needed for some features.
-use std::ops::Deref;
 
 /// An RGB colour value
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
@@ -179,23 +176,13 @@ impl Write for Discard {
 const MIN_WIDTH: usize = 3;
 
 /// Size information/estimate
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, Default)]
 pub struct SizeEstimate {
     size: usize,      // Rough overall size
     min_width: usize, // The narrowest possible
 
     // The use is specific to the node type.
     prefix_size: usize,
-}
-
-impl Default for SizeEstimate {
-    fn default() -> SizeEstimate {
-        SizeEstimate {
-            size: 0,
-            min_width: 0,
-            prefix_size: 0,
-        }
-    }
 }
 
 impl SizeEstimate {
@@ -882,7 +869,7 @@ fn td_to_render_tree<'a, 'b, T: Write>(
     if let Element { ref attrs, .. } = handle.data {
         for attr in attrs.borrow().iter() {
             if &attr.name.local == "colspan" {
-                let v: &str = &*attr.value;
+                let v: &str = &attr.value;
                 colspan = v.parse().unwrap_or(1);
             }
         }
@@ -1074,6 +1061,8 @@ struct HtmlContext {
     pad_block_width: bool,
     allow_width_overflow: bool,
     min_wrap_width: usize,
+    raw: bool,
+    draw_borders: bool,
 }
 
 fn dom_to_render_tree_with_context<T: Write>(
@@ -1171,18 +1160,17 @@ fn prepend_marker(prefix: RenderNode, mut orig: RenderNode) -> RenderNode {
         TableRow(ref mut rrow, _) => {
             // If the row is empty, then there isn't really anything
             // to attach the fragment start to.
-            if rrow.cells.len() > 0 {
-                rrow.cells[0].content.insert(0, prefix);
+            if let Some(cell) = rrow.cells.first_mut() {
+                cell.content.insert(0, prefix);
             }
         }
 
         TableBody(ref mut rows) | Table(RenderTable { ref mut rows, .. }) => {
             // If the row is empty, then there isn't really anything
             // to attach the fragment start to.
-            if rows.len() > 0 {
-                let rrow = &mut rows[0];
-                if rrow.cells.len() > 0 {
-                    rrow.cells[0].content.insert(0, prefix);
+            if let Some(rrow) = rows.first_mut() {
+                if let Some(cell) = rrow.cells.first_mut() {
+                    cell.content.insert(0, prefix);
                 }
             }
         }
@@ -1380,10 +1368,7 @@ fn process_dom_node<'a, 'b, 'c, T: Write>(
                     pending_noempty(handle, move |_, cs| {
                         let cs = cs
                             .into_iter()
-                            .filter(|n| match &n.info {
-                                RenderNodeInfo::ListItem(..) => true,
-                                _ => false,
-                            })
+                            .filter(|n| matches!(n.info, RenderNodeInfo::ListItem(..)))
                             .collect();
                         Ok(Some(RenderNode::new(Ol(start, cs))))
                     })
@@ -1418,21 +1403,18 @@ fn process_dom_node<'a, 'b, 'c, T: Write>(
                         cons,
                         prefn,
                         postfn,
-                    } => {
-                        let fragname: String = fragname.into();
-                        PendingChildren {
-                            children,
-                            prefn,
-                            postfn,
-                            cons: Box::new(move |ctx, ch| {
-                                let fragnode = RenderNode::new(FragStart(fragname));
-                                match cons(ctx, ch)? {
-                                    None => Ok(Some(fragnode)),
-                                    Some(node) => Ok(Some(prepend_marker(fragnode, node))),
-                                }
-                            }),
-                        }
-                    }
+                    } => PendingChildren {
+                        children,
+                        prefn,
+                        postfn,
+                        cons: Box::new(move |ctx, ch| {
+                            let fragnode = RenderNode::new(FragStart(fragname));
+                            match cons(ctx, ch)? {
+                                None => Ok(Some(fragnode)),
+                                Some(node) => Ok(Some(prepend_marker(fragnode, node))),
+                            }
+                        }),
+                    },
                 }
             } else {
                 result
@@ -1460,7 +1442,7 @@ fn process_dom_node<'a, 'b, 'c, T: Write>(
         }
         _ => {
             // NodeData doesn't have a Debug impl.
-            write!(err_out, "Unhandled node type.\n").unwrap();
+            writeln!(err_out, "Unhandled node type.").unwrap();
             Nothing
         }
     })
@@ -1475,7 +1457,7 @@ fn render_tree_to_string<T: Write, D: TextDecorator>(
 ) -> Result<SubRenderer<D>> {
     /* Phase 1: get size estimates. */
     tree_map_reduce(context, &tree, |context, node| {
-        precalc_size_estimate(&node, context, decorator)
+        precalc_size_estimate(node, context, decorator)
     })?;
     /* Phase 2: actually render. */
     let mut renderer = TextRenderer::new(renderer);
@@ -1512,7 +1494,7 @@ fn pending2<
     }
 }
 
-fn do_render_node<'a, 'b, T: Write, D: TextDecorator>(
+fn do_render_node<'b, T: Write, D: TextDecorator>(
     renderer: &mut TextRenderer<D>,
     tree: RenderNode,
     err_out: &'b mut T,
@@ -1816,7 +1798,7 @@ fn render_table_tree<T: Write, D: TextDecorator>(
         + col_sizes.len().saturating_sub(1);
     let width = renderer.width();
 
-    let vert_row = min_size > width || width == 0;
+    let vert_row = renderer.options.raw || (min_size > width || width == 0);
 
     let mut col_widths: Vec<usize> = if !vert_row {
         col_sizes
@@ -1846,13 +1828,12 @@ fn render_table_tree<T: Write, D: TextDecorator>(
         let num_cols = col_widths.len();
         if num_cols > 0 {
             loop {
-                let cur_width = col_widths.iter().cloned().sum::<usize>() + num_cols - 1;
+                let cur_width = col_widths.iter().sum::<usize>() + num_cols - 1;
                 if cur_width <= width {
                     break;
                 }
                 let (i, _) = col_widths
                     .iter()
-                    .cloned()
                     .enumerate()
                     .max_by_key(|&(colno, width)| {
                         (
@@ -1884,7 +1865,9 @@ fn render_table_tree<T: Write, D: TextDecorator>(
 
     renderer.start_block()?;
 
-    renderer.add_horizontal_border_width(table_width)?;
+    if renderer.options.draw_borders {
+        renderer.add_horizontal_border_width(table_width)?;
+    }
 
     Ok(TreeMapResult::PendingChildren {
         children: table.into_rows(col_widths, vert_row),
@@ -1986,6 +1969,8 @@ pub mod config {
 
         allow_width_overflow: bool,
         min_wrap_width: usize,
+        raw: bool,
+        draw_borders: bool,
     }
 
     impl<D: TextDecorator> Config<D> {
@@ -2001,6 +1986,8 @@ pub mod config {
                 pad_block_width: self.pad_block_width,
                 allow_width_overflow: self.allow_width_overflow,
                 min_wrap_width: self.min_wrap_width,
+                raw: self.raw,
+                draw_borders: self.draw_borders,
             }
         }
         /// Parse with context.
@@ -2041,13 +2028,13 @@ pub mod config {
 
         /// Render an existing RenderTree into a string.
         pub fn render_to_string(&self, render_tree: RenderTree, width: usize) -> Result<String> {
-            Ok(render_tree
+            render_tree
                 .render_with_context(
                     &mut self.make_context(),
                     width,
                     self.decorator.make_subblock_decorator(),
                 )?
-                .into_string()?)
+                .into_string()
         }
 
         /// Take an existing RenderTree, and returns text wrapped to `width` columns.
@@ -2059,13 +2046,13 @@ pub mod config {
             render_tree: RenderTree,
             width: usize,
         ) -> Result<Vec<TaggedLine<Vec<D::Annotation>>>> {
-            Ok(render_tree
+            render_tree
                 .render_with_context(
                     &mut self.make_context(),
                     width,
                     self.decorator.make_subblock_decorator(),
                 )?
-                .into_lines()?)
+                .into_lines()
         }
 
         /// Reads HTML from `input`, and returns a `String` with text wrapped to
@@ -2076,10 +2063,9 @@ pub mod config {
             width: usize,
         ) -> Result<String> {
             let mut context = self.make_context();
-            Ok(self
-                .do_parse(&mut context, input)?
+            self.do_parse(&mut context, input)?
                 .render_with_context(&mut context, width, self.decorator)?
-                .into_string()?)
+                .into_string()
         }
 
         /// Reads HTML from `input`, and returns text wrapped to `width` columns.
@@ -2092,10 +2078,9 @@ pub mod config {
             width: usize,
         ) -> Result<Vec<TaggedLine<Vec<D::Annotation>>>> {
             let mut context = self.make_context();
-            Ok(self
-                .do_parse(&mut context, input)?
+            self.do_parse(&mut context, input)?
                 .render_with_context(&mut context, width, self.decorator)?
-                .into_lines()?)
+                .into_lines()
         }
 
         #[cfg(feature = "css")]
@@ -2143,6 +2128,21 @@ pub mod config {
         /// to a TooNarrow error unless `allow_width_overflow()` is set.
         pub fn min_wrap_width(mut self, min_wrap_width: usize) -> Self {
             self.min_wrap_width = min_wrap_width;
+            self
+        }
+
+        /// Raw extraction, ensures text in table cells ends up rendered together
+        /// This traverses tables as if they had a single column and every cell is its own row.
+        /// Implies `no_table_borders()`
+        pub fn raw_mode(mut self, raw: bool) -> Self {
+            self.raw = raw;
+            self.draw_borders = false;
+            self
+        }
+
+        /// Do not render table borders
+        pub fn no_table_borders(mut self) -> Self {
+            self.draw_borders = false;
             self
         }
     }
@@ -2219,6 +2219,8 @@ pub mod config {
             pad_block_width: false,
             allow_width_overflow: false,
             min_wrap_width: MIN_WIDTH,
+            raw: false,
+            draw_borders: true,
         }
     }
 
@@ -2234,6 +2236,8 @@ pub mod config {
             pad_block_width: false,
             allow_width_overflow: false,
             min_wrap_width: MIN_WIDTH,
+            raw: false,
+            draw_borders: true,
         }
     }
 
@@ -2249,6 +2253,8 @@ pub mod config {
             pad_block_width: false,
             allow_width_overflow: false,
             min_wrap_width: MIN_WIDTH,
+            raw: false,
+            draw_borders: true,
         }
     }
 }
@@ -2276,6 +2282,8 @@ impl RenderTree {
         render_options.pad_block_width = context.pad_block_width;
         render_options.min_wrap_width = context.min_wrap_width;
         render_options.allow_width_overflow = context.allow_width_overflow;
+        render_options.raw = context.raw;
+        render_options.draw_borders = context.draw_borders;
         let test_decorator = decorator.make_subblock_decorator();
         let builder = SubRenderer::new(width, render_options, decorator);
         let builder =

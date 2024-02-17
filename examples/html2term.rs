@@ -1,6 +1,5 @@
 #[cfg(unix)]
 extern crate argparse;
-extern crate html2text;
 #[cfg(unix)]
 extern crate termion;
 #[cfg(unix)]
@@ -21,7 +20,7 @@ mod top {
     use termion::screen::IntoAlternateScreen;
     use unicode_width::UnicodeWidthStr;
 
-    fn to_style(tag: &Vec<RichAnnotation>) -> String {
+    fn to_style(tag: &[RichAnnotation]) -> String {
         let mut style = String::new();
 
         for ann in tag {
@@ -87,17 +86,17 @@ mod top {
         }
     }
 
-    fn link_from_tag(tag: &Vec<RichAnnotation>) -> Option<String> {
+    fn link_from_tag(tag: &[RichAnnotation]) -> Option<String> {
         let mut link = None;
         for annotation in tag {
-            if let RichAnnotation::Link(ref text) = *annotation {
+            if let RichAnnotation::Link(text) = annotation {
                 link = Some(text.clone());
             }
         }
         link
     }
 
-    fn find_links(lines: &Vec<TaggedLine<Vec<RichAnnotation>>>) -> LinkMap {
+    fn find_links(lines: &[TaggedLine<Vec<RichAnnotation>>]) -> LinkMap {
         let mut map = Vec::new();
         for line in lines {
             let mut linevec = Vec::new();
@@ -118,12 +117,11 @@ mod top {
         start_xy: HashMap<String, (usize, usize)>,
     }
 
-    fn find_frags(lines: &Vec<TaggedLine<Vec<RichAnnotation>>>) -> FragMap {
+    fn find_frags(lines: &[TaggedLine<Vec<RichAnnotation>>]) -> FragMap {
         use self::TaggedLineElement::*;
 
         let mut map = HashMap::new();
-        let mut y = 0;
-        for line in lines {
+        for (y, line) in lines.iter().enumerate() {
             let mut x = 0;
             for tli in line.iter() {
                 match tli {
@@ -135,7 +133,6 @@ mod top {
                     }
                 }
             }
-            y += 1;
         }
         FragMap { start_xy: map }
     }
@@ -264,8 +261,8 @@ mod top {
                     Key::Char('\t') => {}
                     Key::Char('\r') | Key::Char('\n') => {
                         if let Some(url) = opt_url {
-                            if url.starts_with('#') {
-                                let start = frag_map.start_xy.get(&url[1..]);
+                            if let Some(u) = url.strip_prefix('#') {
+                                let start = frag_map.start_xy.get(u);
                                 if let Some((x, y)) = start {
                                     doc_x = *x;
                                     doc_y = *y;

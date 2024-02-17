@@ -142,7 +142,7 @@ impl<T: Debug + Eq + PartialEq + Clone + Default> TaggedLine<T> {
     pub fn from_string(s: String, tag: &T) -> TaggedLine<T> {
         TaggedLine {
             v: vec![TaggedLineElement::Str(TaggedString {
-                s: s,
+                s,
                 tag: tag.clone(),
             })],
         }
@@ -709,7 +709,7 @@ pub enum BorderSegHoriz {
 /// A dividing line between table rows which tracks intersections
 /// with vertical lines.
 #[derive(Clone, Debug)]
-pub struct BorderHoriz<T: Clone> {
+pub struct BorderHoriz<T> {
     /// The segments for the line.
     pub segments: Vec<BorderSegHoriz>,
     /// The tag associated with the lines
@@ -826,7 +826,7 @@ impl<T: Clone> BorderHoriz<T> {
 
 /// A line, which can either be text or a line.
 #[derive(Clone, Debug)]
-pub enum RenderLine<T: PartialEq + Eq + Clone + Debug + Default> {
+pub enum RenderLine<T> {
     /// Some rendered text
     Text(TaggedLine<T>),
     /// A table border line
@@ -884,8 +884,10 @@ impl<T: PartialEq + Eq + Clone + Debug + Default> RenderLine<T> {
 /// annotations depending on a decorator.
 #[derive(Clone)]
 pub struct SubRenderer<D: TextDecorator> {
-    width: usize,
-    options: RenderOptions,
+    /// Text width
+    pub width: usize,
+    /// Rendering options
+    pub options: RenderOptions,
     lines: LinkedList<RenderLine<Vec<D::Annotation>>>,
     /// True at the end of a block, meaning we should add
     /// a blank line if any other text is added.
@@ -930,6 +932,13 @@ pub struct RenderOptions {
     /// This may give a better output when the parent block
     /// has a background colour set.
     pub pad_block_width: bool,
+
+    /// Raw extraction, ensures text in table cells ends up rendered together
+    /// This traverses tables as if they had a single column and every cell is its own row.
+    pub raw: bool,
+
+    /// Whether to draw table borders
+    pub draw_borders: bool,
 }
 
 impl Default for RenderOptions {
@@ -939,6 +948,8 @@ impl Default for RenderOptions {
             min_wrap_width: crate::MIN_WIDTH,
             allow_width_overflow: Default::default(),
             pad_block_width: Default::default(),
+            raw: false,
+            draw_borders: true,
         }
     }
 }
@@ -1103,10 +1114,8 @@ impl<D: TextDecorator> SubRenderer<D> {
 
     pub(crate) fn width_minus(&self, prefix_len: usize, min_width: usize) -> crate::Result<usize> {
         let new_width = self.width.saturating_sub(prefix_len);
-        if new_width < min_width {
-            if !self.options.allow_width_overflow {
-                return Err(Error::TooNarrow);
-            }
+        if new_width < min_width && !self.options.allow_width_overflow {
+            return Err(Error::TooNarrow);
         }
         Ok(new_width.max(min_width))
     }
@@ -1222,16 +1231,12 @@ impl<D: TextDecorator> Renderer for SubRenderer<D> {
         let mut s = None;
         // Do any filtering of the text
         for filter in &self.text_filter_stack {
-            // When we stop supporting Rust < 1.40, this can become:
-            //let srctext = s.as_deref().unwrap_or(text);
-            let srctext = s.as_ref().map(Deref::deref).unwrap_or(text);
+            let srctext = s.as_deref().unwrap_or(text);
             if let Some(filtered) = filter(srctext) {
                 s = Some(filtered);
             }
         }
-        // When we stop supporting Rust < 1.40, this can become:
-        //let filtered_text = s.as_deref().unwrap_or(text);
-        let filtered_text = s.as_ref().map(Deref::deref).unwrap_or(text);
+        let filtered_text = s.as_deref().unwrap_or(text);
         if self.pre_depth == 0 {
             self.wrapping
                 .as_mut()
@@ -1344,18 +1349,14 @@ impl<D: TextDecorator> Renderer for SubRenderer<D> {
         let mut next_border = BorderHoriz::new(tot_width, self.ann_stack.clone());
 
         // Join the vertical lines to all the borders
-        {
+        if let Some(RenderLine::Line(prev_border)) = self.lines.back_mut() {
             let mut pos = 0;
-            if let &mut RenderLine::Line(ref mut prev_border) = self.lines.back_mut().unwrap() {
-                html_trace!("Merging with last line:\n{}", prev_border.to_string());
-                for &(w, _) in &line_sets[..line_sets.len() - 1] {
-                    html_trace!("pos={}, w={}", pos, w);
-                    prev_border.join_below(pos + w);
-                    next_border.join_above(pos + w);
-                    pos += w + 1;
-                }
-            } else {
-                panic!("Expected a border line");
+            html_trace!("Merging with last line:\n{}", prev_border.to_string());
+            for &(w, _) in &line_sets[..line_sets.len() - 1] {
+                html_trace!("pos={}, w={}", pos, w);
+                prev_border.join_below(pos + w);
+                next_border.join_above(pos + w);
+                pos += w + 1;
             }
         }
 
@@ -1373,15 +1374,7 @@ impl<D: TextDecorator> Renderer for SubRenderer<D> {
             /* Collapse any top border */
             let mut pos = 0;
             for &mut (w, ref mut sublines) in &mut line_sets {
-                let starts_border = if sublines.len() > 0 {
-                    if let RenderLine::Line(_) = sublines[0] {
-                        true
-                    } else {
-                        false
-                    }
-                } else {
-                    false
-                };
+                let starts_border = matches!(sublines.first(), Some(RenderLine::Line(_)));
                 if starts_border {
                     html_trace!("Starts border");
                     if let &mut RenderLine::Line(ref mut prev_border) =
@@ -1406,65 +1399,52 @@ impl<D: TextDecorator> Renderer for SubRenderer<D> {
             /* Collapse any bottom border */
             let mut pos = 0;
             for (col_no, &mut (w, ref mut sublines)) in line_sets.iter_mut().enumerate() {
-                let ends_border = if sublines.len() > 0 {
-                    if let Some(&RenderLine::Line(_)) = sublines.last() {
-                        true
-                    } else {
-                        false
-                    }
-                } else {
-                    false
-                };
-                if ends_border {
+                if let Some(RenderLine::Line(line)) = sublines.last() {
                     html_trace!("Ends border");
-                    if let RenderLine::Line(line) = sublines.pop().unwrap() {
-                        next_border.merge_from_above(&line, pos);
-                        column_padding[col_no] = Some(line.to_vertical_lines_above())
-                    }
+                    next_border.merge_from_above(line, pos);
+                    column_padding[col_no] = Some(line.to_vertical_lines_above());
+                    sublines.pop();
                 }
                 pos += w + 1;
             }
         }
 
-        let cell_height = line_sets
-            .iter()
-            .map(|&(_, ref v)| v.len())
-            .max()
-            .unwrap_or(0);
+        let cell_height = line_sets.iter().map(|(_, v)| v.len()).max().unwrap_or(0);
         let spaces: String = (0..tot_width).map(|_| ' ').collect();
         let last_cellno = line_sets.len() - 1;
+        let mut line = TaggedLine::new();
         for i in 0..cell_height {
-            let mut line = TaggedLine::new();
             for (cellno, &mut (width, ref mut ls)) in line_sets.iter_mut().enumerate() {
-                if let Some(piece) = ls.get_mut(i) {
-                    match piece {
-                        &mut RenderLine::Text(ref mut tline) => {
-                            line.consume(tline);
-                        }
-                        &mut RenderLine::Line(ref bord) => {
-                            line.push(Str(TaggedString {
-                                s: bord.to_string(),
-                                tag: self.ann_stack.clone(),
-                            }));
-                        }
-                    };
-                } else {
-                    line.push(Str(TaggedString {
-                        s: column_padding[cellno]
-                            .as_ref()
-                            .map(|s| s.clone())
-                            .unwrap_or_else(|| spaces[0..width].to_string()),
-
+                match ls.get_mut(i) {
+                    Some(RenderLine::Text(tline)) => line.consume(tline),
+                    Some(RenderLine::Line(bord)) => line.push(Str(TaggedString {
+                        s: bord.to_string(),
                         tag: self.ann_stack.clone(),
-                    }));
+                    })),
+                    None => line.push(Str(TaggedString {
+                        s: column_padding[cellno]
+                            .clone()
+                            .unwrap_or_else(|| spaces[0..width].to_string()),
+                        tag: self.ann_stack.clone(),
+                    })),
                 }
                 if cellno != last_cellno {
-                    line.push_char('│', &self.ann_stack);
+                    line.push_char(
+                        if self.options.draw_borders {
+                            '│'
+                        } else {
+                            ' '
+                        },
+                        &self.ann_stack,
+                    );
                 }
             }
             self.lines.push_back(RenderLine::Text(line));
+            line = TaggedLine::new();
         }
-        self.lines.push_back(RenderLine::Line(next_border));
+        if self.options.draw_borders {
+            self.lines.push_back(RenderLine::Line(next_border));
+        }
         Ok(())
     }
 
@@ -1484,7 +1464,7 @@ impl<D: TextDecorator> Renderer for SubRenderer<D> {
         for col in cols {
             if first {
                 first = false;
-            } else {
+            } else if self.options.draw_borders {
                 let border = BorderHoriz::new_type(
                     width,
                     BorderSegHoriz::StraightVert,
@@ -1494,7 +1474,9 @@ impl<D: TextDecorator> Renderer for SubRenderer<D> {
             }
             self.append_subrender(col, std::iter::repeat(""))?;
         }
-        self.add_horizontal_border()?;
+        if self.options.draw_borders {
+            self.add_horizontal_border()?;
+        }
         Ok(())
     }
 
@@ -1715,12 +1697,8 @@ impl TextDecorator for PlainDecorator {
         "`".to_string()
     }
 
-    fn decorate_preformat_first(&self) -> Self::Annotation {
-        ()
-    }
-    fn decorate_preformat_cont(&self) -> Self::Annotation {
-        ()
-    }
+    fn decorate_preformat_first(&self) -> Self::Annotation {}
+    fn decorate_preformat_cont(&self) -> Self::Annotation {}
 
     fn decorate_image(&mut self, _src: &str, title: &str) -> (String, Self::Annotation) {
         (format!("[{}]", title), ())
@@ -1811,12 +1789,8 @@ impl TextDecorator for TrivialDecorator {
         "".to_string()
     }
 
-    fn decorate_preformat_first(&self) -> Self::Annotation {
-        ()
-    }
-    fn decorate_preformat_cont(&self) -> Self::Annotation {
-        ()
-    }
+    fn decorate_preformat_first(&self) -> Self::Annotation {}
+    fn decorate_preformat_cont(&self) -> Self::Annotation {}
 
     fn decorate_image(&mut self, _src: &str, title: &str) -> (String, Self::Annotation) {
         // FIXME: this should surely be the alt text, not the title text
@@ -1855,10 +1829,11 @@ pub struct RichDecorator {}
 
 /// Annotation type for "rich" text.  Text is associated with a set of
 /// these.
-#[derive(PartialEq, Eq, Clone, Debug)]
+#[derive(PartialEq, Eq, Clone, Debug, Default)]
 #[non_exhaustive]
 pub enum RichAnnotation {
     /// Normal text.
+    #[default]
     Default,
     /// A link with the target.
     Link(String),
@@ -1878,12 +1853,6 @@ pub enum RichAnnotation {
     Colour(crate::Colour),
     /// Background Colour information
     BgColour(crate::Colour),
-}
-
-impl Default for RichAnnotation {
-    fn default() -> Self {
-        RichAnnotation::Default
-    }
 }
 
 impl RichDecorator {
