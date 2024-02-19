@@ -9,6 +9,14 @@ Possible log types:
 - `[fixed]` for any bug fixes.
 - `[security]` to invite users to upgrade in case of vulnerabilities.
 
+### 0.12.1
+
+- [fixed] Fix a case where Err(TooNarrow) was returned unnecessarily. (thanks sftse)
+- [added] Add new rendering options `Config::raw_mode()` and
+  `Config::no_table_borders()` (thanks sftse)
+- [changed] Formatting, clippy and other tidy-ups (thanks sftse)
+- [changed] Cargo fmt now enforced in CI
+
 ### 0.12.0
 
 - [changed] Updated termion dev-dependency
