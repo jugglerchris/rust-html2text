@@ -204,6 +204,8 @@ fn is_transparent(color: &CssColor) -> bool {
         CssColor::LAB(_) => false,
         CssColor::Predefined(_) => false,
         CssColor::Float(_) => false,
+        CssColor::LightDark(_, _) => false,
+        CssColor::System(_) => false,
     }
 }
 

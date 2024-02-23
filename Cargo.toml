@@ -1,6 +1,6 @@
 [package]
 name = "html2text"
-version = "0.12.1"
+version = "0.12.2"
 authors = ["Chris Emerson <github@mail.nosreme.org>"]
 description = "Render HTML as plain text."
 repository = "https://github.com/jugglerchris/rust-html2text/"
@@ -20,7 +20,7 @@ tendril = "0.4"
 unicode-width = "0.1.5"
 backtrace = { version = "0.3", optional=true }
 thiserror = "1.0.50"
-lightningcss = { version = "1.0.0-alpha.51", optional=true }
+lightningcss = { version = "1.0.0-alpha.54", optional=true }
 # Keep dashmap back; 5.5 has a higher MSRV.
 dashmap = "~5.4"
 log = { version = "0.4.20", optional = true }

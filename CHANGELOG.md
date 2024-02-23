@@ -9,6 +9,10 @@ Possible log types:
 - `[fixed]` for any bug fixes.
 - `[security]` to invite users to upgrade in case of vulnerabilities.
 
+### 0.12.2
+
+- [changed] Bump version of lightningcss dependency to fix build failures.
+
 ### 0.12.1
 
 - [fixed] Fix a case where Err(TooNarrow) was returned unnecessarily. (thanks sftse)
