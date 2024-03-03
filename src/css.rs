@@ -238,6 +238,20 @@ fn styles_from_properties(decls: &DeclarationBlock<'_>) -> Vec<Style> {
                 }
                 styles.push(Style::BgColour(color.clone()));
             }
+            Property::MaxHeight(height) => {
+                use lightningcss::properties::size::MaxSize::*;
+                use lightningcss::values::percentage::DimensionPercentage::*;
+                dbg!(&height);
+                match height {
+                    LengthPercentage(Dimension(dim)) => {
+                        // Treat max-height: 0 the same as display: none.
+                        if Some(0.0) == dim.to_px() {
+                            styles.push(Style::DisplayNone);
+                        }
+                    }
+                    _ => (),
+                }
+            }
             Property::Display(disp) => {
                 if let display::Display::Keyword(DisplayKeyword::None) = disp {
                     styles.push(Style::DisplayNone);
