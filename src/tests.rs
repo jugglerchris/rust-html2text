@@ -2329,10 +2329,22 @@ text
     }
 
     #[test]
+    fn test_max_height_0() {
+        test_html_css(
+            br#"
+        <div style="max-height: 0; overflow-y: hidden">This should be hidden</div>
+        <p>Hello</p>"#,
+            r#"Hello
+"#,
+            20,
+        );
+    }
+
+    #[test]
     fn test_height_0() {
         test_html_css(
             br#"
-        <div style="max-height: 0">This should be hidden</div>
+        <div style="height: 0; overflow: hidden">This should be hidden</div>
         <p>Hello</p>"#,
             r#"Hello
 "#,
