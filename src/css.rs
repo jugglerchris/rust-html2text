@@ -7,6 +7,7 @@ use lightningcss::{
     declaration::DeclarationBlock,
     properties::{
         display::{self, DisplayKeyword},
+        overflow::{Overflow, OverflowKeyword},
         Property,
     },
     rules::CssRule,
@@ -212,6 +213,8 @@ fn is_transparent(color: &CssColor) -> bool {
 fn styles_from_properties(decls: &DeclarationBlock<'_>) -> Vec<Style> {
     let mut styles = Vec::new();
     html_trace_quiet!("styles:from_properties: {decls:?}");
+    let mut overflow_hidden = false;
+    let mut height_zero = false;
     for decl in decls
         .declarations
         .iter()
@@ -238,19 +241,35 @@ fn styles_from_properties(decls: &DeclarationBlock<'_>) -> Vec<Style> {
                 }
                 styles.push(Style::BgColour(color.clone()));
             }
+            Property::Height(height) => {
+                use lightningcss::properties::size::Size::*;
+                use lightningcss::values::percentage::DimensionPercentage::*;
+                match height {
+                    LengthPercentage(Dimension(dim)) if dim.to_px() == Some(0.0) => {
+                        height_zero = true;
+                    }
+                    _ => (),
+                }
+            }
             Property::MaxHeight(height) => {
                 use lightningcss::properties::size::MaxSize::*;
                 use lightningcss::values::percentage::DimensionPercentage::*;
-                dbg!(&height);
                 match height {
                     LengthPercentage(Dimension(dim)) => {
                         // Treat max-height: 0 the same as display: none.
                         if Some(0.0) == dim.to_px() {
-                            styles.push(Style::DisplayNone);
+                            height_zero = true;
                         }
                     }
                     _ => (),
                 }
+            }
+            Property::OverflowY(OverflowKeyword::Hidden)
+            | Property::Overflow(Overflow {
+                y: OverflowKeyword::Hidden,
+                ..
+            }) => {
+                overflow_hidden = true;
             }
             Property::Display(disp) => {
                 if let display::Display::Keyword(DisplayKeyword::None) = disp {
@@ -261,6 +280,10 @@ fn styles_from_properties(decls: &DeclarationBlock<'_>) -> Vec<Style> {
                 html_trace_quiet!("CSS: Unhandled property {:?}", decl);
             }
         }
+    }
+    // If the height is set to zero and overflow hidden, treat as display: none
+    if height_zero && overflow_hidden {
+        styles.push(Style::DisplayNone);
     }
     styles
 }

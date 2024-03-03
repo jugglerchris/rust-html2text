@@ -9,6 +9,12 @@ Possible log types:
 - `[fixed]` for any bug fixes.
 - `[security]` to invite users to upgrade in case of vulnerabilities.
 
+### 0.12.4
+
+- [changed] Update the previous `max-height: 0` to also look at `height: 0` and require
+  `overflow: hidden` as well.
+  This helps with a hack some e-mail senders use for e-mail previews.  (thanks tkapias)
+
 ### 0.12.3
 
 - [changed] Treat `max-height: 0` as if it's `display: none` when CSS is enabled.
