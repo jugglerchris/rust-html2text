@@ -2327,4 +2327,16 @@ text
                   "H\ne\nl\nl\no\n*<W></W>\n<W>t</W>\n<W>h</W>\n<W>e</W>\n<W>r</W>\n<W>e</W>\n*\nb\no\no\n",
                   1);
     }
+
+    #[test]
+    fn test_height_0() {
+        test_html_css(
+            br#"
+        <div style="max-height: 0">This should be hidden</div>
+        <p>Hello</p>"#,
+            r#"Hello
+"#,
+            20,
+        );
+    }
 }
