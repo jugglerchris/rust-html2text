@@ -7,7 +7,8 @@ use lightningcss::{
     declaration::DeclarationBlock,
     properties::{
         display::{self, DisplayKeyword},
-        Property, overflow::{Overflow, OverflowKeyword},
+        overflow::{Overflow, OverflowKeyword},
+        Property,
     },
     rules::CssRule,
     stylesheet::{ParserOptions, StyleAttribute, StyleSheet},
@@ -263,8 +264,11 @@ fn styles_from_properties(decls: &DeclarationBlock<'_>) -> Vec<Style> {
                     _ => (),
                 }
             }
-            Property::OverflowY(OverflowKeyword::Hidden) |
-                Property::Overflow(Overflow { y: OverflowKeyword::Hidden, .. }) => {
+            Property::OverflowY(OverflowKeyword::Hidden)
+            | Property::Overflow(Overflow {
+                y: OverflowKeyword::Hidden,
+                ..
+            }) => {
                 overflow_hidden = true;
             }
             Property::Display(disp) => {
