@@ -111,8 +111,9 @@ where
             #[cfg(not(feature = "css"))]
             let use_css_colours = false;
             return conf
-                .coloured(input, flags.width,
-                          move |anns, s| default_colour_map(anns, s, use_css_colours))
+                .coloured(input, flags.width, move |anns, s| {
+                    default_colour_map(anns, s, use_css_colours)
+                })
                 .unwrap();
         }
     }
