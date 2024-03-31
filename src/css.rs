@@ -16,6 +16,8 @@ use lightningcss::{
     values::color::CssColor,
 };
 
+mod parser;
+
 use crate::{
     markup5ever_rcdom::{
         Handle,

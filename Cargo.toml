@@ -24,6 +24,7 @@ lightningcss = { version = "1.0.0-alpha.54", optional=true }
 # Keep dashmap back; 5.5 has a higher MSRV.
 dashmap = { version = "~5.4", optional=true }
 log = { version = "0.4.20", optional = true }
+nom = "7.1.3"
 
 [features]
 html_trace = ["dep:log"]
