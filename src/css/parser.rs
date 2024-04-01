@@ -1,9 +1,17 @@
 //! Parsing for the subset of CSS used in html2text.
 
-use nom::{IResult, branch::alt, character::complete, bytes::complete::{tag, take_until, take_while}, combinator::{map, fail, opt}, multi::many0, error::ErrorKind, sequence::tuple};
+use nom::{IResult, branch::alt, character::complete, bytes::complete::{tag, take, take_until, take_while}, combinator::{map, fail, opt, all_consuming, verify}, multi::{many0, separated_list0}, error::ErrorKind, sequence::tuple};
+
+#[derive(Debug, PartialEq)]
+pub enum Colour {
+    Rgb(u8, u8, u8),
+}
 
 #[derive(Debug, PartialEq)]
 pub enum Declaration {
+    Color {
+        value: Colour,
+    },
     Unknown {
         name: PropertyName,
         value: String,
@@ -105,10 +113,65 @@ pub fn parse_declaration(text: &str) -> IResult<&str, Option<Declaration>> {
             tag(":"),
             skip_optional_whitespace,
             parse_value))(text)?;
-    Ok((rest, Some(Declaration::Unknown {
-        name: prop,
-        value: value.into(),
-    })))
+    let decl = match prop.0.as_str() {
+        "color" => {
+            let (_rest, value) = all_consuming(parse_color)(&value)?;
+            Declaration::Color { value }
+        }
+        _ => Declaration::Unknown {
+            name: prop,
+            value: value.into(),
+        }
+    };
+    Ok((rest, Some(decl)))
+}
+
+fn hex1(text: &str) -> IResult<&str, u8> {
+    let (rest, digit) = verify(take(1usize), |s: &str| -> bool { s.chars().all(|c| c.is_ascii_hexdigit())})(text)?;
+    Ok((rest, u8::from_str_radix(digit, 16).unwrap()))
+}
+
+fn hex2(text: &str) -> IResult<&str, u8> {
+    let (rest, digits) = verify(take(2usize), |s: &str| -> bool { s.chars().all(|c| c.is_ascii_hexdigit())})(text)?;
+    Ok((rest, u8::from_str_radix(digits, 16).unwrap()))
+}
+
+
+fn hex_colour3(text: &str) -> IResult<&str, Colour> {
+    let (rest, _) = tag("#")(text)?;
+    let (rest, (r,g,b)) = tuple((hex1, hex1, hex1))(rest)?;
+    let (rest, _) = skip_optional_whitespace(rest)?;
+    Ok((rest, Colour::Rgb(r * 0x11, g * 0x11, b * 0x11)))
+}
+
+fn hex_colour6(text: &str) -> IResult<&str, Colour> {
+    let (rest, _) = tag("#")(text)?;
+    let (rest, (r,g,b)) = tuple((hex2, hex2, hex2))(rest)?;
+    let (rest, _) = skip_optional_whitespace(rest)?;
+    Ok((rest, Colour::Rgb(r, g, b)))
+}
+
+fn rgb_func_colour(text: &str) -> IResult<&str, Colour> {
+    fail(text)
+}
+
+fn parse_color(text: &str) -> IResult<&str, Colour> {
+    let (rest, _) = skip_optional_whitespace(text)?;
+    alt((
+       /* TODO: Specific named colours */
+       hex_colour6,
+       hex_colour3,
+       rgb_func_colour,
+       ))(text)
+}
+
+pub fn parse_rules(text: &str) -> IResult<&str, Vec<Declaration>> {
+    separated_list0(
+        tuple((tag(";"), skip_optional_whitespace)),
+        parse_declaration)(text)
+        .map(|(rest, v)| (rest, v.into_iter()
+                          .flatten()
+                          .collect()))
 }
 
 #[cfg(test)]

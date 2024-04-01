@@ -11,7 +11,7 @@ use lightningcss::{
         Property,
     },
     rules::CssRule,
-    stylesheet::{ParserOptions, StyleAttribute, StyleSheet},
+    stylesheet::{ParserOptions, StyleSheet},
     traits::Parse,
     values::color::CssColor,
 };
@@ -23,7 +23,7 @@ use crate::{
         Handle,
         NodeData::{self, Comment, Document, Element},
     },
-    tree_map_reduce, Result, TreeMapResult,
+    tree_map_reduce, Result, TreeMapResult, css::parser::parse_rules,
 };
 
 #[derive(Debug, Clone)]
@@ -192,12 +192,92 @@ pub struct StyleData {
 
 pub(crate) fn parse_style_attribute(text: &str) -> Result<Vec<Style>> {
     html_trace_quiet!("Parsing inline style: {text}");
-    let sattr = StyleAttribute::parse(text, ParserOptions::default())
+    let (_rest, decls) = parse_rules(text)
         .map_err(|_| crate::Error::CssParseError)?;
 
-    let styles = styles_from_properties(&sattr.declarations);
+    let styles = styles_from_properties2(&decls);
     html_trace_quiet!("Parsed inline style: {:?}", styles);
     Ok(styles)
+}
+
+fn styles_from_properties2(decls: &[parser::Declaration]) -> Vec<Style> {
+    let mut styles = Vec::new();
+    html_trace_quiet!("styles:from_properties2: {decls:?}");
+    let overflow_hidden = false;
+    let height_zero = false;
+    for decl in decls {
+        html_trace_quiet!("styles:from_properties2: {decl:?}");
+        match decl {
+            parser::Declaration::Unknown { .. } => {},
+            parser::Declaration::Color { value: parser::Colour::Rgb(r, g, b) } => {
+                styles.push(Style::Colour(CssColor::RGBA(lightningcss::values::color::RGBA { red: *r, green: *g, blue: *b, alpha: 0xff })));
+            }
+            /*
+            Property::Color(color) => {
+                if is_transparent(&color) {
+                    continue;
+                }
+                styles.push(Style::Colour(color.clone()));
+            }
+            Property::Background(bginfo) => {
+                let color = bginfo.last().unwrap().color.clone();
+                if is_transparent(&color) {
+                    continue;
+                }
+                styles.push(Style::BgColour(color));
+            }
+            Property::BackgroundColor(color) => {
+                if is_transparent(&color) {
+                    continue;
+                }
+                styles.push(Style::BgColour(color.clone()));
+            }
+            Property::Height(height) => {
+                use lightningcss::properties::size::Size::*;
+                use lightningcss::values::percentage::DimensionPercentage::*;
+                match height {
+                    LengthPercentage(Dimension(dim)) if dim.to_px() == Some(0.0) => {
+                        height_zero = true;
+                    }
+                    _ => (),
+                }
+            }
+            Property::MaxHeight(height) => {
+                use lightningcss::properties::size::MaxSize::*;
+                use lightningcss::values::percentage::DimensionPercentage::*;
+                match height {
+                    LengthPercentage(Dimension(dim)) => {
+                        // Treat max-height: 0 the same as display: none.
+                        if Some(0.0) == dim.to_px() {
+                            height_zero = true;
+                        }
+                    }
+                    _ => (),
+                }
+            }
+            Property::OverflowY(OverflowKeyword::Hidden)
+            | Property::Overflow(Overflow {
+                y: OverflowKeyword::Hidden,
+                ..
+            }) => {
+                overflow_hidden = true;
+            }
+            Property::Display(disp) => {
+                if let display::Display::Keyword(DisplayKeyword::None) = disp {
+                    styles.push(Style::DisplayNone);
+                }
+            }
+            _ => {
+                html_trace_quiet!("CSS: Unhandled property {:?}", decl);
+            }
+            */
+        }
+    }
+    // If the height is set to zero and overflow hidden, treat as display: none
+    if height_zero && overflow_hidden {
+        styles.push(Style::DisplayNone);
+    }
+    styles
 }
 
 fn is_transparent(color: &CssColor) -> bool {
