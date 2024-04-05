@@ -23,7 +23,7 @@ use crate::{
         Handle,
         NodeData::{self, Comment, Document, Element},
     },
-    tree_map_reduce, Result, TreeMapResult, css::parser::parse_rules,
+    tree_map_reduce, Result, TreeMapResult, css::parser::parse_rules, Colour,
 };
 
 #[derive(Debug, Clone)]
@@ -173,8 +173,8 @@ impl<'r, 'i> TryFrom<&'r lightningcss::selector::Selector<'i>> for Selector {
 
 #[derive(Debug, Clone)]
 pub(crate) enum Style {
-    Colour(CssColor),
-    BgColour(CssColor),
+    Colour(Colour),
+    BgColour(Colour),
     DisplayNone,
 }
 
@@ -210,7 +210,10 @@ fn styles_from_properties2(decls: &[parser::Declaration]) -> Vec<Style> {
         match decl {
             parser::Declaration::Unknown { .. } => {},
             parser::Declaration::Color { value: parser::Colour::Rgb(r, g, b) } => {
-                styles.push(Style::Colour(CssColor::RGBA(lightningcss::values::color::RGBA { red: *r, green: *g, blue: *b, alpha: 0xff })));
+                styles.push(Style::Colour(Colour{
+                    r: *r,
+                    g: *g, b: *b
+                }));
             }
             /*
             Property::Color(color) => {
@@ -292,6 +295,25 @@ fn is_transparent(color: &CssColor) -> bool {
     }
 }
 
+trait Convert<T> {
+    fn convert(&self) -> T;
+}
+
+impl Convert<Colour> for CssColor {
+    fn convert(&self) -> Colour {
+        let rgb = self.to_rgb().unwrap();
+        if let CssColor::RGBA(rgba) = rgb {
+            Colour {
+                r: rgba.red,
+                g: rgba.green,
+                b: rgba.blue,
+            }
+        } else {
+            panic!()
+        }
+    }
+}
+
 fn styles_from_properties(decls: &DeclarationBlock<'_>) -> Vec<Style> {
     let mut styles = Vec::new();
     html_trace_quiet!("styles:from_properties: {decls:?}");
@@ -308,20 +330,20 @@ fn styles_from_properties(decls: &DeclarationBlock<'_>) -> Vec<Style> {
                 if is_transparent(&color) {
                     continue;
                 }
-                styles.push(Style::Colour(color.clone()));
+                styles.push(Style::Colour(color.convert()));
             }
             Property::Background(bginfo) => {
                 let color = bginfo.last().unwrap().color.clone();
                 if is_transparent(&color) {
                     continue;
                 }
-                styles.push(Style::BgColour(color));
+                styles.push(Style::BgColour(color.convert()));
             }
             Property::BackgroundColor(color) => {
                 if is_transparent(&color) {
                     continue;
                 }
-                styles.push(Style::BgColour(color.clone()));
+                styles.push(Style::BgColour(color.convert()));
             }
             Property::Height(height) => {
                 use lightningcss::properties::size::Size::*;
@@ -429,11 +451,11 @@ impl StyleData {
                         result.extend(rules);
                     } else if &*attr.name.local == "color" {
                         if let Ok(colour) = CssColor::parse_string(&*attr.value) {
-                            result.push(Style::Colour(colour));
+                            result.push(Style::Colour(colour.convert()));
                         }
                     } else if &*attr.name.local == "bgcolor" {
                         if let Ok(colour) = CssColor::parse_string(&*attr.value) {
-                            result.push(Style::BgColour(colour));
+                            result.push(Style::BgColour(colour.convert()));
                         }
                     }
                 }

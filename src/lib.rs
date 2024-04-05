@@ -1215,15 +1215,11 @@ fn process_dom_node<'a, 'b, 'c, T: Write>(
                     .matching_rules(&handle, context.use_doc_css)
                 {
                     match style {
-                        css::Style::Colour(col) => {
-                            if let Ok(colour) = Colour::try_from(&col) {
-                                css_colour = Some(colour);
-                            }
+                        css::Style::Colour(colour) => {
+                            css_colour = Some(colour);
                         }
-                        css::Style::BgColour(col) => {
-                            if let Ok(colour) = Colour::try_from(&col) {
-                                css_bgcolour = Some(colour);
-                            }
+                        css::Style::BgColour(colour) => {
+                            css_bgcolour = Some(colour);
                         }
                         css::Style::DisplayNone => {
                             return Ok(Nothing);
