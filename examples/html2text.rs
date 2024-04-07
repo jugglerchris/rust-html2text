@@ -107,7 +107,9 @@ where
             #[cfg(not(feature = "css"))]
             let use_only_css = false;
             return conf
-                .coloured(input, flags.width, |ann, s| default_colour_map(ann, s, use_only_css))
+                .coloured(input, flags.width, |ann, s| {
+                    default_colour_map(ann, s, use_only_css)
+                })
                 .unwrap();
         }
     }
@@ -187,8 +189,11 @@ fn main() {
         ap.refer(&mut flags.use_css)
             .add_option(&["--css"], StoreTrue, "Enable CSS");
         #[cfg(feature = "css")]
-        ap.refer(&mut flags.use_only_css)
-            .add_option(&["--only-css"], StoreTrue, "Don't use default non-CSS colours");
+        ap.refer(&mut flags.use_only_css).add_option(
+            &["--only-css"],
+            StoreTrue,
+            "Don't use default non-CSS colours",
+        );
         ap.parse_args_or_exit();
     }
 
