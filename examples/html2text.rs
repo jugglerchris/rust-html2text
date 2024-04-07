@@ -102,8 +102,12 @@ where
         if flags.use_colour {
             let conf = config::rich();
             let conf = update_config(conf, &flags);
+            #[cfg(feature = "css")]
+            let use_only_css = flags.use_only_css;
+            #[cfg(not(feature = "css"))]
+            let use_only_css = false;
             return conf
-                .coloured(input, flags.width, |ann, s| default_colour_map(ann, s, flags.use_only_css))
+                .coloured(input, flags.width, |ann, s| default_colour_map(ann, s, use_only_css))
                 .unwrap();
         }
     }
