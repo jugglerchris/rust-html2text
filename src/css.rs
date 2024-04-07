@@ -244,7 +244,6 @@ fn styles_from_properties2(decls: &[parser::Declaration]) -> Vec<Style> {
                             height_zero = true;
                         }
                     }
-                    parser::Height::Percent(_) => (),
                 }
             }
             parser::Declaration::MaxHeight { value } => {
@@ -255,7 +254,6 @@ fn styles_from_properties2(decls: &[parser::Declaration]) -> Vec<Style> {
                             height_zero = true;
                         }
                     }
-                    parser::Height::Percent(_) => (),
                 }
             }
             parser::Declaration::Overflow { value: parser::Overflow::Hidden } |

@@ -25,10 +25,10 @@ pub enum LengthUnit {
 
 #[derive(Debug, PartialEq)]
 pub enum Height {
+    #[allow(unused)]
     Auto,
     // If the length is 0, the unit will be Px
     Length(f32, LengthUnit),
-    Percent(u8),
 }
 
 #[derive(Debug, PartialEq)]
