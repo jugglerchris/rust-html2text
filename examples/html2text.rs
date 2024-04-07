@@ -10,11 +10,11 @@ use std::io::Write;
 #[cfg(unix)]
 use html2text::render::text_renderer::RichAnnotation;
 #[cfg(unix)]
-fn default_colour_map(annotations: &[RichAnnotation], s: &str) -> String {
+fn default_colour_map(annotations: &[RichAnnotation], s: &str, no_default_colours: bool) -> String {
     use termion::color::*;
     use RichAnnotation::*;
     // Explicit CSS colours override any other colours
-    let mut have_explicit_colour = false;
+    let mut have_explicit_colour = no_default_colours;
     let mut start = Vec::new();
     let mut finish = Vec::new();
     trace!("default_colour_map: str={s}, annotations={annotations:?}");
@@ -103,7 +103,7 @@ where
             let conf = config::rich();
             let conf = update_config(conf, &flags);
             return conf
-                .coloured(input, flags.width, default_colour_map)
+                .coloured(input, flags.width, |ann, s| default_colour_map(ann, s, flags.use_only_css))
                 .unwrap();
         }
     }
@@ -125,6 +125,8 @@ struct Flags {
     use_colour: bool,
     #[cfg(feature = "css")]
     use_css: bool,
+    #[cfg(feature = "css")]
+    use_only_css: bool,
 }
 
 fn main() {
@@ -139,6 +141,8 @@ fn main() {
         use_colour: false,
         #[cfg(feature = "css")]
         use_css: false,
+        #[cfg(feature = "css")]
+        use_only_css: false,
     };
     let mut literal: bool = false;
 
@@ -178,6 +182,9 @@ fn main() {
         #[cfg(feature = "css")]
         ap.refer(&mut flags.use_css)
             .add_option(&["--css"], StoreTrue, "Enable CSS");
+        #[cfg(feature = "css")]
+        ap.refer(&mut flags.use_only_css)
+            .add_option(&["--only-css"], StoreTrue, "Don't use default non-CSS colours");
         ap.parse_args_or_exit();
     }
 
