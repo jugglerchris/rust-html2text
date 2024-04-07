@@ -12,6 +12,8 @@ Possible log types:
 ### Unreleased
 
 - [changed] Updated some dependencies
+- [added] The `html2text` example now has `--ignore-css-colour`, which ignores CSS
+  colour information but still uses `display: none`, for example.
 - [added] The `html2text` example now has `--only-css` option, to not use
   default colours when CSS colours are being used.
 
