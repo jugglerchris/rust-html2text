@@ -10,7 +10,12 @@ use std::io::Write;
 #[cfg(unix)]
 use html2text::render::text_renderer::RichAnnotation;
 #[cfg(unix)]
-fn default_colour_map(annotations: &[RichAnnotation], s: &str, no_default_colours: bool) -> String {
+fn default_colour_map(
+    annotations: &[RichAnnotation],
+    s: &str,
+    use_css_colours: bool,
+    no_default_colours: bool,
+) -> String {
     use termion::color::*;
     use RichAnnotation::*;
     // Explicit CSS colours override any other colours
@@ -60,13 +65,17 @@ fn default_colour_map(annotations: &[RichAnnotation], s: &str, no_default_colour
                 }
             }
             Colour(c) => {
-                start.push(format!("{}", Fg(Rgb(c.r, c.g, c.b))));
-                finish.push(format!("{}", Fg(Reset)));
-                have_explicit_colour = true;
+                if use_css_colours {
+                    start.push(format!("{}", Fg(Rgb(c.r, c.g, c.b))));
+                    finish.push(format!("{}", Fg(Reset)));
+                    have_explicit_colour = true;
+                }
             }
             BgColour(c) => {
-                start.push(format!("{}", Bg(Rgb(c.r, c.g, c.b))));
-                finish.push(format!("{}", Bg(Reset)));
+                if use_css_colours {
+                    start.push(format!("{}", Bg(Rgb(c.r, c.g, c.b))));
+                    finish.push(format!("{}", Bg(Reset)));
+                }
             }
             _ => {}
         }
@@ -103,12 +112,16 @@ where
             let conf = config::rich();
             let conf = update_config(conf, &flags);
             #[cfg(feature = "css")]
+            let use_css_colours = !flags.ignore_css_colours;
+            #[cfg(not(feature = "css"))]
+            let use_css_colours = false;
+            #[cfg(feature = "css")]
             let use_only_css = flags.use_only_css;
             #[cfg(not(feature = "css"))]
             let use_only_css = false;
             return conf
-                .coloured(input, flags.width, |ann, s| {
-                    default_colour_map(ann, s, use_only_css)
+                .coloured(input, flags.width, move |anns, s| {
+                    default_colour_map(anns, s, use_css_colours, use_only_css)
                 })
                 .unwrap();
         }
@@ -132,6 +145,8 @@ struct Flags {
     #[cfg(feature = "css")]
     use_css: bool,
     #[cfg(feature = "css")]
+    ignore_css_colours: bool,
+    #[cfg(feature = "css")]
     use_only_css: bool,
 }
 
@@ -147,6 +162,8 @@ fn main() {
         use_colour: false,
         #[cfg(feature = "css")]
         use_css: false,
+        #[cfg(feature = "css")]
+        ignore_css_colours: false,
         #[cfg(feature = "css")]
         use_only_css: false,
     };
@@ -188,6 +205,9 @@ fn main() {
         #[cfg(feature = "css")]
         ap.refer(&mut flags.use_css)
             .add_option(&["--css"], StoreTrue, "Enable CSS");
+        #[cfg(feature = "css")]
+        ap.refer(&mut flags.ignore_css_colours)
+            .add_option(&["--ignore-css-colour"], StoreTrue, "With --css, ignore CSS colour information (still hides elements with e.g. display: none)");
         #[cfg(feature = "css")]
         ap.refer(&mut flags.use_only_css).add_option(
             &["--only-css"],
