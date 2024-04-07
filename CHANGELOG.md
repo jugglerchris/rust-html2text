@@ -9,6 +9,14 @@ Possible log types:
 - `[fixed]` for any bug fixes.
 - `[security]` to invite users to upgrade in case of vulnerabilities.
 
+### Unreleased
+
+- [changed] Updated some dependencies
+- [added] The `html2text` example now has `--ignore-css-colour`, which ignores CSS
+  colour information but still uses `display: none`, for example.
+- [added] The `html2text` example now has `--only-css` option, to not use
+  default colours when CSS colours are being used.
+
 ### 0.12.4
 
 - [changed] Update the previous `max-height: 0` to also look at `height: 0` and require
