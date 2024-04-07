@@ -1,6 +1,8 @@
 //! Parsing for the subset of CSS used in html2text.
 
-use nom::{IResult, branch::alt, character::complete, bytes::complete::{tag, take, take_until, take_while}, combinator::{map, fail, opt, all_consuming, verify}, multi::{many0, separated_list0}, error::ErrorKind, sequence::tuple};
+use std::str::FromStr;
+
+use nom::{IResult, branch::alt, character::complete::{self, alpha0, digit1, digit0, alpha1}, bytes::complete::{tag, take, take_until, take_while}, combinator::{map, fail, opt, all_consuming, verify, recognize}, multi::{many0, separated_list0}, error::ErrorKind, sequence::tuple};
 
 #[derive(Debug, PartialEq)]
 pub enum Colour {
@@ -8,9 +10,51 @@ pub enum Colour {
 }
 
 #[derive(Debug, PartialEq)]
+pub enum LengthUnit {
+    // Absolute units
+    In,
+    Cm,
+    Mm,
+    Pt,
+    Pc,
+    Px,
+    // Relative units
+    Em,
+    Ex
+}
+
+#[derive(Debug, PartialEq)]
+pub enum Height {
+    Auto,
+    // If the length is 0, the unit will be Px
+    Length(f32, LengthUnit),
+    Percent(u8),
+}
+
+#[derive(Debug, PartialEq)]
+pub enum Overflow {
+    Visible,
+    Hidden,
+    Scroll,
+    Auto,
+}
+
+#[derive(Debug, PartialEq)]
 pub enum Declaration {
     Color {
         value: Colour,
+    },
+    Height {
+        value: Height,
+    },
+    MaxHeight {
+        value: Height,
+    },
+    Overflow {
+        value: Overflow,
+    },
+    OverflowY {
+        value: Overflow,
     },
     Unknown {
         name: PropertyName,
@@ -56,7 +100,7 @@ fn nmchar_char(s: &str) -> IResult<&str, char> {
     match iter.next() {
         Some(c) => {
             match c {
-                '_' | 'a'..='z' | 'A' ..= 'Z' | '0' ..= '9' => {
+                '_' | 'a'..='z' | 'A' ..= 'Z' | '0' ..= '9' | '-' => {
                     Ok((iter.as_str(), c.to_ascii_lowercase()))
                 }
                 _ => {
@@ -118,6 +162,22 @@ pub fn parse_declaration(text: &str) -> IResult<&str, Option<Declaration>> {
             let (_rest, value) = all_consuming(parse_color)(&value)?;
             Declaration::Color { value }
         }
+        "height" => {
+            let (_rest, value) = all_consuming(parse_height)(&value)?;
+            Declaration::Height { value }
+        }
+        "max-height" => {
+            let (_rest, value) = all_consuming(parse_height)(&value)?;
+            Declaration::MaxHeight { value }
+        }
+        "overflow" => {
+            let (_rest, value) = all_consuming(parse_overflow)(&value)?;
+            Declaration::Overflow { value }
+        }
+        "overflow-y" => {
+            let (_rest, value) = all_consuming(parse_overflow)(&value)?;
+            Declaration::OverflowY { value }
+        }
         _ => Declaration::Unknown {
             name: prop,
             value: value.into(),
@@ -162,7 +222,83 @@ fn parse_color(text: &str) -> IResult<&str, Colour> {
        hex_colour6,
        hex_colour3,
        rgb_func_colour,
-       ))(text)
+       ))(rest)
+}
+
+fn parse_integer(text: &str) -> IResult<&str, f32> {
+    let (rest, digits) = digit1(text)?;
+    Ok((rest, <f32 as FromStr>::from_str(digits).unwrap()))
+}
+
+fn parse_decimal(text: &str) -> IResult<&str, f32> {
+    let (rest, valstr) = recognize(tuple((
+            digit0,
+            tag("."),
+            digit1)))(text)?;
+    Ok((rest, <f32 as FromStr>::from_str(valstr).unwrap()))
+}
+
+fn parse_number(text: &str) -> IResult<&str, f32> {
+    let (rest, _) = skip_optional_whitespace(text)?;
+    let (rest, (sign, val)) =
+        tuple((
+            opt(alt((tag("-"), tag("+")))),
+            alt((
+                parse_integer,
+                parse_decimal))))(rest)?;
+    Ok((rest, match sign {
+        Some("-") => -val,
+        None | Some("+") => val,
+        _ => unreachable!(),
+    }))
+}
+
+fn parse_unit(text: &str) -> IResult<&str, LengthUnit> {
+    let (rest, word) = alpha0(text)?;
+    Ok((rest, match word {
+        "in" => LengthUnit::In,
+        "cm" => LengthUnit::Cm,
+        "mm" => LengthUnit::Mm,
+        "pt" => LengthUnit::Pt,
+        "pc" => LengthUnit::Pc,
+        "px" => LengthUnit::Px,
+        "em" => LengthUnit::Em,
+        "ex" => LengthUnit::Ex,
+        _ => {
+            return fail(text);
+        }
+    }))
+}
+
+fn parse_height(text: &str) -> IResult<&str, Height> {
+    let (rest, _) = skip_optional_whitespace(text)?;
+    let (rest, num) = parse_number(rest)?;
+    let (rest, unit) = opt(parse_unit)(rest)?;
+
+    Ok((rest, match unit {
+        Some(unit) => {
+            Height::Length(num, unit)
+        }
+        None => {
+            if num == 0.0 {
+                Height::Length(num, LengthUnit::Px)
+            } else {
+                return fail(text);
+            }
+        }
+    }))
+}
+
+fn parse_overflow(text: &str) -> IResult<&str, Overflow> {
+    let (rest, _) = skip_optional_whitespace(text)?;
+    let (rest, word) = alpha1(rest)?;
+    match word {
+        "visible" => Ok((rest, Overflow::Visible)),
+        "hidden" => Ok((rest, Overflow::Hidden)),
+        "scroll" => Ok((rest, Overflow::Scroll)),
+        "auto" => Ok((rest, Overflow::Auto)),
+        _ => fail(text),
+    }
 }
 
 pub fn parse_rules(text: &str) -> IResult<&str, Vec<Declaration>> {

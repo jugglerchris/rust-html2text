@@ -203,8 +203,8 @@ pub(crate) fn parse_style_attribute(text: &str) -> Result<Vec<Style>> {
 fn styles_from_properties2(decls: &[parser::Declaration]) -> Vec<Style> {
     let mut styles = Vec::new();
     html_trace_quiet!("styles:from_properties2: {decls:?}");
-    let overflow_hidden = false;
-    let height_zero = false;
+    let mut overflow_hidden = false;
+    let mut height_zero = false;
     for decl in decls {
         html_trace_quiet!("styles:from_properties2: {decl:?}");
         match decl {
@@ -235,36 +235,36 @@ fn styles_from_properties2(decls: &[parser::Declaration]) -> Vec<Style> {
                 }
                 styles.push(Style::BgColour(color.clone()));
             }
-            Property::Height(height) => {
-                use lightningcss::properties::size::Size::*;
-                use lightningcss::values::percentage::DimensionPercentage::*;
-                match height {
-                    LengthPercentage(Dimension(dim)) if dim.to_px() == Some(0.0) => {
-                        height_zero = true;
-                    }
-                    _ => (),
-                }
-            }
-            Property::MaxHeight(height) => {
-                use lightningcss::properties::size::MaxSize::*;
-                use lightningcss::values::percentage::DimensionPercentage::*;
-                match height {
-                    LengthPercentage(Dimension(dim)) => {
-                        // Treat max-height: 0 the same as display: none.
-                        if Some(0.0) == dim.to_px() {
+            */
+            parser::Declaration::Height { value } => {
+                match value {
+                    parser::Height::Auto => (),
+                    parser::Height::Length(l, _) => {
+                        if *l == 0.0 {
                             height_zero = true;
                         }
                     }
-                    _ => (),
+                    parser::Height::Percent(_) => (),
                 }
             }
-            Property::OverflowY(OverflowKeyword::Hidden)
-            | Property::Overflow(Overflow {
-                y: OverflowKeyword::Hidden,
-                ..
-            }) => {
+            parser::Declaration::MaxHeight { value } => {
+                match value {
+                    parser::Height::Auto => (),
+                    parser::Height::Length(l, _) => {
+                        if *l == 0.0 {
+                            height_zero = true;
+                        }
+                    }
+                    parser::Height::Percent(_) => (),
+                }
+            }
+            parser::Declaration::Overflow { value: parser::Overflow::Hidden } |
+            parser::Declaration::OverflowY { value: parser::Overflow::Hidden } => {
                 overflow_hidden = true;
             }
+            parser::Declaration::Overflow { .. } |
+            parser::Declaration::OverflowY { .. } => { }
+            /*
             Property::Display(disp) => {
                 if let display::Display::Keyword(DisplayKeyword::None) = disp {
                     styles.push(Style::DisplayNone);
