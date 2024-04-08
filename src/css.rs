@@ -207,9 +207,9 @@ fn styles_from_properties2(decls: &[parser::Declaration]) -> Vec<Style> {
     let mut height_zero = false;
     for decl in decls {
         html_trace_quiet!("styles:from_properties2: {decl:?}");
-        match decl {
-            parser::Declaration::Unknown { .. } => {},
-            parser::Declaration::Color { value: parser::Colour::Rgb(r, g, b) } => {
+        match &decl.data {
+            parser::Decl::Unknown { .. } => {},
+            parser::Decl::Color { value: parser::Colour::Rgb(r, g, b) } => {
                 styles.push(Style::Colour(Colour{
                     r: *r,
                     g: *g, b: *b
@@ -236,7 +236,7 @@ fn styles_from_properties2(decls: &[parser::Declaration]) -> Vec<Style> {
                 styles.push(Style::BgColour(color.clone()));
             }
             */
-            parser::Declaration::Height { value } => {
+            parser::Decl::Height { value } => {
                 match value {
                     parser::Height::Auto => (),
                     parser::Height::Length(l, _) => {
@@ -246,7 +246,7 @@ fn styles_from_properties2(decls: &[parser::Declaration]) -> Vec<Style> {
                     }
                 }
             }
-            parser::Declaration::MaxHeight { value } => {
+            parser::Decl::MaxHeight { value } => {
                 match value {
                     parser::Height::Auto => (),
                     parser::Height::Length(l, _) => {
@@ -256,12 +256,12 @@ fn styles_from_properties2(decls: &[parser::Declaration]) -> Vec<Style> {
                     }
                 }
             }
-            parser::Declaration::Overflow { value: parser::Overflow::Hidden } |
-            parser::Declaration::OverflowY { value: parser::Overflow::Hidden } => {
+            parser::Decl::Overflow { value: parser::Overflow::Hidden } |
+            parser::Decl::OverflowY { value: parser::Overflow::Hidden } => {
                 overflow_hidden = true;
             }
-            parser::Declaration::Overflow { .. } |
-            parser::Declaration::OverflowY { .. } => { }
+            parser::Decl::Overflow { .. } |
+            parser::Decl::OverflowY { .. } => { }
             /*
             Property::Display(disp) => {
                 if let display::Display::Keyword(DisplayKeyword::None) = disp {

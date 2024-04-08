@@ -40,7 +40,7 @@ pub enum Overflow {
 }
 
 #[derive(Debug, PartialEq)]
-pub enum Declaration {
+pub enum Decl {
     Color {
         value: Colour,
     },
@@ -60,6 +60,21 @@ pub enum Declaration {
         name: PropertyName,
         value: String,
     },
+}
+
+#[derive(Debug, PartialEq)]
+pub struct Declaration {
+    pub data: Decl,
+}
+
+#[derive(Debug, PartialEq)]
+pub struct Selector {
+}
+
+#[derive(Debug, PartialEq)]
+pub struct RuleSet {
+    selectors: Vec<Selector>,
+    declarations: Vec<Declaration>,
 }
 
 #[derive(Debug, PartialEq)]
@@ -160,30 +175,32 @@ pub fn parse_declaration(text: &str) -> IResult<&str, Option<Declaration>> {
     let decl = match prop.0.as_str() {
         "color" => {
             let (_rest, value) = all_consuming(parse_color)(&value)?;
-            Declaration::Color { value }
+            Decl::Color { value }
         }
         "height" => {
             let (_rest, value) = all_consuming(parse_height)(&value)?;
-            Declaration::Height { value }
+            Decl::Height { value }
         }
         "max-height" => {
             let (_rest, value) = all_consuming(parse_height)(&value)?;
-            Declaration::MaxHeight { value }
+            Decl::MaxHeight { value }
         }
         "overflow" => {
             let (_rest, value) = all_consuming(parse_overflow)(&value)?;
-            Declaration::Overflow { value }
+            Decl::Overflow { value }
         }
         "overflow-y" => {
             let (_rest, value) = all_consuming(parse_overflow)(&value)?;
-            Declaration::OverflowY { value }
+            Decl::OverflowY { value }
         }
-        _ => Declaration::Unknown {
+        _ => Decl::Unknown {
             name: prop,
             value: value.into(),
         }
     };
-    Ok((rest, Some(decl)))
+    Ok((rest, Some(Declaration {
+        data: decl,
+    })))
 }
 
 fn hex1(text: &str) -> IResult<&str, u8> {
@@ -310,18 +327,22 @@ pub fn parse_rules(text: &str) -> IResult<&str, Vec<Declaration>> {
                           .collect()))
 }
 
+pub fn parse_stylesheet(text: &str) -> IResult<&str, Vec<RuleSet>> {
+    todo!()
+}
+
 #[cfg(test)]
 mod test {
     use crate::css::parser::{Height, LengthUnit};
 
-    use super::{Declaration, PropertyName, Colour, Overflow};
+    use super::{Decl, Declaration, PropertyName, Colour, Overflow};
 
     #[test]
     fn test_parse_decl() {
-        assert_eq!(super::parse_declaration("foo:bar;"), Ok((";", Some(Declaration::Unknown {
+        assert_eq!(super::parse_declaration("foo:bar;"), Ok((";", Some(Declaration { data: Decl::Unknown {
             name: PropertyName("foo".into()),
             value: "bar".into()
-        }))));
+        }}))));
     }
 
     #[test]
@@ -330,8 +351,8 @@ mod test {
             super::parse_rules("overflow: hidden; overflow-y: scroll"),
             Ok(("",
                 vec![
-                Declaration::Overflow { value: Overflow::Hidden },
-                Declaration::OverflowY { value: Overflow::Scroll },
+                Declaration { data: Decl::Overflow { value: Overflow::Hidden } },
+                Declaration { data: Decl::OverflowY { value: Overflow::Scroll } },
                 ])));
     }
 
@@ -341,12 +362,12 @@ mod test {
             super::parse_rules("color: #123; color: #abcdef"),
             Ok(("",
                 vec![
-                    Declaration::Color {
+                    Declaration { data: Decl::Color {
                         value: Colour::Rgb(0x11, 0x22, 0x33)
-                    },
-                    Declaration::Color {
+                    }},
+                    Declaration { data: Decl::Color {
                         value: Colour::Rgb(0xab, 0xcd, 0xef)
-                    },
+                    }},
                 ])));
     }
 
@@ -356,12 +377,12 @@ mod test {
             super::parse_rules("height: 0; max-height: 100cm"),
             Ok(("",
                 vec![
-                    Declaration::Height {
+                    Declaration { data: Decl::Height {
                         value: Height::Length(0.0, LengthUnit::Px),
-                    },
-                    Declaration::MaxHeight {
+                    }},
+                    Declaration { data: Decl::MaxHeight {
                         value: Height::Length(100.0, LengthUnit::Cm),
-                    },
+                    }},
                 ])));
     }
 }
