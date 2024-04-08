@@ -312,12 +312,56 @@ pub fn parse_rules(text: &str) -> IResult<&str, Vec<Declaration>> {
 
 #[cfg(test)]
 mod test {
-    use super::{Declaration, PropertyName};
+    use crate::css::parser::{Height, LengthUnit};
+
+    use super::{Declaration, PropertyName, Colour, Overflow};
+
     #[test]
     fn test_parse_decl() {
         assert_eq!(super::parse_declaration("foo:bar;"), Ok((";", Some(Declaration::Unknown {
             name: PropertyName("foo".into()),
             value: "bar".into()
         }))));
+    }
+
+    #[test]
+    fn test_parse_overflow() {
+        assert_eq!(
+            super::parse_rules("overflow: hidden; overflow-y: scroll"),
+            Ok(("",
+                vec![
+                Declaration::Overflow { value: Overflow::Hidden },
+                Declaration::OverflowY { value: Overflow::Scroll },
+                ])));
+    }
+
+    #[test]
+    fn test_parse_color() {
+        assert_eq!(
+            super::parse_rules("color: #123; color: #abcdef"),
+            Ok(("",
+                vec![
+                    Declaration::Color {
+                        value: Colour::Rgb(0x11, 0x22, 0x33)
+                    },
+                    Declaration::Color {
+                        value: Colour::Rgb(0xab, 0xcd, 0xef)
+                    },
+                ])));
+    }
+
+    #[test]
+    fn test_parse_height() {
+        assert_eq!(
+            super::parse_rules("height: 0; max-height: 100cm"),
+            Ok(("",
+                vec![
+                    Declaration::Height {
+                        value: Height::Length(0.0, LengthUnit::Px),
+                    },
+                    Declaration::MaxHeight {
+                        value: Height::Length(100.0, LengthUnit::Cm),
+                    },
+                ])));
     }
 }
