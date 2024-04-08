@@ -26,7 +26,7 @@ use crate::{
     tree_map_reduce, Result, TreeMapResult, css::parser::parse_rules, Colour,
 };
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 enum SelectorComponent {
     Class(String),
     Element(String),
@@ -35,7 +35,7 @@ enum SelectorComponent {
     CombDescendant,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 struct Selector {
     // List of components, right first so we match from the leaf.
     components: Vec<SelectorComponent>,
