@@ -215,6 +215,12 @@ fn styles_from_properties2(decls: &[parser::Declaration]) -> Vec<Style> {
                     g: *g, b: *b
                 }));
             }
+            parser::Decl::BackgroundColor { value: parser::Colour::Rgb(r, g, b) } => {
+                styles.push(Style::BgColour(Colour{
+                    r: *r,
+                    g: *g, b: *b
+                }));
+            }
             /*
             Property::Color(color) => {
                 if is_transparent(&color) {
@@ -228,12 +234,6 @@ fn styles_from_properties2(decls: &[parser::Declaration]) -> Vec<Style> {
                     continue;
                 }
                 styles.push(Style::BgColour(color));
-            }
-            Property::BackgroundColor(color) => {
-                if is_transparent(&color) {
-                    continue;
-                }
-                styles.push(Style::BgColour(color.clone()));
             }
             */
             parser::Decl::Height { value } => {
@@ -262,12 +262,12 @@ fn styles_from_properties2(decls: &[parser::Declaration]) -> Vec<Style> {
             }
             parser::Decl::Overflow { .. } |
             parser::Decl::OverflowY { .. } => { }
-            /*
-            Property::Display(disp) => {
-                if let display::Display::Keyword(DisplayKeyword::None) = disp {
+            parser::Decl::Display { value } => {
+                if let parser::Display::None = value {
                     styles.push(Style::DisplayNone);
                 }
             }
+            /*
             _ => {
                 html_trace_quiet!("CSS: Unhandled property {:?}", decl);
             }
@@ -394,33 +394,21 @@ impl StyleData {
     /// Add some CSS source to be included.  The source will be parsed
     /// and the relevant and supported features extracted.
     pub fn add_css(&mut self, css: &str) -> Result<()> {
-        let ss = StyleSheet::parse(css, ParserOptions::default())
+        let (_, ss) = dbg!(parser::parse_stylesheet(css))
             .map_err(|_| crate::Error::CssParseError)?;
 
-        for rule in &ss.rules.0 {
-            match rule {
-                CssRule::Style(style) => {
-                    let styles = styles_from_properties(&style.declarations);
-                    if !styles.is_empty() {
-                        for selector in &style.selectors.0 {
-                            match Selector::try_from(selector) {
-                                Ok(selector) => {
-                                    let ruleset = Ruleset {
-                                        selector,
-                                        styles: styles.clone(),
-                                    };
-                                    html_trace_quiet!("Adding ruleset {ruleset:?}");
-                                    self.rules.push(ruleset);
-                                }
-                                Err(_) => {
-                                    html_trace!("Ignoring selector {:?}", selector);
-                                    continue;
-                                }
-                            }
-                        }
-                    }
+        for rule in ss {
+            let styles = styles_from_properties2(&rule.declarations);
+            if !styles.is_empty() {
+                for selector in rule.selectors {
+                    let ruleset = Ruleset {
+                        selector,
+                        styles: styles.clone(),
+                    };
+                    html_trace_quiet!("Adding ruleset {ruleset:?}");
+                    dbg!(&ruleset);
+                    self.rules.push(ruleset);
                 }
-                _ => (),
             }
         }
         Ok(())

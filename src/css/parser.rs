@@ -2,7 +2,7 @@
 
 use std::str::FromStr;
 
-use nom::{IResult, branch::alt, character::complete::{self, alpha0, digit1, digit0, alpha1}, bytes::complete::{tag, take, take_until, take_while}, combinator::{map, fail, opt, all_consuming, verify, recognize}, multi::{many0, separated_list0, separated_list1}, error::ErrorKind, sequence::tuple};
+use nom::{IResult, branch::alt, character::complete::{self, alpha0, digit1, digit0, alpha1}, bytes::complete::{tag, take, take_until, take_while}, combinator::{map, fail, opt, all_consuming, verify, recognize}, multi::{many0, separated_list0, many1}, error::ErrorKind, sequence::tuple};
 
 #[derive(Debug, PartialEq)]
 pub enum Colour {
@@ -39,9 +39,19 @@ pub enum Overflow {
     Auto,
 }
 
+#[non_exhaustive]
+#[derive(Debug, PartialEq)]
+pub enum Display {
+    None,
+    Other
+}
+
 #[derive(Debug, PartialEq)]
 pub enum Decl {
     Color {
+        value: Colour,
+    },
+    BackgroundColor {
         value: Colour,
     },
     Height {
@@ -56,6 +66,9 @@ pub enum Decl {
     OverflowY {
         value: Overflow,
     },
+    Display {
+        value: Display,
+    },
     Unknown {
         name: PropertyName,
         value: String,
@@ -65,14 +78,15 @@ pub enum Decl {
 #[derive(Debug, PartialEq)]
 pub struct Declaration {
     pub data: Decl,
+    pub important: Importance,
 }
 
 use super::{Selector, SelectorComponent};
 
 #[derive(Debug, PartialEq)]
 pub struct RuleSet {
-    selectors: Vec<Selector>,
-    declarations: Vec<Declaration>,
+    pub selectors: Vec<Selector>,
+    pub declarations: Vec<Declaration>,
 }
 
 #[derive(Debug, PartialEq)]
@@ -121,7 +135,7 @@ fn nmchar_char(s: &str) -> IResult<&str, char> {
                 }
             }
         }
-        None => IResult::Err(nom::Err::Incomplete(nom::Needed::Size(1.try_into().unwrap())))
+        None => fail(s)
     }
 }
 
@@ -167,15 +181,39 @@ fn parse_value(text: &str) -> IResult<&str, &str> {
     take_while(|c| c != ';')(text)
 }
 
+#[derive(Copy, Clone, PartialEq, Eq, Debug)]
+enum Importance {
+    Default,
+    Important
+}
+
+fn parse_important(text: &str) -> IResult<&str, Importance> {
+    let (rest, (_, _ws1, id, _ws2)) = tuple((
+            tag("!"),
+            skip_optional_whitespace,
+            parse_ident,
+            skip_optional_whitespace))(text)?;
+    if id != "important" {
+        return fail(text);
+    }
+    Ok((rest, Importance::Important))
+}
+
 pub fn parse_declaration(text: &str) -> IResult<&str, Option<Declaration>> {
-    let (rest, (prop, _ws1, _colon, _ws2, value)) =
+    let (rest, (prop, _ws1, _colon, _ws2, value, _ws3, important)) =
         tuple((
             parse_property_name,
             skip_optional_whitespace,
             tag(":"),
             skip_optional_whitespace,
-            parse_value))(text)?;
+            parse_value,
+            skip_optional_whitespace,
+            opt(parse_important)))(text)?;
     let decl = match prop.0.as_str() {
+        "background-color" => {
+            let (_rest, value) = all_consuming(parse_color)(&value)?;
+            Decl::BackgroundColor { value }
+        }
         "color" => {
             let (_rest, value) = all_consuming(parse_color)(&value)?;
             Decl::Color { value }
@@ -196,6 +234,10 @@ pub fn parse_declaration(text: &str) -> IResult<&str, Option<Declaration>> {
             let (_rest, value) = all_consuming(parse_overflow)(&value)?;
             Decl::OverflowY { value }
         }
+        "display" => {
+            let (_rest, value) = all_consuming(parse_display)(&value)?;
+            Decl::Display { value }
+        }
         _ => Decl::Unknown {
             name: prop,
             value: value.into(),
@@ -203,6 +245,7 @@ pub fn parse_declaration(text: &str) -> IResult<&str, Option<Declaration>> {
     };
     Ok((rest, Some(Declaration {
         data: decl,
+        important: important.unwrap_or(Importance::Default),
     })))
 }
 
@@ -235,10 +278,38 @@ fn rgb_func_colour(text: &str) -> IResult<&str, Colour> {
     fail(text)
 }
 
+fn named_colour(text: &str) -> IResult<&str, Colour> {
+    let (rest, _) = skip_optional_whitespace(text)?;
+    let (rest, name) = dbg!(parse_ident(rest))?;
+    let colour = match name.as_str() {
+        "aqua" => Colour::Rgb(0, 0xff, 0xff),
+        "black" => Colour::Rgb(0, 0, 0),
+        "blue" => Colour::Rgb(0, 0, 0xff),
+        "fuchsia" => Colour::Rgb(0xff, 0, 0xff),
+        "gray" => Colour::Rgb(0x80, 0x80, 0x80),
+        "green" => Colour::Rgb(0, 0x80, 0),
+        "lime" => Colour::Rgb(0, 0xff, 0),
+        "maroon" => Colour::Rgb(0x80, 0, 0),
+        "navy" => Colour::Rgb(0, 0, 0x80),
+        "olive" => Colour::Rgb(0x80, 0x80, 0),
+        "orange" => Colour::Rgb(0xff, 0xa5, 0),
+        "purple" => Colour::Rgb(0x80, 0, 0x80),
+        "red" => Colour::Rgb(0xff, 0, 0),
+        "silver" => Colour::Rgb(0xc0, 0xc0, 0xc0),
+        "teal" => Colour::Rgb(0, 0x80, 0x80),
+        "white" => Colour::Rgb(0xff, 0xff, 0xff),
+        "yellow" => Colour::Rgb(0xff, 0xff, 0),
+        _ => {
+            return fail(text);
+        }
+    };
+    Ok((rest, colour))
+}
+
 fn parse_color(text: &str) -> IResult<&str, Colour> {
     let (rest, _) = skip_optional_whitespace(text)?;
     alt((
-       /* TODO: Specific named colours */
+       named_colour,
        hex_colour6,
        hex_colour3,
        rgb_func_colour,
@@ -321,6 +392,17 @@ fn parse_overflow(text: &str) -> IResult<&str, Overflow> {
     }
 }
 
+fn parse_display(text: &str) -> IResult<&str, Display> {
+    let (rest, _) = skip_optional_whitespace(text)?;
+    if let Ok((rest, word)) = alpha1::<_, nom::error::Error<&str>>(rest) {
+        match word {
+            "none" => return Ok((rest, Display::None)),
+            _ => (),
+        }
+    }
+    Ok((rest, Display::Other))
+}
+
 pub fn parse_rules(text: &str) -> IResult<&str, Vec<Declaration>> {
     separated_list0(
         tuple((tag(";"), skip_optional_whitespace)),
@@ -330,26 +412,56 @@ pub fn parse_rules(text: &str) -> IResult<&str, Vec<Declaration>> {
                           .collect()))
 }
 
-pub fn parse_selector_component(text: &str) -> IResult<&str, SelectorComponent> {
+pub fn parse_class(text: &str) -> IResult<&str, SelectorComponent> {
+    let (rest, _) = tag(".")(text)?;
+    let (rest, classname) = parse_ident(rest)?;
+    Ok((rest, SelectorComponent::Class(classname)))
+}
+
+pub fn parse_hash(text: &str) -> IResult<&str, SelectorComponent> {
+    fail(text)
+    /*
+    let (rest, _) = tag(".")(text)?;
+    let (rest, id) = parse_hash(rest)?;
+    Ok((rest, SelectorComponent::
+    */
+}
+
+pub fn parse_simple_selector_component(text: &str) -> IResult<&str, SelectorComponent> {
+    alt((
+        parse_class,
+        parse_hash))(text)
+}
+
+pub fn parse_selector_with_element(text: &str) -> IResult<&str, Vec<SelectorComponent>> {
     let (rest, ident) = parse_ident(text)?;
-    Ok((rest, SelectorComponent::Element(ident.into())))
+    let (rest, extras) = many0(
+        parse_simple_selector_component)(rest)?;
+    let mut result = vec![SelectorComponent::Element(ident.into())];
+    result.extend(extras);
+    Ok((rest, result))
+}
+
+pub fn parse_selector_without_element(text: &str) -> IResult<&str, Vec<SelectorComponent>> {
+    many1(parse_simple_selector_component)(text)
 }
 
 pub fn parse_selector(text: &str) -> IResult<&str, Selector> {
-    let (rest, components) = separated_list1(
-        tuple((tag(","), skip_optional_whitespace)),
+    let (rest, components) =
         alt((
-            parse_selector_component,
-            fail)))(text)?;
+            parse_selector_with_element,
+            parse_selector_without_element,
+            fail))(text)?;
     Ok((rest, Selector {
         components
     }))
 }
 
 pub fn parse_ruleset(text: &str) -> IResult<&str, RuleSet> {
-    let (rest, selectors) = separated_list0(
+    let (rest, _) = skip_optional_whitespace(text)?;
+    let (rest, selectors) = dbg!(separated_list0(
         tuple((tag(","), skip_optional_whitespace)),
-        parse_selector)(text)?;
+        parse_selector)(rest))?;
     let (rest, (_ws1, _bra, _ws2, declarations, _ws3, _optsemi, _ws4,_ket, _ws5)) =
         tuple((
             skip_optional_whitespace,
@@ -374,16 +486,19 @@ pub fn parse_stylesheet(text: &str) -> IResult<&str, Vec<RuleSet>> {
 
 #[cfg(test)]
 mod test {
-    use crate::css::{parser::{Height, LengthUnit, RuleSet, Selector}, SelectorComponent};
+    use crate::css::{parser::{Height, LengthUnit, RuleSet, Selector, Importance}, SelectorComponent};
 
     use super::{Decl, Declaration, PropertyName, Colour, Overflow};
 
     #[test]
     fn test_parse_decl() {
-        assert_eq!(super::parse_declaration("foo:bar;"), Ok((";", Some(Declaration { data: Decl::Unknown {
-            name: PropertyName("foo".into()),
-            value: "bar".into()
-        }}))));
+        assert_eq!(super::parse_declaration("foo:bar;"), Ok((";", Some(Declaration {
+            data: Decl::Unknown {
+                name: PropertyName("foo".into()),
+                value: "bar".into()
+            },
+            important: Importance::Default,
+        }))));
     }
 
     #[test]
@@ -392,8 +507,14 @@ mod test {
             super::parse_rules("overflow: hidden; overflow-y: scroll"),
             Ok(("",
                 vec![
-                Declaration { data: Decl::Overflow { value: Overflow::Hidden } },
-                Declaration { data: Decl::OverflowY { value: Overflow::Scroll } },
+                Declaration {
+                    data: Decl::Overflow { value: Overflow::Hidden }, 
+                    important: Importance::Default,
+                },
+                Declaration {
+                    data: Decl::OverflowY { value: Overflow::Scroll },
+                    important: Importance::Default,
+                },
                 ])));
     }
 
@@ -403,12 +524,18 @@ mod test {
             super::parse_rules("color: #123; color: #abcdef"),
             Ok(("",
                 vec![
-                    Declaration { data: Decl::Color {
-                        value: Colour::Rgb(0x11, 0x22, 0x33)
-                    }},
-                    Declaration { data: Decl::Color {
-                        value: Colour::Rgb(0xab, 0xcd, 0xef)
-                    }},
+                    Declaration {
+                        data: Decl::Color {
+                            value: Colour::Rgb(0x11, 0x22, 0x33)
+                        },
+                        important: Importance::Default,
+                    },
+                    Declaration {
+                        data: Decl::Color {
+                            value: Colour::Rgb(0xab, 0xcd, 0xef)
+                        },
+                        important: Importance::Default,
+                    },
                 ])));
     }
 
@@ -418,12 +545,18 @@ mod test {
             super::parse_rules("height: 0; max-height: 100cm"),
             Ok(("",
                 vec![
-                    Declaration { data: Decl::Height {
-                        value: Height::Length(0.0, LengthUnit::Px),
-                    }},
-                    Declaration { data: Decl::MaxHeight {
-                        value: Height::Length(100.0, LengthUnit::Cm),
-                    }},
+                    Declaration {
+                        data: Decl::Height {
+                            value: Height::Length(0.0, LengthUnit::Px),
+                        },
+                        important: Importance::Default,
+                    },
+                    Declaration {
+                        data: Decl::MaxHeight {
+                            value: Height::Length(100.0, LengthUnit::Cm),
+                        },
+                        important: Importance::Default,
+                    },
                 ])));
     }
 
@@ -452,11 +585,55 @@ mod test {
                         },
                     ],
                     declarations: vec![
-                        Declaration { data: Decl::Color {
-                            value: Colour::Rgb(0x11, 0x22, 0x33)
-                        }},
+                        Declaration {
+                            data: Decl::Color {
+                                value: Colour::Rgb(0x11, 0x22, 0x33)
+                            },
+                            important: Importance::Default,
+                        },
                     ],
                 }
             ])));
+    }
+
+    #[test]
+    fn test_parse_class() {
+        assert_eq!(
+            super::parse_stylesheet("
+            .foo {
+                color: #112233;
+                background-color: #332211 !important;
+            }
+            "),
+            Ok(("", vec![
+                RuleSet {
+                    selectors: vec![
+                        Selector {
+                            components: vec![
+                                SelectorComponent::Class("foo".into()),
+                            ],
+                        },
+                    ],
+                    declarations: vec![
+                        Declaration {
+                            data: Decl::Color {
+                                value: Colour::Rgb(0x11, 0x22, 0x33)
+                            },
+                            important: Importance::Default,
+                        },
+                        Declaration {
+                            data: Decl::BackgroundColor {
+                                value: Colour::Rgb(0x33, 0x22, 0x11)
+                            },
+                            important: Importance::Important,
+                        },
+                    ],
+                }
+            ])));
+    }
+
+    #[test]
+    fn test_parse_named_colour() {
+        assert_eq!(super::parse_color(" white"), Ok(("", Colour::Rgb(0xff, 0xff, 0xff))));
     }
 }
