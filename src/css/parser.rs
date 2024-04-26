@@ -1,8 +1,8 @@
 //! Parsing for the subset of CSS used in html2text.
 
-use std::{str::FromStr, borrow::Cow};
+use std::{str::FromStr, borrow::Cow, ops::Deref};
 
-use nom::{IResult, branch::alt, character::complete::{self, alpha0, digit1, digit0, alpha1}, bytes::complete::{tag, take, take_until, take_while}, combinator::{map, fail, opt, all_consuming, verify, recognize}, multi::{many0, separated_list0, many1}, error::ErrorKind, sequence::tuple};
+use nom::{IResult, branch::alt, character::{complete::{self, alpha0, digit1, digit0, alpha1}}, bytes::complete::{tag, take, take_until}, combinator::{map, fail, opt, verify, recognize}, multi::{many0, separated_list0, many1}, error::ErrorKind, sequence::tuple};
 
 #[derive(Debug, PartialEq)]
 pub enum Colour {
@@ -71,7 +71,7 @@ pub enum Decl {
     },
     Unknown {
         name: PropertyName,
-        value: String,
+//        value: Vec<Token>,
     },
 }
 
@@ -182,6 +182,21 @@ fn nmstart_char(s: &str) -> IResult<&str, char> {
     }
 }
 
+fn is_ident_start(c: char) -> bool {
+    match c {
+        'a' ..= 'z' | 'A' ..= 'Z' | '_' => true,
+        '\u{0081}'.. => true,
+        _ => false,
+    }
+}
+
+fn is_digit(c: char) -> bool {
+    match c {
+        '0' ..= '9' => true,
+        _ => false,
+    }
+}
+
 fn nmchar_char(s: &str) -> IResult<&str, char> {
     let mut iter = s.chars();
     match iter.next() {
@@ -260,6 +275,14 @@ fn parse_token(text: &str) -> IResult<&str, Token> {
         Some(';') => {
             Ok((&rest[1..], Token::Semicolon))
         }
+        Some(c) if is_ident_start(c) => {
+            let (rest, ident) = parse_ident(rest)?;
+            Ok((rest, Token::Ident(ident.into())))
+        }
+        Some(c) if is_digit(c) => {
+            let (rest, num) = recognize(parse_number)(rest)?;
+            Ok((rest, Token::Number(num.into())))
+        }
         Some(c) => unimplemented!("Unhandled char [{}]", c),
     }
 }
@@ -325,15 +348,15 @@ pub fn parse_declaration(text: &str) -> IResult<&str, Option<Declaration>> {
             let value = parse_color(&value)?;
             Decl::Color { value }
         }
-        /*
         "height" => {
-            let (_rest, value) = all_consuming(parse_height)(&value)?;
+            let value = parse_height(&value)?;
             Decl::Height { value }
         }
         "max-height" => {
-            let (_rest, value) = all_consuming(parse_height)(&value)?;
+            let value = parse_height(&value)?;
             Decl::MaxHeight { value }
         }
+        /*
         "overflow" => {
             let (_rest, value) = all_consuming(parse_overflow)(&value)?;
             Decl::Overflow { value }
@@ -349,7 +372,7 @@ pub fn parse_declaration(text: &str) -> IResult<&str, Option<Declaration>> {
         */
         _ => Decl::Unknown {
             name: prop,
-            value: /*value*/"".into(),
+//            value: /*value*/"".into(),
         }
     };
     Ok((rest, Some(Declaration {
@@ -415,8 +438,12 @@ fn named_colour(text: &str) -> IResult<&str, Colour> {
     Ok((rest, colour))
 }
 
+fn empty_fail() -> nom::Err<nom::error::Error<&'static str>> {
+    nom::Err::Error(nom::error::Error::new("", ErrorKind::Fail))
+}
+
 fn parse_color(value: &RawValue) -> Result<Colour, nom::Err<nom::error::Error<&'static str>>> {
-    let fail_error = nom::Err::Error(nom::error::Error::new("", ErrorKind::Fail));
+    let fail_error = empty_fail();
     if value.tokens.len() != 1 {
         return Err(fail_error);
     }
@@ -483,37 +510,41 @@ fn parse_number(text: &str) -> IResult<&str, f32> {
 fn parse_unit(text: &str) -> IResult<&str, LengthUnit> {
     let (rest, word) = alpha0(text)?;
     Ok((rest, match word {
-        "in" => LengthUnit::In,
-        "cm" => LengthUnit::Cm,
-        "mm" => LengthUnit::Mm,
-        "pt" => LengthUnit::Pt,
-        "pc" => LengthUnit::Pc,
-        "px" => LengthUnit::Px,
-        "em" => LengthUnit::Em,
-        "ex" => LengthUnit::Ex,
         _ => {
             return fail(text);
         }
     }))
 }
 
-fn parse_height(text: &str) -> IResult<&str, Height> {
-    let (rest, _) = skip_optional_whitespace(text)?;
-    let (rest, num) = parse_number(rest)?;
-    let (rest, unit) = opt(parse_unit)(rest)?;
-
-    Ok((rest, match unit {
-        Some(unit) => {
-            Height::Length(num, unit)
+fn parse_height(value: &RawValue) -> Result<Height, nom::Err<nom::error::Error<&'static str>>> {
+    match &value.tokens[..] {
+        &[Token::Number(ref n), Token::Ident(ref unit)] => {
+            let (_, num) = parse_number(n).map_err(|_e| empty_fail())?;
+            let unit = match unit.deref() {
+                "in" => LengthUnit::In,
+                "cm" => LengthUnit::Cm,
+                "mm" => LengthUnit::Mm,
+                "pt" => LengthUnit::Pt,
+                "pc" => LengthUnit::Pc,
+                "px" => LengthUnit::Px,
+                "em" => LengthUnit::Em,
+                "ex" => LengthUnit::Ex,
+                _ => {
+                    return Err(empty_fail());
+                }
+            };
+            Ok(Height::Length(num, unit))
         }
-        None => {
-            if num == 0.0 {
-                Height::Length(num, LengthUnit::Px)
+        &[Token::Number(ref n)] => {
+            let (_, n) = parse_number(&n).map_err(|_e| empty_fail())?;
+            if n == 0.0 {
+                Ok(Height::Length(0.0, LengthUnit::Px))
             } else {
-                return fail(text);
+                Err(empty_fail())
             }
         }
-    }))
+        _ => Err(empty_fail()),
+    }
 }
 
 fn parse_overflow(text: &str) -> IResult<&str, Overflow> {
@@ -631,7 +662,7 @@ mod test {
         assert_eq!(super::parse_declaration("foo:bar;"), Ok((";", Some(Declaration {
             data: Decl::Unknown {
                 name: PropertyName("foo".into()),
-                value: "bar".into()
+//                value: "bar".into()
             },
             important: Importance::Default,
         }))));
