@@ -1,6 +1,6 @@
 //! Parsing for the subset of CSS used in html2text.
 
-use std::str::FromStr;
+use std::{str::FromStr, borrow::Cow};
 
 use nom::{IResult, branch::alt, character::complete::{self, alpha0, digit1, digit0, alpha1}, bytes::complete::{tag, take, take_until, take_while}, combinator::{map, fail, opt, all_consuming, verify, recognize}, multi::{many0, separated_list0, many1}, error::ErrorKind, sequence::tuple};
 
@@ -73,6 +73,66 @@ pub enum Decl {
         name: PropertyName,
         value: String,
     },
+}
+
+// Tokens as defined in the CSS Syntax Module Level 3
+#[derive(Debug, PartialEq)]
+enum Token<'s> {
+    /// Plain identifier
+    Ident(Cow<'s, str>),
+    /// Start of a function call: <ident>(
+    Function(Cow<'s, str>),
+    /// @<ident>
+    AtKeyword(Cow<'s, str>),
+    /// #abcd12
+    Hash(Cow<'s, str>),
+    /// Quoted (double or single) string
+    String(Cow<'s, str>),
+    /// <bad-string-token>
+    BadString(Cow<'s, str>),
+    /// URL
+    Url(Cow<'s, str>),
+    /// <bad-url-token>
+    BadUrl(Cow<'s, str>),
+    /// Delim character
+    Delim(char),
+    /// Number
+    Number(Cow<'s, str>),
+    /// Dimension (number, unit)
+    Dimension(Cow<'s, str>, Cow<'s, str>),
+    /// Percentage
+    Percentage(Cow<'s, str>),
+    /// Whitespace
+    //Whitespace(Cow<'s, str>),
+    /// CDO (<!--)
+    CDO,
+    /// CDC (-->)
+    CDC,
+    /// Colon
+    Colon,
+    /// Semicolon
+    Semicolon,
+    /// Comma
+    Comma,
+    /// [-token
+    OpenSquare,
+    /// ]-token
+    CloseSquare,
+    /// (-token
+    OpenRound,
+    /// )-token
+    CloseRound,
+    /// {-token
+    OpenBrace,
+    /// }-token
+    CloseBrace,
+}
+
+// A raw, uninterpreted declaration value.
+#[derive(Debug, PartialEq)]
+struct RawValue<'s> {
+    tokens: Vec<Token<'s>>,
+    important: bool,
 }
 
 #[derive(Debug, PartialEq)]
@@ -172,13 +232,60 @@ fn parse_ident(text: &str) -> IResult<&str, String> {
     Ok((rest, name.into_iter().collect()))
 }
 
-fn parse_property_name(text: &str) -> IResult<&str, PropertyName> {
-    parse_ident(text)
-        .map(|(r, s)| (r, PropertyName(s)))
+fn parse_identstring(text: &str) -> IResult<&str, String> {
+    let (rest, _) = skip_optional_whitespace(text)?;
+
+    let (rest, name) = many1(nmchar)(rest)?;
+    Ok((rest, name.into_iter().collect()))
 }
 
-fn parse_value(text: &str) -> IResult<&str, &str> {
-    take_while(|c| c != ';')(text)
+fn parse_property_name(text: &str) -> IResult<&str, PropertyName> {
+    dbg!(parse_ident(text)
+        .map(|(r, s)| (r, PropertyName(s))))
+}
+
+// For now ignore whitespace
+fn parse_token(text: &str) -> IResult<&str, Token> {
+    let (rest, _) = skip_optional_whitespace(text)?;
+    let mut chars = rest.chars();
+    match dbg!(chars.next()) {
+        None => fail(rest),
+        //Some('"') => {}
+        Some('#') => {
+            match dbg!(parse_identstring(&rest[1..])) {
+                Ok((rest, id)) => Ok((rest, Token::Hash(id.into()))),
+                Err(_) => Ok((rest, Token::Delim('#'))),
+            }
+        }
+        Some(';') => {
+            Ok((&rest[1..], Token::Semicolon))
+        }
+        Some(c) => unimplemented!("Unhandled char [{}]", c),
+    }
+}
+
+fn parse_token_not_semicolon(text: &str) -> IResult<&str, Token> {
+    let (rest, token) = parse_token(text)?;
+    if token == Token::Semicolon {
+        fail(text)
+    } else {
+        Ok((rest, token))
+    }
+}
+
+fn parse_value(text: &str) -> IResult<&str, RawValue> {
+    let (rest, mut tokens) = dbg!(many0(parse_token_not_semicolon)(text))?;
+    let mut important = false;
+    if tokens.len() >= 2 &&
+        &tokens[tokens.len() - 2..] == &[Token::Delim('!'), Token::Ident("important".into())] {
+        tokens.pop();
+        tokens.pop();
+        important = true;
+    }
+    Ok((rest, RawValue {
+        tokens,
+        important,
+    }))
 }
 
 #[derive(Copy, Clone, PartialEq, Eq, Debug)]
@@ -200,24 +307,25 @@ fn parse_important(text: &str) -> IResult<&str, Importance> {
 }
 
 pub fn parse_declaration(text: &str) -> IResult<&str, Option<Declaration>> {
-    let (rest, (prop, _ws1, _colon, _ws2, value, _ws3, important)) =
+    let (rest, (prop, _ws1, _colon, _ws2, value)) =
         tuple((
             parse_property_name,
             skip_optional_whitespace,
             tag(":"),
             skip_optional_whitespace,
-            parse_value,
-            skip_optional_whitespace,
-            opt(parse_important)))(text)?;
-    let decl = match prop.0.as_str() {
+            parse_value))(text)?;
+    let decl = match dbg!(prop.0.as_str()) {
+        /*
         "background-color" => {
             let (_rest, value) = all_consuming(parse_color)(&value)?;
             Decl::BackgroundColor { value }
         }
+        */
         "color" => {
-            let (_rest, value) = all_consuming(parse_color)(&value)?;
+            let value = parse_color(&value)?;
             Decl::Color { value }
         }
+        /*
         "height" => {
             let (_rest, value) = all_consuming(parse_height)(&value)?;
             Decl::Height { value }
@@ -238,14 +346,15 @@ pub fn parse_declaration(text: &str) -> IResult<&str, Option<Declaration>> {
             let (_rest, value) = all_consuming(parse_display)(&value)?;
             Decl::Display { value }
         }
+        */
         _ => Decl::Unknown {
             name: prop,
-            value: value.into(),
+            value: /*value*/"".into(),
         }
     };
     Ok((rest, Some(Declaration {
         data: decl,
-        important: important.unwrap_or(Importance::Default),
+        important: if value.important { Importance::Important } else { Importance::Default },
     })))
 }
 
@@ -306,14 +415,41 @@ fn named_colour(text: &str) -> IResult<&str, Colour> {
     Ok((rest, colour))
 }
 
-fn parse_color(text: &str) -> IResult<&str, Colour> {
-    let (rest, _) = skip_optional_whitespace(text)?;
+fn parse_color(value: &RawValue) -> Result<Colour, nom::Err<nom::error::Error<&'static str>>> {
+    let fail_error = nom::Err::Error(nom::error::Error::new("", ErrorKind::Fail));
+    if value.tokens.len() != 1 {
+        return Err(fail_error);
+    }
+    match dbg!(&value.tokens[0]) {
+        Token::Ident(_) => todo!(),
+        Token::Function(_) => todo!(),
+        Token::Hash(s) => {
+            if s.len() == 3 {
+                let v = u32::from_str_radix(&s, 16).map_err(|_| fail_error)?;
+                let r = ((v >> 8) & 0xf) as u8 * 0x11;
+                let g = ((v >> 4) & 0xf) as u8 * 0x11;
+                let b = (v & 0xf) as u8 * 0x11;
+                Ok(Colour::Rgb(r, g, b))
+            } else if s.len() == 6 {
+                let v = u32::from_str_radix(&s, 16).map_err(|_| fail_error)?;
+                let r = ((v >> 16) & 0xff) as u8;
+                let g = ((v >> 8) & 0xff) as u8;
+                let b = (v & 0xff) as u8;
+                Ok(Colour::Rgb(r, g, b))
+            } else {
+                Err(fail_error)
+            }
+        }
+        _ => Err(fail_error),
+    }
+    /*
     alt((
        named_colour,
        hex_colour6,
        hex_colour3,
        rgb_func_colour,
        ))(rest)
+       */
 }
 
 fn parse_integer(text: &str) -> IResult<&str, f32> {
@@ -634,6 +770,7 @@ mod test {
 
     #[test]
     fn test_parse_named_colour() {
-        assert_eq!(super::parse_color(" white"), Ok(("", Colour::Rgb(0xff, 0xff, 0xff))));
+        //assert_eq!(super::parse_color(" white"), Ok(("", Colour::Rgb(0xff, 0xff, 0xff))));
+        todo!()
     }
 }
