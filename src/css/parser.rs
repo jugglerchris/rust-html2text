@@ -599,10 +599,20 @@ pub fn parse_hash(text: &str) -> IResult<&str, SelectorComponent> {
     */
 }
 
+// Match some (not zero) whitespace
+pub fn parse_ws(text: &str) -> IResult<&str, ()> {
+    map(many1(match_whitespace_item), |_| ())(text)
+}
+
 pub fn parse_simple_selector_component(text: &str) -> IResult<&str, SelectorComponent> {
     alt((
+        map(tuple((skip_optional_whitespace, tag(">"), skip_optional_whitespace)), |_| SelectorComponent::CombChild),
+        map(tuple((skip_optional_whitespace, tag("*"), skip_optional_whitespace)), |_| SelectorComponent::Star),
+        map(parse_ws, |_| SelectorComponent::CombDescendant),
         parse_class,
-        parse_hash))(text)
+        parse_hash,
+        map(parse_ident, |name| SelectorComponent::Element(name)),
+        ))(text)
 }
 
 pub fn parse_selector_with_element(text: &str) -> IResult<&str, Vec<SelectorComponent>> {
@@ -619,11 +629,20 @@ pub fn parse_selector_without_element(text: &str) -> IResult<&str, Vec<SelectorC
 }
 
 pub fn parse_selector(text: &str) -> IResult<&str, Selector> {
-    let (rest, components) =
+    let (rest, mut components) =
         alt((
             parse_selector_with_element,
             parse_selector_without_element,
             fail))(text)?;
+    // Reverse.  Also remove any leading/trailing CombDescendent, as leading/trailing whitespace
+    // shouldn't count as a descendent combinator.
+    if let Some(&SelectorComponent::CombDescendant) = components.last() {
+        components.pop();
+    }
+    components.reverse();
+    if let Some(&SelectorComponent::CombDescendant) = components.last() {
+        components.pop();
+    }
     Ok((rest, Selector {
         components
     }))
