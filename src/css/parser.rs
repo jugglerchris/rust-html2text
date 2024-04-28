@@ -283,6 +283,9 @@ fn parse_token(text: &str) -> IResult<&str, Token> {
             let (rest, num) = recognize(parse_number)(rest)?;
             Ok((rest, Token::Number(num.into())))
         }
+        Some('!') => {
+            Ok((&rest[1..], Token::Delim('!')))
+        }
         Some(c) => unimplemented!("Unhandled char [{}]", c),
     }
 }
@@ -338,12 +341,10 @@ pub fn parse_declaration(text: &str) -> IResult<&str, Option<Declaration>> {
             skip_optional_whitespace,
             parse_value))(text)?;
     let decl = match dbg!(prop.0.as_str()) {
-        /*
         "background-color" => {
-            let (_rest, value) = all_consuming(parse_color)(&value)?;
+            let value = parse_color(&value)?;
             Decl::BackgroundColor { value }
         }
-        */
         "color" => {
             let value = parse_color(&value)?;
             Decl::Color { value }
@@ -356,20 +357,18 @@ pub fn parse_declaration(text: &str) -> IResult<&str, Option<Declaration>> {
             let value = parse_height(&value)?;
             Decl::MaxHeight { value }
         }
-        /*
         "overflow" => {
-            let (_rest, value) = all_consuming(parse_overflow)(&value)?;
+            let value = parse_overflow(&value)?;
             Decl::Overflow { value }
         }
         "overflow-y" => {
-            let (_rest, value) = all_consuming(parse_overflow)(&value)?;
+            let value = parse_overflow(&value)?;
             Decl::OverflowY { value }
         }
         "display" => {
-            let (_rest, value) = all_consuming(parse_display)(&value)?;
+            let value = parse_display(&value)?;
             Decl::Display { value }
         }
-        */
         _ => Decl::Unknown {
             name: prop,
 //            value: /*value*/"".into(),
@@ -410,34 +409,6 @@ fn rgb_func_colour(text: &str) -> IResult<&str, Colour> {
     fail(text)
 }
 
-fn named_colour(text: &str) -> IResult<&str, Colour> {
-    let (rest, _) = skip_optional_whitespace(text)?;
-    let (rest, name) = dbg!(parse_ident(rest))?;
-    let colour = match name.as_str() {
-        "aqua" => Colour::Rgb(0, 0xff, 0xff),
-        "black" => Colour::Rgb(0, 0, 0),
-        "blue" => Colour::Rgb(0, 0, 0xff),
-        "fuchsia" => Colour::Rgb(0xff, 0, 0xff),
-        "gray" => Colour::Rgb(0x80, 0x80, 0x80),
-        "green" => Colour::Rgb(0, 0x80, 0),
-        "lime" => Colour::Rgb(0, 0xff, 0),
-        "maroon" => Colour::Rgb(0x80, 0, 0),
-        "navy" => Colour::Rgb(0, 0, 0x80),
-        "olive" => Colour::Rgb(0x80, 0x80, 0),
-        "orange" => Colour::Rgb(0xff, 0xa5, 0),
-        "purple" => Colour::Rgb(0x80, 0, 0x80),
-        "red" => Colour::Rgb(0xff, 0, 0),
-        "silver" => Colour::Rgb(0xc0, 0xc0, 0xc0),
-        "teal" => Colour::Rgb(0, 0x80, 0x80),
-        "white" => Colour::Rgb(0xff, 0xff, 0xff),
-        "yellow" => Colour::Rgb(0xff, 0xff, 0),
-        _ => {
-            return fail(text);
-        }
-    };
-    Ok((rest, colour))
-}
-
 fn empty_fail() -> nom::Err<nom::error::Error<&'static str>> {
     nom::Err::Error(nom::error::Error::new("", ErrorKind::Fail))
 }
@@ -448,7 +419,31 @@ fn parse_color(value: &RawValue) -> Result<Colour, nom::Err<nom::error::Error<&'
         return Err(fail_error);
     }
     match dbg!(&value.tokens[0]) {
-        Token::Ident(_) => todo!(),
+        Token::Ident(c) => {
+            let colour = match c.deref() {
+                "aqua" => Colour::Rgb(0, 0xff, 0xff),
+                "black" => Colour::Rgb(0, 0, 0),
+                "blue" => Colour::Rgb(0, 0, 0xff),
+                "fuchsia" => Colour::Rgb(0xff, 0, 0xff),
+                "gray" => Colour::Rgb(0x80, 0x80, 0x80),
+                "green" => Colour::Rgb(0, 0x80, 0),
+                "lime" => Colour::Rgb(0, 0xff, 0),
+                "maroon" => Colour::Rgb(0x80, 0, 0),
+                "navy" => Colour::Rgb(0, 0, 0x80),
+                "olive" => Colour::Rgb(0x80, 0x80, 0),
+                "orange" => Colour::Rgb(0xff, 0xa5, 0),
+                "purple" => Colour::Rgb(0x80, 0, 0x80),
+                "red" => Colour::Rgb(0xff, 0, 0),
+                "silver" => Colour::Rgb(0xc0, 0xc0, 0xc0),
+                "teal" => Colour::Rgb(0, 0x80, 0x80),
+                "white" => Colour::Rgb(0xff, 0xff, 0xff),
+                "yellow" => Colour::Rgb(0xff, 0xff, 0),
+                _ => {
+                    return Err(empty_fail());
+                }
+            };
+            Ok(colour)
+        }
         Token::Function(_) => todo!(),
         Token::Hash(s) => {
             if s.len() == 3 {
@@ -472,8 +467,6 @@ fn parse_color(value: &RawValue) -> Result<Colour, nom::Err<nom::error::Error<&'
     /*
     alt((
        named_colour,
-       hex_colour6,
-       hex_colour3,
        rgb_func_colour,
        ))(rest)
        */
@@ -547,27 +540,39 @@ fn parse_height(value: &RawValue) -> Result<Height, nom::Err<nom::error::Error<&
     }
 }
 
-fn parse_overflow(text: &str) -> IResult<&str, Overflow> {
-    let (rest, _) = skip_optional_whitespace(text)?;
-    let (rest, word) = alpha1(rest)?;
-    match word {
-        "visible" => Ok((rest, Overflow::Visible)),
-        "hidden" => Ok((rest, Overflow::Hidden)),
-        "scroll" => Ok((rest, Overflow::Scroll)),
-        "auto" => Ok((rest, Overflow::Auto)),
-        _ => fail(text),
-    }
-}
-
-fn parse_display(text: &str) -> IResult<&str, Display> {
-    let (rest, _) = skip_optional_whitespace(text)?;
-    if let Ok((rest, word)) = alpha1::<_, nom::error::Error<&str>>(rest) {
-        match word {
-            "none" => return Ok((rest, Display::None)),
-            _ => (),
+fn parse_overflow(value: &RawValue) -> Result<Overflow, nom::Err<nom::error::Error<&'static str>>> {
+    for tok in &value.tokens {
+        if let Token::Ident(word) = tok {
+            match word.deref() {
+                "visible" => {
+                    return Ok(Overflow::Visible);
+                }
+                "hidden" => {
+                    return Ok(Overflow::Hidden);
+                }
+                "scroll" => {
+                    return Ok(Overflow::Scroll);
+                }
+                "auto" => {
+                    return Ok(Overflow::Auto);
+                }
+                _ => {}
+            }
         }
     }
-    Ok((rest, Display::Other))
+    Err(empty_fail())
+}
+
+fn parse_display(value: &RawValue) -> Result<Display, nom::Err<nom::error::Error<&'static str>>> {
+    for tok in &value.tokens {
+        if let Token::Ident(word) = tok {
+            match word.deref() {
+                "none" => return Ok(Display::None),
+                _ => (),
+            }
+        }
+    }
+    Ok(Display::Other)
 }
 
 pub fn parse_rules(text: &str) -> IResult<&str, Vec<Declaration>> {
@@ -801,7 +806,11 @@ mod test {
 
     #[test]
     fn test_parse_named_colour() {
-        //assert_eq!(super::parse_color(" white"), Ok(("", Colour::Rgb(0xff, 0xff, 0xff))));
-        todo!()
+        assert_eq!(
+            super::parse_declaration("color: white"),
+            Ok(("", Some(Declaration {
+                data: Decl::Color { value: Colour::Rgb(0xff, 0xff, 0xff) },
+                important: Importance::Default,
+            }))));
     }
 }
