@@ -2,7 +2,7 @@
 
 use std::{str::FromStr, borrow::Cow, ops::Deref};
 
-use nom::{IResult, branch::alt, character::{complete::{self, alpha0, digit1, digit0, alpha1}}, bytes::complete::{tag, take, take_until}, combinator::{map, fail, opt, verify, recognize}, multi::{many0, separated_list0, many1}, error::ErrorKind, sequence::tuple};
+use nom::{IResult, branch::alt, character::complete::{self, alpha0, digit1, digit0}, bytes::complete::{tag, take_until}, combinator::{map, fail, opt, recognize}, multi::{many0, separated_list0, many1}, error::ErrorKind, sequence::tuple};
 
 #[derive(Debug, PartialEq)]
 pub enum Colour {
@@ -76,6 +76,7 @@ pub enum Decl {
 }
 
 // Tokens as defined in the CSS Syntax Module Level 3
+#[allow(unused)]
 #[derive(Debug, PartialEq)]
 enum Token<'s> {
     /// Plain identifier
@@ -315,21 +316,9 @@ fn parse_value(text: &str) -> IResult<&str, RawValue> {
 }
 
 #[derive(Copy, Clone, PartialEq, Eq, Debug)]
-enum Importance {
+pub enum Importance {
     Default,
     Important
-}
-
-fn parse_important(text: &str) -> IResult<&str, Importance> {
-    let (rest, (_, _ws1, id, _ws2)) = tuple((
-            tag("!"),
-            skip_optional_whitespace,
-            parse_ident,
-            skip_optional_whitespace))(text)?;
-    if id != "important" {
-        return fail(text);
-    }
-    Ok((rest, Importance::Important))
 }
 
 pub fn parse_declaration(text: &str) -> IResult<&str, Option<Declaration>> {
@@ -378,31 +367,6 @@ pub fn parse_declaration(text: &str) -> IResult<&str, Option<Declaration>> {
         data: decl,
         important: if value.important { Importance::Important } else { Importance::Default },
     })))
-}
-
-fn hex1(text: &str) -> IResult<&str, u8> {
-    let (rest, digit) = verify(take(1usize), |s: &str| -> bool { s.chars().all(|c| c.is_ascii_hexdigit())})(text)?;
-    Ok((rest, u8::from_str_radix(digit, 16).unwrap()))
-}
-
-fn hex2(text: &str) -> IResult<&str, u8> {
-    let (rest, digits) = verify(take(2usize), |s: &str| -> bool { s.chars().all(|c| c.is_ascii_hexdigit())})(text)?;
-    Ok((rest, u8::from_str_radix(digits, 16).unwrap()))
-}
-
-
-fn hex_colour3(text: &str) -> IResult<&str, Colour> {
-    let (rest, _) = tag("#")(text)?;
-    let (rest, (r,g,b)) = tuple((hex1, hex1, hex1))(rest)?;
-    let (rest, _) = skip_optional_whitespace(rest)?;
-    Ok((rest, Colour::Rgb(r * 0x11, g * 0x11, b * 0x11)))
-}
-
-fn hex_colour6(text: &str) -> IResult<&str, Colour> {
-    let (rest, _) = tag("#")(text)?;
-    let (rest, (r,g,b)) = tuple((hex2, hex2, hex2))(rest)?;
-    let (rest, _) = skip_optional_whitespace(rest)?;
-    Ok((rest, Colour::Rgb(r, g, b)))
 }
 
 fn rgb_func_colour(text: &str) -> IResult<&str, Colour> {

@@ -3,20 +3,9 @@ use std::convert::TryFrom;
 use std::io::Write;
 use std::ops::Deref;
 
-use lightningcss::{
-    declaration::DeclarationBlock,
-    properties::{
-        display::{self, DisplayKeyword},
-        overflow::{Overflow, OverflowKeyword},
-        Property,
-    },
-    rules::CssRule,
-    stylesheet::{ParserOptions, StyleSheet},
-    traits::Parse,
-    values::color::CssColor,
-};
-
 mod parser;
+
+use lightningcss::{values::color::CssColor, traits::Parse};
 
 use crate::{
     markup5ever_rcdom::{
@@ -221,21 +210,6 @@ fn styles_from_properties2(decls: &[parser::Declaration]) -> Vec<Style> {
                     g: *g, b: *b
                 }));
             }
-            /*
-            Property::Color(color) => {
-                if is_transparent(&color) {
-                    continue;
-                }
-                styles.push(Style::Colour(color.clone()));
-            }
-            Property::Background(bginfo) => {
-                let color = bginfo.last().unwrap().color.clone();
-                if is_transparent(&color) {
-                    continue;
-                }
-                styles.push(Style::BgColour(color));
-            }
-            */
             parser::Decl::Height { value } => {
                 match value {
                     parser::Height::Auto => (),
@@ -281,18 +255,6 @@ fn styles_from_properties2(decls: &[parser::Declaration]) -> Vec<Style> {
     styles
 }
 
-fn is_transparent(color: &CssColor) -> bool {
-    match color {
-        CssColor::CurrentColor => false,
-        CssColor::RGBA(rgba) => rgba.alpha == 0,
-        CssColor::LAB(_) => false,
-        CssColor::Predefined(_) => false,
-        CssColor::Float(_) => false,
-        CssColor::LightDark(_, _) => false,
-        CssColor::System(_) => false,
-    }
-}
-
 trait Convert<T> {
     fn convert(&self) -> T;
 }
@@ -310,84 +272,6 @@ impl Convert<Colour> for CssColor {
             panic!()
         }
     }
-}
-
-fn styles_from_properties(decls: &DeclarationBlock<'_>) -> Vec<Style> {
-    let mut styles = Vec::new();
-    html_trace_quiet!("styles:from_properties: {decls:?}");
-    let mut overflow_hidden = false;
-    let mut height_zero = false;
-    for decl in decls
-        .declarations
-        .iter()
-        .chain(decls.important_declarations.iter())
-    {
-        html_trace_quiet!("styles:from_properties: {decl:?}");
-        match decl {
-            Property::Color(color) => {
-                if is_transparent(&color) {
-                    continue;
-                }
-                styles.push(Style::Colour(color.convert()));
-            }
-            Property::Background(bginfo) => {
-                let color = bginfo.last().unwrap().color.clone();
-                if is_transparent(&color) {
-                    continue;
-                }
-                styles.push(Style::BgColour(color.convert()));
-            }
-            Property::BackgroundColor(color) => {
-                if is_transparent(&color) {
-                    continue;
-                }
-                styles.push(Style::BgColour(color.convert()));
-            }
-            Property::Height(height) => {
-                use lightningcss::properties::size::Size::*;
-                use lightningcss::values::percentage::DimensionPercentage::*;
-                match height {
-                    LengthPercentage(Dimension(dim)) if dim.to_px() == Some(0.0) => {
-                        height_zero = true;
-                    }
-                    _ => (),
-                }
-            }
-            Property::MaxHeight(height) => {
-                use lightningcss::properties::size::MaxSize::*;
-                use lightningcss::values::percentage::DimensionPercentage::*;
-                match height {
-                    LengthPercentage(Dimension(dim)) => {
-                        // Treat max-height: 0 the same as display: none.
-                        if Some(0.0) == dim.to_px() {
-                            height_zero = true;
-                        }
-                    }
-                    _ => (),
-                }
-            }
-            Property::OverflowY(OverflowKeyword::Hidden)
-            | Property::Overflow(Overflow {
-                y: OverflowKeyword::Hidden,
-                ..
-            }) => {
-                overflow_hidden = true;
-            }
-            Property::Display(disp) => {
-                if let display::Display::Keyword(DisplayKeyword::None) = disp {
-                    styles.push(Style::DisplayNone);
-                }
-            }
-            _ => {
-                html_trace_quiet!("CSS: Unhandled property {:?}", decl);
-            }
-        }
-    }
-    // If the height is set to zero and overflow hidden, treat as display: none
-    if height_zero && overflow_hidden {
-        styles.push(Style::DisplayNone);
-    }
-    styles
 }
 
 impl StyleData {
