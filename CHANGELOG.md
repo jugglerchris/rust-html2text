@@ -9,13 +9,15 @@ Possible log types:
 - `[fixed]` for any bug fixes.
 - `[security]` to invite users to upgrade in case of vulnerabilities.
 
-### Unreleased
+### 0.12.5
 
 - [changed] Updated some dependencies
 - [added] The `html2text` example now has `--ignore-css-colour`, which ignores CSS
   colour information but still uses `display: none`, for example.
 - [added] The `html2text` example now has `--only-css` option, to not use
   default colours when CSS colours are being used.
+- [fixed] Make the dummy `dashmap` depenency optional so it's not included
+  unnecessarily when CSS isn't enabled (thanks xmakro)
 
 ### 0.12.4
 
