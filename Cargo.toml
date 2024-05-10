@@ -45,4 +45,4 @@ argparse = "0.2.2"
 log = "0.4.20"
 
 [target.'cfg(unix)'.dev-dependencies]
-termion = "3.0"
+termion = "4.0"
