@@ -136,9 +136,6 @@ pub enum Error {
     /// An general error was encountered.
     #[error("Unknown failure")]
     Fail,
-    /// A formatting error happened
-    #[error("Formatting error")]
-    FmtError(#[from] std::fmt::Error),
     /// An I/O error
     #[error("I/O error")]
     IoError(#[from] std::io::Error),
@@ -152,7 +149,6 @@ impl PartialEq for Error {
             #[cfg(feature = "css")]
             (CssParseError, CssParseError) => true,
             (Fail, Fail) => true,
-            (FmtError(f1), FmtError(f2)) => f1 == f2,
             _ => false,
         }
     }
@@ -2162,8 +2158,6 @@ pub mod config {
             R: std::io::Read,
             FMap: Fn(&[RichAnnotation], &str) -> String,
         {
-            use std::fmt::Write;
-
             let mut context = self.make_context();
             let lines = self
                 .do_parse(&mut context, input)?
@@ -2173,7 +2167,7 @@ pub mod config {
             let mut result = String::new();
             for line in lines {
                 for ts in line.tagged_strings() {
-                    write!(result, "{}", colour_map(&ts.tag, &ts.s))?;
+                    result.push_str(&colour_map(&ts.tag, &ts.s));
                 }
                 result.push('\n');
             }
@@ -2192,14 +2186,12 @@ pub mod config {
         where
             FMap: Fn(&[RichAnnotation], &str) -> String,
         {
-            use std::fmt::Write;
-
             let lines = self.render_to_lines(render_tree, width)?;
 
             let mut result = String::new();
             for line in lines {
                 for ts in line.tagged_strings() {
-                    write!(result, "{}", colour_map(&ts.tag, &ts.s))?;
+                    result.push_str(&colour_map(&ts.tag, &ts.s));
                 }
                 result.push('\n');
             }
