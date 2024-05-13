@@ -5,7 +5,6 @@
 //! underlining in some terminals).
 
 use crate::{parse, RichAnnotation, RichDecorator};
-use std::fmt::Write;
 use std::io;
 
 /// Reads HTML from `input`, and returns text wrapped to `width` columns.
@@ -32,7 +31,7 @@ where
     let mut result = String::new();
     for line in lines {
         for ts in line.tagged_strings() {
-            write!(result, "{}", colour_map(&ts.tag, &ts.s))?;
+            result.push_str(&colour_map(&ts.tag, &ts.s));
         }
         result.push('\n');
     }
