@@ -905,7 +905,8 @@ pub(crate) enum RenderLine<T> {
 
 impl<T: PartialEq + Eq + Clone + Debug + Default> RenderLine<T> {
     /// Turn the rendered line into a String
-    fn into_string(self) -> String {
+    #[allow(clippy::inherent_to_string)]
+    fn to_string(&self) -> String {
         match self {
             RenderLine::Text(tagged) => tagged.to_string(),
             RenderLine::Line(border) => border.to_string(),
@@ -928,15 +929,6 @@ impl<T: PartialEq + Eq + Clone + Debug + Default> RenderLine<T> {
                 }));
                 tagged
             }
-        }
-    }
-
-    #[cfg(feature = "html_trace")]
-    /// For testing, return a simple string of the contents.
-    fn to_string(&self) -> String {
-        match self {
-            RenderLine::Text(tagged) => tagged.to_string(),
-            RenderLine::Line(border) => border.to_string(),
         }
     }
 
@@ -1090,7 +1082,7 @@ impl<D: TextDecorator> SubRenderer<D> {
         #[cfg(feature = "html_trace")]
         let width: usize = self.width;
         for line in self.into_lines()? {
-            result.push_str(&line.into_string());
+            result.push_str(&line.to_string());
             result.push('\n');
         }
         html_trace!("into_string({}, {:?})", width, result);
