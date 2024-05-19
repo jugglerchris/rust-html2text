@@ -282,12 +282,31 @@ fn parse_token(text: &str) -> IResult<&str, Token> {
                 Err(_) => Ok((rest, Token::Delim('#'))),
             }
         }
-        Some(';') => {
-            Ok((&rest[1..], Token::Semicolon))
-        }
+        //Some('\'') => {}
+        Some(';') => Ok((&rest[1..], Token::Semicolon)),
+        Some('(') => Ok((&rest[1..], Token::OpenRound)),
+        Some(')') => Ok((&rest[1..], Token::CloseRound)),
+        //Some('+')
+        //Some(',')
+        Some(',') => Ok((&rest[1..], Token::Comma)),
+        //Some('-')
+        //Some('.')
+        Some(':') => Ok((&rest[1..], Token::Colon)),
+        //Some('<')
+        //Some('@')
+        Some('[') => Ok((&rest[1..], Token::OpenSquare)),
+        //Some('\\')
+        Some(']') => Ok((&rest[1..], Token::CloseSquare)),
+        Some('{') => Ok((&rest[1..], Token::OpenBrace)),
+        Some('}') => Ok((&rest[1..], Token::CloseBrace)),
         Some(c) if is_ident_start(c) => {
             let (rest, ident) = parse_ident(rest)?;
-            Ok((rest, Token::Ident(ident.into())))
+            // If the next character is '(', then it's a function token
+            let match_bracket: IResult<_, _> = tag("(")(rest);
+            match match_bracket {
+                Ok((rest_f, _)) => Ok((rest_f, Token::Function(ident.into()))),
+                Err(_) => Ok((rest, Token::Ident(ident.into()))),
+            }
         }
         Some(c) if is_digit(c) => {
             let (rest, num) = recognize(parse_number)(rest)?;
@@ -392,12 +411,13 @@ fn empty_fail() -> nom::Err<nom::error::Error<&'static str>> {
 }
 
 fn parse_color(value: &RawValue) -> Result<Colour, nom::Err<nom::error::Error<&'static str>>> {
+    dbg!(value);
     let fail_error = empty_fail();
-    if value.tokens.len() != 1 {
+    if value.tokens.len() == 0 {
         return Err(fail_error);
     }
-    match dbg!(&value.tokens[0]) {
-        Token::Ident(c) => {
+    match &value.tokens[..] {
+        [Token::Ident(c)] => {
             let colour = match c.deref() {
                 "aqua" => Colour::Rgb(0, 0xff, 0xff),
                 "black" => Colour::Rgb(0, 0, 0),
@@ -422,8 +442,29 @@ fn parse_color(value: &RawValue) -> Result<Colour, nom::Err<nom::error::Error<&'
             };
             Ok(colour)
         }
-        Token::Function(_) => todo!(),
-        Token::Hash(s) => {
+        [Token::Function(name), .., Token::CloseRound] => {
+            use Token::*;
+            match name.deref() {
+                "rgb" => {
+                    let rgb_args = &value.tokens[1..value.tokens.len()-1];
+                    match dbg!(rgb_args) {
+                        [Number(r), Comma, Number(g), Comma, Number(b)] => {
+                            let r = r.parse().map_err(|_e| empty_fail())?;
+                            let g = g.parse().map_err(|_e| empty_fail())?;
+                            let b = b.parse().map_err(|_e| empty_fail())?;
+                            Ok(Colour::Rgb(r, g, b))
+                        }
+                        _ => {
+                            return Err(empty_fail());
+                        }
+                    }
+                }
+                _ => {
+                    return Err(empty_fail())
+                }
+            }
+        }
+        [Token::Hash(s)] => {
             if s.len() == 3 {
                 let v = u32::from_str_radix(&s, 16).map_err(|_| fail_error)?;
                 let r = ((v >> 8) & 0xf) as u8 * 0x11;
