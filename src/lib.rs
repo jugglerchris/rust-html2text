@@ -86,11 +86,6 @@ use std::cell::Cell;
 use std::cmp::{max, min};
 use unicode_width::UnicodeWidthStr;
 
-#[cfg(feature = "css")]
-use lightningcss::values::color::CssColor;
-#[cfg(feature = "css")]
-use std::convert::TryFrom;
-
 use std::io;
 use std::io::Write;
 use std::iter::{once, repeat};
@@ -104,22 +99,6 @@ pub struct Colour {
     pub g: u8,
     /// Blue value
     pub b: u8,
-}
-
-#[cfg(feature = "css")]
-impl TryFrom<&CssColor> for Colour {
-    type Error = ();
-
-    fn try_from(value: &CssColor) -> std::result::Result<Self, Self::Error> {
-        match value {
-            CssColor::RGBA(rgba) => Ok(Colour {
-                r: rgba.red,
-                g: rgba.green,
-                b: rgba.blue,
-            }),
-            _ => Err(()),
-        }
-    }
 }
 
 /// Errors from reading or rendering HTML

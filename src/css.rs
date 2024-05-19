@@ -5,8 +5,6 @@ use std::ops::Deref;
 
 mod parser;
 
-use lightningcss::{values::color::CssColor, traits::Parse};
-
 use crate::{
     markup5ever_rcdom::{
         Handle,
@@ -107,59 +105,6 @@ impl Selector {
     }
 }
 
-impl<'r, 'i> TryFrom<&'r lightningcss::selector::Selector<'i>> for Selector {
-    type Error = ();
-
-    fn try_from(
-        selector: &'r lightningcss::selector::Selector<'i>,
-    ) -> std::result::Result<Self, Self::Error> {
-        let mut components = Vec::new();
-
-        use lightningcss::selector::Combinator;
-        use lightningcss::selector::Component;
-
-        let mut si = selector.iter();
-        loop {
-            while let Some(item) = si.next() {
-                match item {
-                    Component::Class(id) => {
-                        components.push(SelectorComponent::Class(String::from(id.deref())));
-                    }
-                    Component::LocalName(name) => {
-                        components.push(SelectorComponent::Element(String::from(
-                            name.lower_name.deref(),
-                        )));
-                    }
-                    Component::ExplicitUniversalType => {
-                        components.push(SelectorComponent::Star);
-                    }
-                    _ => {
-                        html_trace!("Unknown component {:?}", item);
-                        return Err(());
-                    }
-                }
-            }
-            if let Some(comb) = si.next_sequence() {
-                match comb {
-                    Combinator::Child => {
-                        components.push(SelectorComponent::CombChild);
-                    }
-                    Combinator::Descendant => {
-                        components.push(SelectorComponent::CombDescendant);
-                    }
-                    _ => {
-                        html_trace!("Unknown combinator {:?}", comb);
-                        return Err(());
-                    }
-                }
-            } else {
-                break;
-            }
-        }
-        Ok(Selector { components })
-    }
-}
-
 #[derive(Debug, Clone)]
 pub(crate) enum Style {
     Colour(Colour),
@@ -255,25 +200,6 @@ fn styles_from_properties2(decls: &[parser::Declaration]) -> Vec<Style> {
     styles
 }
 
-trait Convert<T> {
-    fn convert(&self) -> T;
-}
-
-impl Convert<Colour> for CssColor {
-    fn convert(&self) -> Colour {
-        let rgb = self.to_rgb().unwrap();
-        if let CssColor::RGBA(rgba) = rgb {
-            Colour {
-                r: rgba.red,
-                g: rgba.green,
-                b: rgba.blue,
-            }
-        } else {
-            panic!()
-        }
-    }
-}
-
 impl StyleData {
     /// Add some CSS source to be included.  The source will be parsed
     /// and the relevant and supported features extracted.
@@ -320,12 +246,12 @@ impl StyleData {
                         let rules = parse_style_attribute(&attr.value).unwrap_or_default();
                         result.extend(rules);
                     } else if &*attr.name.local == "color" {
-                        if let Ok(colour) = CssColor::parse_string(&*attr.value) {
-                            result.push(Style::Colour(colour.convert()));
+                        if let Ok(colour) = parser::parse_color_attribute(&*attr.value) {
+                            result.push(Style::Colour(colour.into()));
                         }
                     } else if &*attr.name.local == "bgcolor" {
-                        if let Ok(colour) = CssColor::parse_string(&*attr.value) {
-                            result.push(Style::BgColour(colour.convert()));
+                        if let Ok(colour) = parser::parse_color_attribute(&*attr.value) {
+                            result.push(Style::BgColour(colour.into()));
                         }
                     }
                 }

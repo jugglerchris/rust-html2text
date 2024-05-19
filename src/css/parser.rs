@@ -9,6 +9,14 @@ pub enum Colour {
     Rgb(u8, u8, u8),
 }
 
+impl Into<crate::Colour> for Colour {
+    fn into(self) -> crate::Colour {
+        match self {
+            Colour::Rgb(r, g, b) => crate::Colour { r, g, b, }
+        }
+    }
+}
+
 #[derive(Debug, PartialEq)]
 pub enum LengthUnit {
     // Absolute units
@@ -313,6 +321,11 @@ fn parse_value(text: &str) -> IResult<&str, RawValue> {
         tokens,
         important,
     }))
+}
+
+pub(crate) fn parse_color_attribute(text: &str) -> Result<Colour, nom::Err<nom::error::Error<&'static str>>> {
+    let (_rest, value) = parse_value(text).map_err(|_| empty_fail())?;
+    parse_color(&value)
 }
 
 #[derive(Copy, Clone, PartialEq, Eq, Debug)]
