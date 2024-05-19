@@ -163,7 +163,8 @@ pub struct PropertyName(String);
 
 fn match_comment(text: &str) -> IResult<&str, ()> {
     let (rest, _) = tag("/*")(text)?;
-    map(take_until("*/"), |_count| ())(rest)
+    let (rest, _) = take_until("*/")(rest)?;
+    map(tag("*/"), |_t| ())(rest)
 }
 
 fn match_whitespace_item(text: &str) -> IResult<&str, ()> {
@@ -441,12 +442,6 @@ fn parse_color(value: &RawValue) -> Result<Colour, nom::Err<nom::error::Error<&'
         }
         _ => Err(fail_error),
     }
-    /*
-    alt((
-       named_colour,
-       rgb_func_colour,
-       ))(rest)
-       */
 }
 
 fn parse_integer(text: &str) -> IResult<&str, f32> {
@@ -803,6 +798,16 @@ mod test {
             super::parse_declaration("color: white"),
             Ok(("", Some(Declaration {
                 data: Decl::Color { value: Colour::Rgb(0xff, 0xff, 0xff) },
+                important: Importance::Default,
+            }))));
+    }
+
+    #[test]
+    fn test_parse_colour_func() {
+        assert_eq!(
+            super::parse_declaration("color: rgb(1, 2, 3)"),
+            Ok(("", Some(Declaration {
+                data: Decl::Color { value: Colour::Rgb(1, 2, 3) },
                 important: Importance::Default,
             }))));
     }

@@ -2406,10 +2406,10 @@ Baz
         }
         </style></head><body>
 
-        <p class="d"><span>C</span><dummy><span>D</span></dummy></p>
+        <p class="d">X<span>C</span><dummy><span>D</span></dummy>Y</p>
         <p class="c"><span>C</span><dummy><span>D</span></dummy></p>
         "#,
-            r#"<R>C</R><R>D</R>
+            r#"X<R>CD</R>Y
 
 <G>C</G>D
 "#,
