@@ -1,5 +1,4 @@
 //! Some basic CSS support.
-use std::convert::TryFrom;
 use std::io::Write;
 use std::ops::Deref;
 

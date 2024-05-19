@@ -2,7 +2,7 @@
 
 use std::{str::FromStr, borrow::Cow, ops::Deref};
 
-use nom::{IResult, branch::alt, character::complete::{self, alpha0, digit1, digit0}, bytes::complete::{tag, take_until}, combinator::{map, fail, opt, recognize}, multi::{many0, separated_list0, many1}, error::ErrorKind, sequence::tuple};
+use nom::{IResult, branch::alt, character::complete::{self, digit1, digit0}, bytes::complete::{tag, take_until}, combinator::{map, fail, opt, recognize}, multi::{many0, separated_list0, many1}, error::ErrorKind, sequence::tuple};
 
 #[derive(Debug, PartialEq)]
 pub enum Colour {
@@ -310,7 +310,14 @@ fn parse_token(text: &str) -> IResult<&str, Token> {
         }
         Some(c) if is_digit(c) => {
             let (rest, num) = recognize(parse_number)(rest)?;
-            Ok((rest, Token::Number(num.into())))
+            let match_pct: IResult<_, _> = tag("%")(rest);
+            if let Ok((rest_p, _)) = match_pct {
+                return Ok((rest_p, Token::Percentage(num.into())));
+            }
+            match parse_ident(rest) {
+                Ok((rest_id, dim)) => Ok((rest_id, Token::Dimension(num.into(), dim.into()))),
+                Err(_) => Ok((rest, Token::Number(num.into()))),
+            }
         }
         Some('!') => {
             Ok((&rest[1..], Token::Delim('!')))
@@ -400,10 +407,6 @@ pub fn parse_declaration(text: &str) -> IResult<&str, Option<Declaration>> {
         data: decl,
         important: if value.important { Importance::Important } else { Importance::Default },
     })))
-}
-
-fn rgb_func_colour(text: &str) -> IResult<&str, Colour> {
-    fail(text)
 }
 
 fn empty_fail() -> nom::Err<nom::error::Error<&'static str>> {
@@ -513,6 +516,7 @@ fn parse_number(text: &str) -> IResult<&str, f32> {
     }))
 }
 
+/*
 fn parse_unit(text: &str) -> IResult<&str, LengthUnit> {
     let (rest, word) = alpha0(text)?;
     Ok((rest, match word {
@@ -521,10 +525,11 @@ fn parse_unit(text: &str) -> IResult<&str, LengthUnit> {
         }
     }))
 }
+*/
 
 fn parse_height(value: &RawValue) -> Result<Height, nom::Err<nom::error::Error<&'static str>>> {
     match &value.tokens[..] {
-        &[Token::Number(ref n), Token::Ident(ref unit)] => {
+        &[Token::Dimension(ref n, ref unit)] => {
             let (_, num) = parse_number(n).map_err(|_e| empty_fail())?;
             let unit = match unit.deref() {
                 "in" => LengthUnit::In,
