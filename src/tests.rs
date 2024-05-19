@@ -2393,4 +2393,27 @@ Baz
             20,
         );
     }
+
+    #[test]
+    fn test_selector_child_desc() {
+        test_html_coloured(
+            br#"<head><style>
+        p.d span { /* descendent */
+            color: #f00;
+        }
+        p.c > span { /* child */
+            color: #0f0;
+        }
+        </style></head><body>
+
+        <p class="d"><span>C</span><dummy><span>D</span></dummy></p>
+        <p class="c"><span>C</span><dummy><span>D</span></dummy></p>
+        "#,
+            r#"<R>C</R><R>D</R>
+
+<G>C</G>D
+"#,
+            20,
+        );
+    }
 }
