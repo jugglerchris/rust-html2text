@@ -2,7 +2,7 @@
 
 use std::{str::FromStr, borrow::Cow, ops::Deref};
 
-use nom::{IResult, branch::alt, character::complete::{self, digit1, digit0}, bytes::complete::{tag, take_until}, combinator::{map, fail, opt, recognize}, multi::{many0, separated_list0, many1}, error::ErrorKind, sequence::tuple};
+use nom::{IResult, branch::alt, character::complete::{self, digit1, digit0}, bytes::complete::{tag, take_until}, combinator::{map, fail, opt, recognize}, multi::{many0, separated_list0, many1}, error::ErrorKind, sequence::tuple, AsChar};
 
 #[derive(Debug, PartialEq)]
 pub enum Colour {
@@ -225,8 +225,34 @@ fn nmchar_char(s: &str) -> IResult<&str, char> {
 }
 
 fn ident_escape(s: &str) -> IResult<&str, char> {
-    // We may not need escapes for property names.
-    fail(s)
+    let (rest, _) = tag("\\")(s)?;
+    let mut chars = rest.char_indices();
+
+    match chars.next() {
+        None => {
+            // EOF: return replacement char
+            return Ok((&rest, '\u{fffd}'));
+        }
+        Some((i, c)) if c.is_hex_digit() => {
+            // Option 1: up to 6 hex digits.
+            let start_idx = i;
+            let mut end_idx = i+1;
+            while let Some((nexti, nextc)) = chars.next() {
+                if nextc.is_hex_digit() && nexti-start_idx < 6 {
+                    continue;
+                } else {
+                    end_idx = nexti;
+                    break;
+                }
+            }
+            let val = u32::from_str_radix(&rest[start_idx..end_idx], 16).unwrap();
+            return Ok((&rest[end_idx..], char::from_u32(val).unwrap_or('\u{fffd}')));
+        }
+        Some((_i, c)) => {
+            let bytes = c.len_utf8();
+            return Ok((&rest[bytes..], c));
+        }
+    }
 }
 
 fn nmstart(text: &str) -> IResult<&str, char> {
@@ -265,64 +291,85 @@ fn parse_identstring(text: &str) -> IResult<&str, String> {
 }
 
 fn parse_property_name(text: &str) -> IResult<&str, PropertyName> {
-    dbg!(parse_ident(text)
-        .map(|(r, s)| (r, PropertyName(s))))
+    parse_ident(text)
+        .map(|(r, s)| (r, PropertyName(s)))
 }
 
 // For now ignore whitespace
 fn parse_token(text: &str) -> IResult<&str, Token> {
     let (rest, _) = skip_optional_whitespace(text)?;
     let mut chars = rest.chars();
-    match dbg!(chars.next()) {
+    match chars.next() {
         None => fail(rest),
-        //Some('"') => {}
+        Some('"') |
+        Some('\'') => parse_string_token(rest),
         Some('#') => {
-            match dbg!(parse_identstring(&rest[1..])) {
+            match parse_identstring(&rest[1..]) {
                 Ok((rest, id)) => Ok((rest, Token::Hash(id.into()))),
                 Err(_) => Ok((rest, Token::Delim('#'))),
             }
         }
-        //Some('\'') => {}
         Some(';') => Ok((&rest[1..], Token::Semicolon)),
         Some('(') => Ok((&rest[1..], Token::OpenRound)),
         Some(')') => Ok((&rest[1..], Token::CloseRound)),
-        //Some('+')
-        //Some(',')
+        Some('+') => {
+            match parse_numeric_token(&rest[1..]) {
+                Ok(result) => Ok(result),
+                Err(_) => Ok((&rest[1..], Token::Delim('+'))),
+            }
+        }
         Some(',') => Ok((&rest[1..], Token::Comma)),
-        //Some('-')
-        //Some('.')
+        Some('-') => {
+            if let Ok((rest_n, tok)) = parse_numeric_token(rest) {
+                return Ok((rest_n, tok));
+            }
+            if rest.starts_with("-->") {
+                return Ok((&rest[3..], Token::CDC));
+            }
+            if let Ok((rest_id, token)) = parse_ident_like(rest) {
+                return Ok((rest_id, token));
+            }
+            Ok((&rest[1..], Token::Delim('-')))
+        }
+        Some('.') => {
+            if let Ok((rest_n, tok)) = parse_numeric_token(rest) {
+                return Ok((rest_n, tok));
+            }
+            Ok((&rest[1..], Token::Delim('.')))
+        }
         Some(':') => Ok((&rest[1..], Token::Colon)),
-        //Some('<')
-        //Some('@')
+        Some('<') => {
+            if rest.starts_with("<!--") {
+                return Ok((&rest[4..], Token::CDC));
+            }
+            Ok((&rest[1..], Token::Delim('<')))
+        }
+        Some('@') => {
+            if let Ok((rest_id, id)) = parse_ident(rest) {
+                return Ok((rest_id, Token::AtKeyword(id.into())));
+            }
+            Ok((&rest[1..], Token::Delim('@')))
+        }
         Some('[') => Ok((&rest[1..], Token::OpenSquare)),
-        //Some('\\')
+        Some('\\') => {
+            if let Ok((rest_id, token)) = parse_ident_like(rest) {
+                Ok((rest_id, token))
+            } else {
+                Ok((&rest[1..], Token::Delim('\\')))
+            }
+        }
         Some(']') => Ok((&rest[1..], Token::CloseSquare)),
         Some('{') => Ok((&rest[1..], Token::OpenBrace)),
         Some('}') => Ok((&rest[1..], Token::CloseBrace)),
-        Some(c) if is_ident_start(c) => {
-            let (rest, ident) = parse_ident(rest)?;
-            // If the next character is '(', then it's a function token
-            let match_bracket: IResult<_, _> = tag("(")(rest);
-            match match_bracket {
-                Ok((rest_f, _)) => Ok((rest_f, Token::Function(ident.into()))),
-                Err(_) => Ok((rest, Token::Ident(ident.into()))),
-            }
-        }
-        Some(c) if is_digit(c) => {
-            let (rest, num) = recognize(parse_number)(rest)?;
-            let match_pct: IResult<_, _> = tag("%")(rest);
-            if let Ok((rest_p, _)) = match_pct {
-                return Ok((rest_p, Token::Percentage(num.into())));
-            }
-            match parse_ident(rest) {
-                Ok((rest_id, dim)) => Ok((rest_id, Token::Dimension(num.into(), dim.into()))),
-                Err(_) => Ok((rest, Token::Number(num.into()))),
-            }
-        }
+        Some(c) if is_ident_start(c) => parse_ident_like(rest),
+        Some(c) if is_digit(c) => parse_numeric_token(rest),
         Some('!') => {
             Ok((&rest[1..], Token::Delim('!')))
         }
-        Some(c) => unimplemented!("Unhandled char [{}]", c),
+        Some(c) => {
+            let num_bytes = c.len_utf8();
+            Ok((&rest[num_bytes..], Token::Delim(c)))
+        }
     }
 }
 
@@ -336,7 +383,7 @@ fn parse_token_not_semicolon(text: &str) -> IResult<&str, Token> {
 }
 
 fn parse_value(text: &str) -> IResult<&str, RawValue> {
-    let (rest, mut tokens) = dbg!(many0(parse_token_not_semicolon)(text))?;
+    let (rest, mut tokens) = many0(parse_token_not_semicolon)(text)?;
     let mut important = false;
     if tokens.len() >= 2 &&
         &tokens[tokens.len() - 2..] == &[Token::Delim('!'), Token::Ident("important".into())] {
@@ -369,7 +416,7 @@ pub fn parse_declaration(text: &str) -> IResult<&str, Option<Declaration>> {
             tag(":"),
             skip_optional_whitespace,
             parse_value))(text)?;
-    let decl = match dbg!(prop.0.as_str()) {
+    let decl = match prop.0.as_str() {
         "background-color" => {
             let value = parse_color(&value)?;
             Decl::BackgroundColor { value }
@@ -414,7 +461,6 @@ fn empty_fail() -> nom::Err<nom::error::Error<&'static str>> {
 }
 
 fn parse_color(value: &RawValue) -> Result<Colour, nom::Err<nom::error::Error<&'static str>>> {
-    dbg!(value);
     let fail_error = empty_fail();
     if value.tokens.len() == 0 {
         return Err(fail_error);
@@ -450,7 +496,7 @@ fn parse_color(value: &RawValue) -> Result<Colour, nom::Err<nom::error::Error<&'
             match name.deref() {
                 "rgb" => {
                     let rgb_args = &value.tokens[1..value.tokens.len()-1];
-                    match dbg!(rgb_args) {
+                    match rgb_args {
                         [Number(r), Comma, Number(g), Comma, Number(b)] => {
                             let r = r.parse().map_err(|_e| empty_fail())?;
                             let g = g.parse().map_err(|_e| empty_fail())?;
@@ -514,6 +560,62 @@ fn parse_number(text: &str) -> IResult<&str, f32> {
         None | Some("+") => val,
         _ => unreachable!(),
     }))
+}
+
+fn parse_numeric_token(text: &str) -> IResult<&str, Token> {
+    let (rest, num) = recognize(parse_number)(text)?;
+    let match_pct: IResult<_, _> = tag("%")(rest);
+    if let Ok((rest_p, _)) = match_pct {
+        return Ok((rest_p, Token::Percentage(num.into())));
+    }
+    match parse_ident(rest) {
+        Ok((rest_id, dim)) => Ok((rest_id, Token::Dimension(num.into(), dim.into()))),
+        Err(_) => Ok((rest, Token::Number(num.into()))),
+    }
+}
+
+fn parse_ident_like(text: &str) -> IResult<&str, Token> {
+    let (rest, ident) = parse_ident(text)?;
+    // If the next character is '(', then it's a function token
+    let match_bracket: IResult<_, _> = tag("(")(rest);
+    match match_bracket {
+        Ok((rest_f, _)) => Ok((rest_f, Token::Function(ident.into()))),
+        Err(_) => Ok((rest, Token::Ident(ident.into()))),
+    }
+}
+
+fn parse_string_token(text: &str) -> IResult<&str, Token> {
+    let mut chars = text.char_indices();
+    let mut s = String::new();
+    let end_char = chars.next().unwrap().1;
+    debug_assert!(end_char == '"' || end_char == '\'');
+
+    loop {
+        match chars.next() {
+            None => return Ok((&text[text.len()..], Token::String(s.into()))),
+            Some((i, c)) if c == end_char => {
+                return Ok((&text[i+1..], Token::String(s.into())));
+            }
+            Some((i, '\n')) => {
+                return Ok((&text[i..], Token::BadString(s.into())));
+            }
+            Some((i, '\\')) => {
+                match chars.next() {
+                    None => {
+                        // Backslash at end
+                        return Ok((&text[i+1..], Token::String(s.into())));
+                    }
+                    Some((_i, '\n')) => {} // Eat the newline
+                    Some((_i, c)) => {
+                        s.push(c);
+                    }
+                }
+            }
+            Some((_, c)) => {
+                s.push(c);
+            }
+        }
+    }
 }
 
 /*
@@ -665,9 +767,9 @@ pub fn parse_selector(text: &str) -> IResult<&str, Selector> {
 
 pub fn parse_ruleset(text: &str) -> IResult<&str, RuleSet> {
     let (rest, _) = skip_optional_whitespace(text)?;
-    let (rest, selectors) = dbg!(separated_list0(
+    let (rest, selectors) = separated_list0(
         tuple((tag(","), skip_optional_whitespace)),
-        parse_selector)(rest))?;
+        parse_selector)(rest)?;
     let (rest, (_ws1, _bra, _ws2, declarations, _ws3, _optsemi, _ws4,_ket, _ws5)) =
         tuple((
             skip_optional_whitespace,
