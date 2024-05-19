@@ -173,7 +173,7 @@ const MIN_WIDTH: usize = 3;
 
 /// Size information/estimate
 #[derive(Debug, Copy, Clone, Default)]
-pub struct SizeEstimate {
+struct SizeEstimate {
     size: usize,      // Rough overall size
     min_width: usize, // The narrowest possible
 
@@ -184,7 +184,7 @@ pub struct SizeEstimate {
 impl SizeEstimate {
     /// Combine two estimates into one (add size and take the largest
     /// min width)
-    pub fn add(self, other: SizeEstimate) -> SizeEstimate {
+    fn add(self, other: SizeEstimate) -> SizeEstimate {
         let min_width = max(self.min_width, other.min_width);
         SizeEstimate {
             size: self.size + other.size,
@@ -194,7 +194,7 @@ impl SizeEstimate {
     }
     /// Combine two estimates into one which need to be side by side.
     /// The min widths are added.
-    pub fn add_hor(self, other: SizeEstimate) -> SizeEstimate {
+    fn add_hor(self, other: SizeEstimate) -> SizeEstimate {
         SizeEstimate {
             size: self.size + other.size,
             min_width: self.min_width + other.min_width,
@@ -203,7 +203,7 @@ impl SizeEstimate {
     }
 
     /// Combine two estimates into one (take max of each)
-    pub fn max(self, other: SizeEstimate) -> SizeEstimate {
+    fn max(self, other: SizeEstimate) -> SizeEstimate {
         SizeEstimate {
             size: max(self.size, other.size),
             min_width: max(self.min_width, other.min_width),
@@ -214,7 +214,7 @@ impl SizeEstimate {
 
 #[derive(Clone, Debug)]
 /// Render tree table cell
-pub struct RenderTableCell {
+struct RenderTableCell {
     colspan: usize,
     content: Vec<RenderNode>,
     size_estimate: Cell<Option<SizeEstimate>>,
@@ -223,7 +223,7 @@ pub struct RenderTableCell {
 
 impl RenderTableCell {
     /// Render this cell to a renderer.
-    pub fn render<T: Write, D: TextDecorator>(
+    fn render<T: Write, D: TextDecorator>(
         &mut self,
         _renderer: &mut TextRenderer<D>,
         _err_out: &mut T,
@@ -233,7 +233,7 @@ impl RenderTableCell {
     }
 
     /// Calculate or return the estimate size of the cell
-    pub fn get_size_estimate(&self) -> SizeEstimate {
+    fn get_size_estimate(&self) -> SizeEstimate {
         if self.size_estimate.get().is_none() {
             let size = self
                 .content
@@ -248,28 +248,28 @@ impl RenderTableCell {
 
 #[derive(Clone, Debug)]
 /// Render tree table row
-pub struct RenderTableRow {
+struct RenderTableRow {
     cells: Vec<RenderTableCell>,
     col_sizes: Option<Vec<usize>>,
 }
 
 impl RenderTableRow {
     /// Return a mutable iterator over the cells.
-    pub fn cells(&self) -> std::slice::Iter<RenderTableCell> {
+    fn cells(&self) -> std::slice::Iter<RenderTableCell> {
         self.cells.iter()
     }
     /// Return a mutable iterator over the cells.
-    pub fn cells_mut(&mut self) -> std::slice::IterMut<RenderTableCell> {
+    fn cells_mut(&mut self) -> std::slice::IterMut<RenderTableCell> {
         self.cells.iter_mut()
     }
     /// Count the number of cells in the row.
     /// Takes into account colspan.
-    pub fn num_cells(&self) -> usize {
+    fn num_cells(&self) -> usize {
         self.cells.iter().map(|cell| cell.colspan.max(1)).sum()
     }
     /// Return an iterator over (column, &cell)s, which
     /// takes into account colspan.
-    pub fn cell_columns(&mut self) -> Vec<(usize, &mut RenderTableCell)> {
+    fn cell_columns(&mut self) -> Vec<(usize, &mut RenderTableCell)> {
         let mut result = Vec::new();
         let mut colno = 0;
         for cell in &mut self.cells {
@@ -282,7 +282,7 @@ impl RenderTableRow {
 
     /// Return the contained cells as RenderNodes, annotated with their
     /// widths if available.  Skips cells with no width allocated.
-    pub fn into_cells(self, vertical: bool) -> Vec<RenderNode> {
+    fn into_cells(self, vertical: bool) -> Vec<RenderNode> {
         let mut result = Vec::new();
         let mut colno = 0;
         let col_sizes = self.col_sizes.unwrap();
@@ -306,7 +306,7 @@ impl RenderTableRow {
 
 #[derive(Clone, Debug)]
 /// A representation of a table render tree with metadata.
-pub struct RenderTable {
+struct RenderTable {
     rows: Vec<RenderTableRow>,
     num_columns: usize,
     size_estimate: Cell<Option<SizeEstimate>>,
@@ -314,7 +314,7 @@ pub struct RenderTable {
 
 impl RenderTable {
     /// Create a new RenderTable with the given rows
-    pub fn new(rows: Vec<RenderTableRow>) -> RenderTable {
+    fn new(rows: Vec<RenderTableRow>) -> RenderTable {
         let num_columns = rows.iter().map(|r| r.num_cells()).max().unwrap_or(0);
         RenderTable {
             rows,
@@ -324,17 +324,17 @@ impl RenderTable {
     }
 
     /// Return an iterator over the rows.
-    pub fn rows(&self) -> std::slice::Iter<RenderTableRow> {
+    fn rows(&self) -> std::slice::Iter<RenderTableRow> {
         self.rows.iter()
     }
 
     /// Return an iterator over the rows.
-    pub fn rows_mut(&mut self) -> std::slice::IterMut<RenderTableRow> {
+    fn rows_mut(&mut self) -> std::slice::IterMut<RenderTableRow> {
         self.rows.iter_mut()
     }
     /// Consume this and return a `Vec<RenderNode>` containing the children;
     /// the children know the column sizes required.
-    pub fn into_rows(self, col_sizes: Vec<usize>, vert: bool) -> Vec<RenderNode> {
+    fn into_rows(self, col_sizes: Vec<usize>, vert: bool) -> Vec<RenderNode> {
         self.rows
             .into_iter()
             .map(|mut tr| {
@@ -383,7 +383,7 @@ impl RenderTable {
     }
 
     /// Calculate and store (or return stored value) of estimated size
-    pub fn get_size_estimate(&self) -> SizeEstimate {
+    fn get_size_estimate(&self) -> SizeEstimate {
         self.size_estimate.get().unwrap()
     }
 }
@@ -391,7 +391,7 @@ impl RenderTable {
 /// The node-specific information distilled from the DOM.
 #[derive(Clone, Debug)]
 #[non_exhaustive]
-pub enum RenderNodeInfo {
+enum RenderNodeInfo {
     /// Some text.
     Text(String),
     /// A group of nodes collected together.
@@ -454,14 +454,14 @@ pub enum RenderNodeInfo {
 
 /// Common fields from a node.
 #[derive(Clone, Debug)]
-pub struct RenderNode {
+struct RenderNode {
     size_estimate: Cell<Option<SizeEstimate>>,
     info: RenderNodeInfo,
 }
 
 impl RenderNode {
     /// Create a node from the RenderNodeInfo.
-    pub fn new(info: RenderNodeInfo) -> RenderNode {
+    fn new(info: RenderNodeInfo) -> RenderNode {
         RenderNode {
             size_estimate: Cell::new(None),
             info,
@@ -469,7 +469,7 @@ impl RenderNode {
     }
 
     /// Get a size estimate
-    pub fn get_size_estimate(&self) -> SizeEstimate {
+    fn get_size_estimate(&self) -> SizeEstimate {
         self.size_estimate.get().unwrap()
     }
 
@@ -602,7 +602,7 @@ impl RenderNode {
     /// Return true if this node is definitely empty.  This is used to quickly
     /// remove e.g. links with no anchor text in most cases, but can't recurse
     /// and look more deeply.
-    pub fn is_shallow_empty(&self) -> bool {
+    fn is_shallow_empty(&self) -> bool {
         use RenderNodeInfo::*;
 
         // Otherwise, make an estimate.
@@ -1083,7 +1083,7 @@ fn dom_to_render_tree_with_context<T: Write>(
 }
 
 /// Convert a DOM tree or subtree into a render tree.
-pub fn dom_to_render_tree<T: Write>(handle: Handle, err_out: &mut T) -> Result<Option<RenderNode>> {
+fn dom_to_render_tree<T: Write>(handle: Handle, err_out: &mut T) -> Result<Option<RenderNode>> {
     dom_to_render_tree_with_context(handle, err_out, &mut Default::default())
 }
 
@@ -2284,7 +2284,7 @@ impl RenderTree {
     }
 
     /// Render this document using the given `decorator` and wrap it to `width` columns.
-    pub fn render<D: TextDecorator>(self, width: usize, decorator: D) -> Result<RenderedText<D>> {
+    fn render<D: TextDecorator>(self, width: usize, decorator: D) -> Result<RenderedText<D>> {
         self.render_with_context(&mut Default::default(), width, decorator)
     }
 
@@ -2292,7 +2292,7 @@ impl RenderTree {
     /// columns.
     ///
     /// [`PlainDecorator`]: render/text_renderer/struct.PlainDecorator.html
-    pub fn render_plain(self, width: usize) -> Result<RenderedText<PlainDecorator>> {
+    fn render_plain(self, width: usize) -> Result<RenderedText<PlainDecorator>> {
         self.render(width, PlainDecorator::new())
     }
 
@@ -2300,23 +2300,23 @@ impl RenderTree {
     /// columns.
     ///
     /// [`RichDecorator`]: render/text_renderer/struct.RichDecorator.html
-    pub fn render_rich(self, width: usize) -> Result<RenderedText<RichDecorator>> {
+    fn render_rich(self, width: usize) -> Result<RenderedText<RichDecorator>> {
         self.render(width, RichDecorator::new())
     }
 }
 
 /// A rendered HTML document.
-pub struct RenderedText<D: TextDecorator>(SubRenderer<D>);
+struct RenderedText<D: TextDecorator>(SubRenderer<D>);
 
 impl<D: TextDecorator> RenderedText<D> {
     /// Convert the rendered HTML document to a string.
-    pub fn into_string(self) -> Result<String> {
+    fn into_string(self) -> Result<String> {
         self.0.into_string()
     }
 
     /// Convert the rendered HTML document to a vector of lines with the annotations created by the
     /// decorator.
-    pub fn into_lines(self) -> Result<Vec<TaggedLine<Vec<D::Annotation>>>> {
+    fn into_lines(self) -> Result<Vec<TaggedLine<Vec<D::Annotation>>>> {
         Ok(self
             .0
             .into_lines()?

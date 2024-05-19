@@ -7,7 +7,7 @@ use crate::Error;
 pub mod text_renderer;
 
 /// A type which is a backend for HTML to text rendering.
-pub trait Renderer {
+pub(crate) trait Renderer {
     /// Add an empty line to the output (ie between blocks).
     fn add_empty_line(&mut self) -> crate::Result<()>;
 

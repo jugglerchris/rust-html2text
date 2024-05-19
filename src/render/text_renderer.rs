@@ -20,7 +20,7 @@ use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
 /// This mainly gives access to a Renderer, but needs to be able to push
 /// new ones on for nested structures.
 #[derive(Clone, Debug)]
-pub struct TextRenderer<D: TextDecorator> {
+pub(crate) struct TextRenderer<D: TextDecorator> {
     subrender: Vec<SubRenderer<D>>,
     links: Vec<String>,
 }
@@ -149,7 +149,7 @@ impl<T: Debug + Eq + PartialEq + Clone + Default> TaggedLine<T> {
     }
 
     /// Join the line into a String, ignoring the tags and markers.
-    pub fn into_string(self) -> String {
+    fn into_string(self) -> String {
         let mut s = String::new();
         for tle in self.v {
             if let TaggedLineElement::Str(ts) = tle {
@@ -160,7 +160,7 @@ impl<T: Debug + Eq + PartialEq + Clone + Default> TaggedLine<T> {
     }
 
     /// Return true if the line is non-empty
-    pub fn is_empty(&self) -> bool {
+    fn is_empty(&self) -> bool {
         for elt in &self.v {
             if elt.has_content() {
                 return false;
@@ -170,7 +170,7 @@ impl<T: Debug + Eq + PartialEq + Clone + Default> TaggedLine<T> {
     }
 
     /// Add a new tagged string fragment to the line
-    pub fn push_str(&mut self, ts: TaggedString<T>) {
+    fn push_str(&mut self, ts: TaggedString<T>) {
         use self::TaggedLineElement::Str;
 
         if !self.v.is_empty() {
@@ -185,7 +185,7 @@ impl<T: Debug + Eq + PartialEq + Clone + Default> TaggedLine<T> {
     }
 
     /// Add a new general TaggedLineElement to the line
-    pub fn push(&mut self, tle: TaggedLineElement<T>) {
+    fn push(&mut self, tle: TaggedLineElement<T>) {
         use self::TaggedLineElement::Str;
 
         if let Str(ts) = tle {
@@ -196,14 +196,14 @@ impl<T: Debug + Eq + PartialEq + Clone + Default> TaggedLine<T> {
     }
 
     /// Add a new fragment to the start of the line
-    pub fn insert_front(&mut self, ts: TaggedString<T>) {
+    fn insert_front(&mut self, ts: TaggedString<T>) {
         use self::TaggedLineElement::Str;
 
         self.v.insert(0, Str(ts));
     }
 
     /// Add text with a particular tag to self
-    pub fn push_char(&mut self, c: char, tag: &T) {
+    fn push_char(&mut self, c: char, tag: &T) {
         use self::TaggedLineElement::Str;
 
         if !self.v.is_empty() {
@@ -223,20 +223,20 @@ impl<T: Debug + Eq + PartialEq + Clone + Default> TaggedLine<T> {
     }
 
     /// Drain tl and use to extend self.
-    pub fn consume(&mut self, tl: &mut TaggedLine<T>) {
+    fn consume(&mut self, tl: &mut TaggedLine<T>) {
         for ts in tl.v.drain(..) {
             self.push(ts);
         }
     }
 
     /// Drain the contained items
-    pub fn drain_all(&mut self) -> vec::Drain<TaggedLineElement<T>> {
+    fn drain_all(&mut self) -> vec::Drain<TaggedLineElement<T>> {
         self.v.drain(..)
     }
 
     /// Iterator over the chars in this line.
     #[cfg_attr(feature = "clippy", allow(needless_lifetimes))]
-    pub fn chars<'a>(&'a self) -> impl Iterator<Item = char> + 'a {
+    fn chars<'a>(&'a self) -> impl Iterator<Item = char> + 'a {
         use self::TaggedLineElement::Str;
 
         self.v.iter().flat_map(|tle| {
@@ -269,7 +269,7 @@ impl<T: Debug + Eq + PartialEq + Clone + Default> TaggedLine<T> {
 
     /// Converts the tagged line into an iterator over the tagged strings in this line, ignoring
     /// any fragments.
-    pub fn into_tagged_strings(self) -> impl Iterator<Item = TaggedString<T>> {
+    fn into_tagged_strings(self) -> impl Iterator<Item = TaggedString<T>> {
         self.v.into_iter().filter_map(|tle| match tle {
             TaggedLineElement::Str(ts) => Some(ts),
             _ => None,
@@ -277,13 +277,13 @@ impl<T: Debug + Eq + PartialEq + Clone + Default> TaggedLine<T> {
     }
 
     /// Return the width of the line in cells
-    pub fn width(&self) -> usize {
+    fn width(&self) -> usize {
         self.tagged_strings().map(TaggedString::width).sum()
     }
 
     /// Pad this line to width with spaces (or if already at least this wide, do
     /// nothing).
-    pub fn pad_to(&mut self, width: usize, tag: &T) {
+    fn pad_to(&mut self, width: usize, tag: &T) {
         use self::TaggedLineElement::Str;
 
         let my_width = self.width();
@@ -485,7 +485,7 @@ impl<T: Clone + Eq + Debug + Default> WrappedBlock<T> {
         Ok(self.text)
     }
 
-    pub fn add_text(&mut self, text: &str, tag: &T) -> Result<(), Error> {
+    fn add_text(&mut self, text: &str, tag: &T) -> Result<(), Error> {
         html_trace!("WrappedBlock::add_text({}), {:?}", text, tag);
         for c in text.chars() {
             if c.is_whitespace() {
@@ -502,7 +502,7 @@ impl<T: Clone + Eq + Debug + Default> WrappedBlock<T> {
         Ok(())
     }
 
-    pub fn add_preformatted_text(
+    fn add_preformatted_text(
         &mut self,
         text: &str,
         tag_main: &T,
@@ -567,15 +567,15 @@ impl<T: Clone + Eq + Debug + Default> WrappedBlock<T> {
         Ok(())
     }
 
-    pub fn add_element(&mut self, elt: TaggedLineElement<T>) {
+    fn add_element(&mut self, elt: TaggedLineElement<T>) {
         self.word.push(elt);
     }
 
-    pub fn text_len(&self) -> usize {
+    fn text_len(&self) -> usize {
         self.textlen + self.linelen + self.wordlen
     }
 
-    pub fn is_empty(&self) -> bool {
+    fn is_empty(&self) -> bool {
         self.text_len() == 0
     }
 }
@@ -692,7 +692,7 @@ pub trait TextDecorator {
 
 /// A space on a horizontal row.
 #[derive(Copy, Clone, Debug)]
-pub enum BorderSegHoriz {
+enum BorderSegHoriz {
     /// Pure horizontal line
     Straight,
     /// Joined with a line above
@@ -709,11 +709,11 @@ pub enum BorderSegHoriz {
 /// A dividing line between table rows which tracks intersections
 /// with vertical lines.
 #[derive(Clone, Debug)]
-pub struct BorderHoriz<T> {
+pub(crate) struct BorderHoriz<T> {
     /// The segments for the line.
-    pub segments: Vec<BorderSegHoriz>,
+    segments: Vec<BorderSegHoriz>,
     /// The tag associated with the lines
-    pub tag: T,
+    tag: T,
 }
 
 impl<T: Clone> BorderHoriz<T> {
@@ -726,7 +726,7 @@ impl<T: Clone> BorderHoriz<T> {
     }
 
     /// Create a new blank border line.
-    pub fn new_type(width: usize, linetype: BorderSegHoriz, tag: T) -> Self {
+    fn new_type(width: usize, linetype: BorderSegHoriz, tag: T) -> Self {
         BorderHoriz {
             segments: vec![linetype; width],
             tag,
@@ -734,7 +734,7 @@ impl<T: Clone> BorderHoriz<T> {
     }
 
     /// Stretch the line to at least the specified width
-    pub fn stretch_to(&mut self, width: usize) {
+    fn stretch_to(&mut self, width: usize) {
         use self::BorderSegHoriz::*;
         while width > self.segments.len() {
             self.segments.push(Straight);
@@ -742,7 +742,7 @@ impl<T: Clone> BorderHoriz<T> {
     }
 
     /// Make a join to a line above at the xth cell
-    pub fn join_above(&mut self, x: usize) {
+    fn join_above(&mut self, x: usize) {
         use self::BorderSegHoriz::*;
         self.stretch_to(x + 1);
         let prev = self.segments[x];
@@ -754,7 +754,7 @@ impl<T: Clone> BorderHoriz<T> {
     }
 
     /// Make a join to a line below at the xth cell
-    pub fn join_below(&mut self, x: usize) {
+    fn join_below(&mut self, x: usize) {
         use self::BorderSegHoriz::*;
         self.stretch_to(x + 1);
         let prev = self.segments[x];
@@ -766,7 +766,7 @@ impl<T: Clone> BorderHoriz<T> {
     }
 
     /// Merge a (possibly partial) border line below into this one.
-    pub fn merge_from_below(&mut self, other: &BorderHoriz<T>, pos: usize) {
+    fn merge_from_below(&mut self, other: &BorderHoriz<T>, pos: usize) {
         use self::BorderSegHoriz::*;
         for (idx, seg) in other.segments.iter().enumerate() {
             match *seg {
@@ -779,7 +779,7 @@ impl<T: Clone> BorderHoriz<T> {
     }
 
     /// Merge a (possibly partial) border line above into this one.
-    pub fn merge_from_above(&mut self, other: &BorderHoriz<T>, pos: usize) {
+    fn merge_from_above(&mut self, other: &BorderHoriz<T>, pos: usize) {
         use self::BorderSegHoriz::*;
         for (idx, seg) in other.segments.iter().enumerate() {
             match *seg {
@@ -793,7 +793,7 @@ impl<T: Clone> BorderHoriz<T> {
 
     /// Return a string of spaces and vertical lines which would match
     /// just above this line.
-    pub fn to_vertical_lines_above(&self) -> String {
+    fn to_vertical_lines_above(&self) -> String {
         use self::BorderSegHoriz::*;
         self.segments
             .iter()
@@ -805,7 +805,7 @@ impl<T: Clone> BorderHoriz<T> {
     }
 
     /// Turn into a string with drawing characters
-    pub fn into_string(self) -> String {
+    fn into_string(self) -> String {
         self.segments
             .into_iter()
             .map(|seg| match seg {
@@ -819,14 +819,14 @@ impl<T: Clone> BorderHoriz<T> {
     }
 
     /// Return a string without destroying self
-    pub fn to_string(&self) -> String {
+    fn to_string(&self) -> String {
         self.clone().into_string()
     }
 }
 
 /// A line, which can either be text or a line.
 #[derive(Clone, Debug)]
-pub enum RenderLine<T> {
+pub(crate) enum RenderLine<T> {
     /// Some rendered text
     Text(TaggedLine<T>),
     /// A table border line
@@ -835,7 +835,7 @@ pub enum RenderLine<T> {
 
 impl<T: PartialEq + Eq + Clone + Debug + Default> RenderLine<T> {
     /// Turn the rendered line into a String
-    pub fn into_string(self) -> String {
+    fn into_string(self) -> String {
         match self {
             RenderLine::Text(tagged) => tagged.into_string(),
             RenderLine::Line(border) => border.into_string(),
@@ -883,7 +883,7 @@ impl<T: PartialEq + Eq + Clone + Debug + Default> RenderLine<T> {
 /// A renderer which just outputs plain text with
 /// annotations depending on a decorator.
 #[derive(Clone)]
-pub struct SubRenderer<D: TextDecorator> {
+pub(crate) struct SubRenderer<D: TextDecorator> {
     /// Text width
     pub width: usize,
     /// Rendering options
@@ -915,7 +915,7 @@ impl<D: TextDecorator + Debug> std::fmt::Debug for SubRenderer<D> {
 /// Rendering options.
 #[derive(Clone)]
 #[non_exhaustive]
-pub struct RenderOptions {
+pub(crate) struct RenderOptions {
     /// The maximum text wrap width.  If set, paragraphs of text will only be wrapped
     /// to that width or less, though the overall width can be larger (e.g. for indented
     /// blocks or side-by-side table cells).
@@ -998,7 +998,7 @@ impl<D: TextDecorator> SubRenderer<D> {
     }
 
     /// Add a prerendered (multiline) string with the current annotations.
-    pub fn add_subblock(&mut self, s: &str) {
+    fn add_subblock(&mut self, s: &str) {
         use self::TaggedLineElement::Str;
 
         html_trace!("add_subblock({}, {})", self.width, s);
@@ -1044,7 +1044,7 @@ impl<D: TextDecorator> SubRenderer<D> {
 
     #[cfg(feature = "html_trace")]
     /// Returns a string of the current builder contents (for testing).
-    pub fn to_string(&self) -> String {
+    fn to_string(&self) -> String {
         let mut result = String::new();
         for line in &self.lines {
             result += &line.to_string();
@@ -1112,7 +1112,7 @@ impl<D: TextDecorator> SubRenderer<D> {
         Ok(())
     }
 
-    pub(crate) fn width_minus(&self, prefix_len: usize, min_width: usize) -> crate::Result<usize> {
+    pub fn width_minus(&self, prefix_len: usize, min_width: usize) -> crate::Result<usize> {
         let new_width = self.width.saturating_sub(prefix_len);
         if new_width < min_width && !self.options.allow_width_overflow {
             return Err(Error::TooNarrow);
