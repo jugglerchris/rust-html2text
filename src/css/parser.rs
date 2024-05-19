@@ -568,12 +568,9 @@ pub fn parse_class(text: &str) -> IResult<&str, SelectorComponent> {
 }
 
 pub fn parse_hash(text: &str) -> IResult<&str, SelectorComponent> {
-    fail(text)
-    /*
-    let (rest, _) = tag(".")(text)?;
-    let (rest, id) = parse_hash(rest)?;
-    Ok((rest, SelectorComponent::
-    */
+    let (rest, _) = tag("#")(text)?;
+    let (rest, word) = parse_identstring(rest)?;
+    Ok((rest, SelectorComponent::Hash(word)))
 }
 
 // Match some (not zero) whitespace

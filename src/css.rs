@@ -17,6 +17,7 @@ use crate::{
 enum SelectorComponent {
     Class(String),
     Element(String),
+    Hash(String),
     Star,
     CombChild,
     CombDescendant,
@@ -55,6 +56,19 @@ impl Selector {
                         return false;
                     }
                 },
+                SelectorComponent::Hash(hash) => {
+                    if let Element { attrs, .. } = &node.data {
+                        let attrs = attrs.borrow();
+                        for attr in attrs.iter() {
+                            if &attr.name.local == "id" {
+                                if &*attr.value == hash {
+                                    return Self::do_matches(&comps[1..], node);
+                                }
+                            }
+                        }
+                    }
+                    false
+                }
                 SelectorComponent::Element(name) => match &node.data {
                     Element { name: eltname, .. } => {
                         if name == eltname.expanded().local.deref() {
@@ -204,7 +218,7 @@ impl StyleData {
     /// Add some CSS source to be included.  The source will be parsed
     /// and the relevant and supported features extracted.
     pub fn add_css(&mut self, css: &str) -> Result<()> {
-        let (_, ss) = dbg!(parser::parse_stylesheet(css))
+        let (_, ss) = parser::parse_stylesheet(css)
             .map_err(|_| crate::Error::CssParseError)?;
 
         for rule in ss {
@@ -216,7 +230,6 @@ impl StyleData {
                         styles: styles.clone(),
                     };
                     html_trace_quiet!("Adding ruleset {ruleset:?}");
-                    dbg!(&ruleset);
                     self.rules.push(ruleset);
                 }
             }

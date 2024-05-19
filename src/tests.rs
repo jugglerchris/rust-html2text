@@ -86,6 +86,13 @@ fn test_colour_map(annotations: &[RichAnnotation], s: &str) -> String {
                 } => {
                     tags = ("<G>", "</G>");
                 }
+                crate::Colour {
+                    r: 0,
+                    g: 0,
+                    b: 0xff,
+                } => {
+                    tags = ("<B>", "</B>");
+                }
                 _ => {
                     tags = ("<?>", "</?>");
                 }
@@ -2347,6 +2354,41 @@ text
         <div style="height: 0; overflow: hidden">This should be hidden</div>
         <p>Hello</p>"#,
             r#"Hello
+"#,
+            20,
+        );
+    }
+
+    #[test]
+    fn test_selector_hash() {
+        test_html_coloured(
+            br#"<head><style>
+        #foo {
+            color: #f00;
+        }
+        p#bar {
+            color: #0f0;
+        }
+        div#baz {
+            color: #00f;
+        }
+        *#qux {
+            color: #fff;
+        }
+        </style></head><body>
+
+        <p id="foo">Foo</p>
+        <p id="bar">Bar</p>
+        <p id="baz">Baz</p>
+        <p id="qux">Qux</p>
+        "#,
+            r#"<R>Foo</R>
+
+<G>Bar</G>
+
+Baz
+
+<W>Qux</W>
 "#,
             20,
         );
