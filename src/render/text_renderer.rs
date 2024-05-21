@@ -236,7 +236,7 @@ impl<T: Debug + Eq + PartialEq + Clone + Default> TaggedLine<T> {
 
     /// Iterator over the chars in this line.
     #[cfg_attr(feature = "clippy", allow(needless_lifetimes))]
-    fn chars<'a>(&'a self) -> impl Iterator<Item = char> + 'a {
+    pub fn chars<'a>(&'a self) -> impl Iterator<Item = char> + 'a {
         use self::TaggedLineElement::Str;
 
         self.v.iter().flat_map(|tle| {

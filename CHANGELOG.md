@@ -17,6 +17,21 @@ Possible log types:
   implementation details or considered redundant have been removed or made
   private (thanks sftse).  Please open an issue for anything removed that was
   being used.
+
+  Of note, `RenderTree::render_plain()` and `RenderTree::render_rich()` have
+  been removed.  Replace code like:
+
+  ```rust
+  let text = html2text::parse(html)?
+      .render_plain(80)?
+      .into_string()?;
+  ```
+  with:
+  ```rust
+  let text = html2text::config::plain()
+      .render_to_string(html2text::parse(html)?)?
+  ```
+
 - [changed] Updated some dependencies
 
 ### 0.12.5

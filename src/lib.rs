@@ -67,8 +67,8 @@ pub mod css;
 pub mod render;
 
 use render::text_renderer::{
-    PlainDecorator, RenderLine, RenderOptions, RichAnnotation, RichDecorator, SubRenderer,
-    TaggedLine, TextDecorator, TextRenderer,
+    RenderLine, RenderOptions, RichAnnotation, RichDecorator, SubRenderer, TaggedLine,
+    TextDecorator, TextRenderer,
 };
 use render::Renderer;
 
@@ -201,16 +201,6 @@ struct RenderTableCell {
 }
 
 impl RenderTableCell {
-    /// Render this cell to a renderer.
-    fn render<T: Write, D: TextDecorator>(
-        &mut self,
-        _renderer: &mut TextRenderer<D>,
-        _err_out: &mut T,
-    ) {
-        unimplemented!()
-        //render_tree_children_to_string(builder, &mut self.content, err_out)
-    }
-
     /// Calculate or return the estimate size of the cell
     fn get_size_estimate(&self) -> SizeEstimate {
         if self.size_estimate.get().is_none() {
@@ -245,18 +235,6 @@ impl RenderTableRow {
     /// Takes into account colspan.
     fn num_cells(&self) -> usize {
         self.cells.iter().map(|cell| cell.colspan.max(1)).sum()
-    }
-    /// Return an iterator over (column, &cell)s, which
-    /// takes into account colspan.
-    fn cell_columns(&mut self) -> Vec<(usize, &mut RenderTableCell)> {
-        let mut result = Vec::new();
-        let mut colno = 0;
-        for cell in &mut self.cells {
-            let colspan = cell.colspan;
-            result.push((colno, cell));
-            colno += colspan;
-        }
-        result
     }
 
     /// Return the contained cells as RenderNodes, annotated with their
@@ -307,10 +285,6 @@ impl RenderTable {
         self.rows.iter()
     }
 
-    /// Return an iterator over the rows.
-    fn rows_mut(&mut self) -> std::slice::IterMut<RenderTableRow> {
-        self.rows.iter_mut()
-    }
     /// Consume this and return a `Vec<RenderNode>` containing the children;
     /// the children know the column sizes required.
     fn into_rows(self, col_sizes: Vec<usize>, vert: bool) -> Vec<RenderNode> {
@@ -359,11 +333,6 @@ impl RenderTable {
         };
         self.size_estimate.set(Some(result));
         result
-    }
-
-    /// Calculate and store (or return stored value) of estimated size
-    fn get_size_estimate(&self) -> SizeEstimate {
-        self.size_estimate.get().unwrap()
     }
 }
 
@@ -1059,11 +1028,6 @@ fn dom_to_render_tree_with_context<T: Write>(
 
     html_trace!("### dom_to_render_tree: out= {:#?}", result);
     result
-}
-
-/// Convert a DOM tree or subtree into a render tree.
-fn dom_to_render_tree<T: Write>(handle: Handle, err_out: &mut T) -> Result<Option<RenderNode>> {
-    dom_to_render_tree_with_context(handle, err_out, &mut Default::default())
 }
 
 fn pending<'a, F>(handle: Handle, f: F) -> TreeMapResult<'a, HtmlContext, Handle, RenderNode>
@@ -2261,22 +2225,6 @@ impl RenderTree {
     /// Render this document using the given `decorator` and wrap it to `width` columns.
     fn render<D: TextDecorator>(self, width: usize, decorator: D) -> Result<RenderedText<D>> {
         self.render_with_context(&mut Default::default(), width, decorator)
-    }
-
-    /// Render this document as plain text using the [`PlainDecorator`][] and wrap it to `width`
-    /// columns.
-    ///
-    /// [`PlainDecorator`]: render/text_renderer/struct.PlainDecorator.html
-    fn render_plain(self, width: usize) -> Result<RenderedText<PlainDecorator>> {
-        self.render(width, PlainDecorator::new())
-    }
-
-    /// Render this document as rich text using the [`RichDecorator`][] and wrap it to `width`
-    /// columns.
-    ///
-    /// [`RichDecorator`]: render/text_renderer/struct.RichDecorator.html
-    fn render_rich(self, width: usize) -> Result<RenderedText<RichDecorator>> {
-        self.render(width, RichDecorator::new())
     }
 }
 
