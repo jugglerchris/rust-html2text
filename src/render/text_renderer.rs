@@ -132,6 +132,12 @@ pub struct TaggedLine<T> {
     v: Vec<TaggedLineElement<T>>,
 }
 
+impl<T: Debug + Eq + PartialEq + Clone + Default> Default for TaggedLine<T> {
+    fn default() -> Self {
+        TaggedLine::new()
+    }
+}
+
 impl<T: Debug + Eq + PartialEq + Clone + Default> TaggedLine<T> {
     /// Create an empty `TaggedLine`.
     pub fn new() -> TaggedLine<T> {
@@ -235,7 +241,7 @@ impl<T: Debug + Eq + PartialEq + Clone + Default> TaggedLine<T> {
     }
 
     /// Iterator over the chars in this line.
-    #[cfg_attr(feature = "clippy", allow(needless_lifetimes))]
+    #[allow(clippy::needless_lifetimes)]
     pub fn chars<'a>(&'a self) -> impl Iterator<Item = char> + 'a {
         use self::TaggedLineElement::Str;
 
@@ -255,7 +261,7 @@ impl<T: Debug + Eq + PartialEq + Clone + Default> TaggedLine<T> {
     }
 
     /// Iterator over TaggedLineElements
-    pub fn iter<'a>(&'a self) -> impl Iterator<Item = &TaggedLineElement<T>> + 'a {
+    pub fn iter(&self) -> impl Iterator<Item = &TaggedLineElement<T>> + '_ {
         self.v.iter()
     }
 
@@ -819,6 +825,7 @@ impl<T: Clone> BorderHoriz<T> {
     }
 
     /// Return a string without destroying self
+    #[allow(clippy::inherent_to_string)]
     fn to_string(&self) -> String {
         self.clone().into_string()
     }
@@ -921,9 +928,6 @@ pub(crate) struct RenderOptions {
     /// blocks or side-by-side table cells).
     pub wrap_width: Option<usize>,
 
-    /// The minimum text width to use when wrapping.
-    pub min_wrap_width: usize,
-
     /// If true, then allow the output to be wider than specified instead of returning
     /// `Err(TooNarrow)`.
     pub allow_width_overflow: bool,
@@ -945,7 +949,6 @@ impl Default for RenderOptions {
     fn default() -> Self {
         Self {
             wrap_width: Default::default(),
-            min_wrap_width: crate::MIN_WIDTH,
             allow_width_overflow: Default::default(),
             pad_block_width: Default::default(),
             raw: false,
@@ -1645,7 +1648,7 @@ pub struct PlainDecorator {
 
 impl PlainDecorator {
     /// Create a new `PlainDecorator`.
-    #[cfg_attr(feature = "clippy", allow(new_without_default_derive))]
+    #[allow(clippy::new_without_default)]
     pub fn new() -> PlainDecorator {
         PlainDecorator {
             nlinks: Rc::new(Cell::new(0)),
@@ -1740,7 +1743,7 @@ pub struct TrivialDecorator {}
 
 impl TrivialDecorator {
     /// Create a new `TrivialDecorator`.
-    #[cfg_attr(feature = "clippy", allow(new_without_default_derive))]
+    #[allow(clippy::new_without_default)]
     pub fn new() -> TrivialDecorator {
         TrivialDecorator {}
     }
@@ -1857,7 +1860,7 @@ pub enum RichAnnotation {
 
 impl RichDecorator {
     /// Create a new `RichDecorator`.
-    #[cfg_attr(feature = "clippy", allow(new_without_default_derive))]
+    #[allow(clippy::new_without_default)]
     pub fn new() -> RichDecorator {
         RichDecorator {}
     }

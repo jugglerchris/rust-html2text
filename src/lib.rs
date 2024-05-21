@@ -47,8 +47,6 @@
 //! read keys from stdin.
 //!
 
-#![cfg_attr(feature = "clippy", feature(plugin))]
-#![cfg_attr(feature = "clippy", plugin(clippy))]
 #![deny(missing_docs)]
 
 // Check code in README.md
@@ -391,8 +389,10 @@ enum RenderNodeInfo {
     /// Start of a named HTML fragment
     FragStart(String),
     /// A region with a foreground colour
+    #[allow(unused)]
     Coloured(Colour, Vec<RenderNode>),
     /// A region with a background colour
+    #[allow(unused)]
     BgColoured(Colour, Vec<RenderNode>),
     /// A list item
     ListItem(Vec<RenderNode>),
@@ -705,9 +705,9 @@ fn desc_list_children_to_render_nodes<T: Write>(
 }
 
 /// Convert a table into a RenderNode
-fn table_to_render_tree<'a, 'b, T: Write>(
+fn table_to_render_tree<'a, T: Write>(
     handle: Handle,
-    _err_out: &'b mut T,
+    _err_out: &mut T,
 ) -> TreeMapResult<'a, HtmlContext, Handle, RenderNode> {
     pending(handle, |_, rowset| {
         let mut rows = vec![];
@@ -729,9 +729,9 @@ fn table_to_render_tree<'a, 'b, T: Write>(
 }
 
 /// Add rows from a thead or tbody.
-fn tbody_to_render_tree<'a, 'b, T: Write>(
+fn tbody_to_render_tree<'a, T: Write>(
     handle: Handle,
-    _err_out: &'b mut T,
+    _err_out: &mut T,
 ) -> TreeMapResult<'a, HtmlContext, Handle, RenderNode> {
     pending_noempty(handle, |_, rowchildren| {
         let mut rows = rowchildren
@@ -778,9 +778,9 @@ fn tbody_to_render_tree<'a, 'b, T: Write>(
 }
 
 /// Convert a table row to a RenderTableRow
-fn tr_to_render_tree<'a, 'b, T: Write>(
+fn tr_to_render_tree<'a, T: Write>(
     handle: Handle,
-    _err_out: &'b mut T,
+    _err_out: &mut T,
 ) -> TreeMapResult<'a, HtmlContext, Handle, RenderNode> {
     pending(handle, |_, cellnodes| {
         let cells = cellnodes
@@ -805,9 +805,9 @@ fn tr_to_render_tree<'a, 'b, T: Write>(
 }
 
 /// Convert a single table cell to a render node.
-fn td_to_render_tree<'a, 'b, T: Write>(
+fn td_to_render_tree<'a, T: Write>(
     handle: Handle,
-    _err_out: &'b mut T,
+    _err_out: &mut T,
 ) -> TreeMapResult<'a, HtmlContext, Handle, RenderNode> {
     let mut colspan = 1;
     if let Element { ref attrs, .. } = handle.data {
@@ -1126,11 +1126,11 @@ fn prepend_marker(prefix: RenderNode, mut orig: RenderNode) -> RenderNode {
     orig
 }
 
-fn process_dom_node<'a, 'b, 'c, T: Write>(
+fn process_dom_node<'a, T: Write>(
     handle: Handle,
-    err_out: &'b mut T,
+    err_out: &mut T,
     #[allow(unused)] // Used with css feature
-    context: &'c mut HtmlContext,
+    context: &mut HtmlContext,
 ) -> Result<TreeMapResult<'a, HtmlContext, Handle, RenderNode>> {
     use RenderNodeInfo::*;
     use TreeMapResult::*;
@@ -1429,10 +1429,10 @@ fn pending2<
     }
 }
 
-fn do_render_node<'b, T: Write, D: TextDecorator>(
+fn do_render_node<T: Write, D: TextDecorator>(
     renderer: &mut TextRenderer<D>,
     tree: RenderNode,
-    err_out: &'b mut T,
+    err_out: &mut T,
 ) -> Result<TreeMapResult<'static, TextRenderer<D>, RenderNode, Option<SubRenderer<D>>>> {
     html_trace!("do_render_node({:?}", tree);
     use RenderNodeInfo::*;
@@ -1668,7 +1668,7 @@ fn do_render_node<'b, T: Write, D: TextDecorator>(
         Sup(children) => {
             // Special case for digit-only superscripts - use superscript
             // characters.
-            fn sup_digits(children: &Vec<RenderNode>) -> Option<String> {
+            fn sup_digits(children: &[RenderNode]) -> Option<String> {
                 if children.len() != 1 {
                     return None;
                 }
@@ -2208,13 +2208,13 @@ impl RenderTree {
         if width == 0 {
             return Err(Error::TooNarrow);
         }
-        let mut render_options = RenderOptions::default();
-        render_options.wrap_width = context.max_wrap_width;
-        render_options.pad_block_width = context.pad_block_width;
-        render_options.min_wrap_width = context.min_wrap_width;
-        render_options.allow_width_overflow = context.allow_width_overflow;
-        render_options.raw = context.raw;
-        render_options.draw_borders = context.draw_borders;
+        let render_options = RenderOptions {
+            wrap_width: context.max_wrap_width,
+            pad_block_width: context.pad_block_width,
+            allow_width_overflow: context.allow_width_overflow,
+            raw: context.raw,
+            draw_borders: context.draw_borders,
+        };
         let test_decorator = decorator.make_subblock_decorator();
         let builder = SubRenderer::new(width, render_options, decorator);
         let builder =
