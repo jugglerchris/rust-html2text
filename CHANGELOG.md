@@ -9,6 +9,16 @@ Possible log types:
 - `[fixed]` for any bug fixes.
 - `[security]` to invite users to upgrade in case of vulnerabilities.
 
+### 0.13.0-alpha.0
+
+- [changed] Replaced LightningCSS with a smaller CSS parser.  There is a chance
+  that some CSS edge cases which no longer work; if so this would be a bug.
+- [removed] Some previously `pub` items and methods which are either internal
+  implementation details or considered redundant have been removed or made
+  private (thanks sftse).  Please open an issue for anything removed that was
+  being used.
+- [changed] Updated some dependencies
+
 ### 0.12.5
 
 - [changed] Updated some dependencies
