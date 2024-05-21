@@ -18,9 +18,9 @@ pub enum Colour {
     Rgb(u8, u8, u8),
 }
 
-impl Into<crate::Colour> for Colour {
-    fn into(self) -> crate::Colour {
-        match self {
+impl From<Colour> for crate::Colour {
+    fn from(value: Colour) -> Self {
+        match value {
             Colour::Rgb(r, g, b) => crate::Colour { r, g, b },
         }
     }
@@ -123,8 +123,10 @@ enum Token<'s> {
     /// Whitespace
     //Whitespace(Cow<'s, str>),
     /// CDO (<!--)
+    #[allow(clippy::upper_case_acronyms)]
     CDO,
     /// CDC (-->)
+    #[allow(clippy::upper_case_acronyms)]
     CDC,
     /// Colon
     Colon,
@@ -196,18 +198,11 @@ fn nmstart_char(s: &str) -> IResult<&str, char> {
 }
 
 fn is_ident_start(c: char) -> bool {
-    match c {
-        'a'..='z' | 'A'..='Z' | '_' => true,
-        '\u{0081}'.. => true,
-        _ => false,
-    }
+    matches!(c, 'a'..='z' | 'A'..='Z' | '_' | '\u{0081}'..)
 }
 
 fn is_digit(c: char) -> bool {
-    match c {
-        '0'..='9' => true,
-        _ => false,
-    }
+    c.is_ascii_digit()
 }
 
 fn nmchar_char(s: &str) -> IResult<&str, char> {
@@ -230,13 +225,13 @@ fn ident_escape(s: &str) -> IResult<&str, char> {
     match chars.next() {
         None => {
             // EOF: return replacement char
-            return Ok((&rest, '\u{fffd}'));
+            Ok((&rest, '\u{fffd}'))
         }
         Some((i, c)) if c.is_hex_digit() => {
             // Option 1: up to 6 hex digits.
             let start_idx = i;
             let mut end_idx = i + 1;
-            while let Some((nexti, nextc)) = chars.next() {
+            for (nexti, nextc) in chars {
                 if nextc.is_hex_digit() && nexti - start_idx < 6 {
                     continue;
                 } else {
@@ -245,11 +240,11 @@ fn ident_escape(s: &str) -> IResult<&str, char> {
                 }
             }
             let val = u32::from_str_radix(&rest[start_idx..end_idx], 16).unwrap();
-            return Ok((&rest[end_idx..], char::from_u32(val).unwrap_or('\u{fffd}')));
+            Ok((&rest[end_idx..], char::from_u32(val).unwrap_or('\u{fffd}')))
         }
         Some((_i, c)) => {
             let bytes = c.len_utf8();
-            return Ok((&rest[bytes..], c));
+            Ok((&rest[bytes..], c))
         }
     }
 }
@@ -266,7 +261,7 @@ fn parse_ident(text: &str) -> IResult<&str, String> {
     let (rest, _) = skip_optional_whitespace(text)?;
     let mut name = Vec::new();
     let (rest, dash) = opt(tag("-"))(rest)?;
-    if let Some(_) = dash {
+    if dash.is_some() {
         name.push('-');
     }
 
@@ -312,8 +307,8 @@ fn parse_token(text: &str) -> IResult<&str, Token> {
             if let Ok((rest_n, tok)) = parse_numeric_token(rest) {
                 return Ok((rest_n, tok));
             }
-            if rest.starts_with("-->") {
-                return Ok((&rest[3..], Token::CDC));
+            if let Some(rest_cdc) = rest.strip_prefix("-->") {
+                return Ok((rest_cdc, Token::CDC));
             }
             if let Ok((rest_id, token)) = parse_ident_like(rest) {
                 return Ok((rest_id, token));
@@ -328,8 +323,8 @@ fn parse_token(text: &str) -> IResult<&str, Token> {
         }
         Some(':') => Ok((&rest[1..], Token::Colon)),
         Some('<') => {
-            if rest.starts_with("<!--") {
-                return Ok((&rest[4..], Token::CDC));
+            if let Some(rest_cdo) = rest.strip_prefix("<!--") {
+                return Ok((rest_cdo, Token::CDO));
             }
             Ok((&rest[1..], Token::Delim('<')))
         }
@@ -373,7 +368,7 @@ fn parse_value(text: &str) -> IResult<&str, RawValue> {
     let (rest, mut tokens) = many0(parse_token_not_semicolon)(text)?;
     let mut important = false;
     if tokens.len() >= 2
-        && &tokens[tokens.len() - 2..] == &[Token::Delim('!'), Token::Ident("important".into())]
+        && tokens[tokens.len() - 2..] == [Token::Delim('!'), Token::Ident("important".into())]
     {
         tokens.pop();
         tokens.pop();
@@ -456,7 +451,7 @@ fn empty_fail() -> nom::Err<nom::error::Error<&'static str>> {
 
 fn parse_color(value: &RawValue) -> Result<Colour, nom::Err<nom::error::Error<&'static str>>> {
     let fail_error = empty_fail();
-    if value.tokens.len() == 0 {
+    if value.tokens.is_empty() {
         return Err(fail_error);
     }
     match &value.tokens[..] {
@@ -497,23 +492,21 @@ fn parse_color(value: &RawValue) -> Result<Colour, nom::Err<nom::error::Error<&'
                             let b = b.parse().map_err(|_e| empty_fail())?;
                             Ok(Colour::Rgb(r, g, b))
                         }
-                        _ => {
-                            return Err(empty_fail());
-                        }
+                        _ => Err(empty_fail()),
                     }
                 }
-                _ => return Err(empty_fail()),
+                _ => Err(empty_fail()),
             }
         }
         [Token::Hash(s)] => {
             if s.len() == 3 {
-                let v = u32::from_str_radix(&s, 16).map_err(|_| fail_error)?;
+                let v = u32::from_str_radix(s, 16).map_err(|_| fail_error)?;
                 let r = ((v >> 8) & 0xf) as u8 * 0x11;
                 let g = ((v >> 4) & 0xf) as u8 * 0x11;
                 let b = (v & 0xf) as u8 * 0x11;
                 Ok(Colour::Rgb(r, g, b))
             } else if s.len() == 6 {
-                let v = u32::from_str_radix(&s, 16).map_err(|_| fail_error)?;
+                let v = u32::from_str_radix(s, 16).map_err(|_| fail_error)?;
                 let r = ((v >> 16) & 0xff) as u8;
                 let g = ((v >> 8) & 0xff) as u8;
                 let b = (v & 0xff) as u8;
@@ -620,8 +613,8 @@ fn parse_unit(text: &str) -> IResult<&str, LengthUnit> {
 */
 
 fn parse_height(value: &RawValue) -> Result<Height, nom::Err<nom::error::Error<&'static str>>> {
-    match &value.tokens[..] {
-        &[Token::Dimension(ref n, ref unit)] => {
+    match value.tokens[..] {
+        [Token::Dimension(ref n, ref unit)] => {
             let (_, num) = parse_number(n).map_err(|_e| empty_fail())?;
             let unit = match unit.deref() {
                 "in" => LengthUnit::In,
@@ -638,8 +631,8 @@ fn parse_height(value: &RawValue) -> Result<Height, nom::Err<nom::error::Error<&
             };
             Ok(Height::Length(num, unit))
         }
-        &[Token::Number(ref n)] => {
-            let (_, n) = parse_number(&n).map_err(|_e| empty_fail())?;
+        [Token::Number(ref n)] => {
+            let (_, n) = parse_number(n).map_err(|_e| empty_fail())?;
             if n == 0.0 {
                 Ok(Height::Length(0.0, LengthUnit::Px))
             } else {
@@ -676,6 +669,7 @@ fn parse_overflow(value: &RawValue) -> Result<Overflow, nom::Err<nom::error::Err
 fn parse_display(value: &RawValue) -> Result<Display, nom::Err<nom::error::Error<&'static str>>> {
     for tok in &value.tokens {
         if let Token::Ident(word) = tok {
+            #[allow(clippy::single_match)]
             match word.deref() {
                 "none" => return Ok(Display::None),
                 _ => (),
@@ -723,14 +717,14 @@ pub fn parse_simple_selector_component(text: &str) -> IResult<&str, SelectorComp
         map(parse_ws, |_| SelectorComponent::CombDescendant),
         parse_class,
         parse_hash,
-        map(parse_ident, |name| SelectorComponent::Element(name)),
+        map(parse_ident, SelectorComponent::Element),
     ))(text)
 }
 
 pub fn parse_selector_with_element(text: &str) -> IResult<&str, Vec<SelectorComponent>> {
     let (rest, ident) = parse_ident(text)?;
     let (rest, extras) = many0(parse_simple_selector_component)(rest)?;
-    let mut result = vec![SelectorComponent::Element(ident.into())];
+    let mut result = vec![SelectorComponent::Element(ident)];
     result.extend(extras);
     Ok((rest, result))
 }

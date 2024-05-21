@@ -1357,14 +1357,12 @@ fn process_dom_node<'a, T: Write>(
 
             #[cfg(feature = "css")]
             let result = if let Some(colour) = css_colour {
-                let colour = colour.into();
                 result.wrap_render_nodes(move |children| Coloured(colour, children))
             } else {
                 result
             };
             #[cfg(feature = "css")]
             let result = if let Some(colour) = css_bgcolour {
-                let colour = colour.into();
                 result.wrap_render_nodes(move |children| BgColoured(colour, children))
             } else {
                 result

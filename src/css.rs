@@ -32,16 +32,14 @@ struct Selector {
 impl Selector {
     fn do_matches(comps: &[SelectorComponent], node: &Handle) -> bool {
         match comps.first() {
-            None => return true,
+            None => true,
             Some(comp) => match comp {
                 SelectorComponent::Class(class) => match &node.data {
                     Document
                     | NodeData::Doctype { .. }
                     | NodeData::Text { .. }
                     | Comment { .. }
-                    | NodeData::ProcessingInstruction { .. } => {
-                        return false;
-                    }
+                    | NodeData::ProcessingInstruction { .. } => false,
                     Element { attrs, .. } => {
                         let attrs = attrs.borrow();
                         for attr in attrs.iter() {
@@ -53,17 +51,15 @@ impl Selector {
                                 }
                             }
                         }
-                        return false;
+                        false
                     }
                 },
                 SelectorComponent::Hash(hash) => {
                     if let Element { attrs, .. } = &node.data {
                         let attrs = attrs.borrow();
                         for attr in attrs.iter() {
-                            if &attr.name.local == "id" {
-                                if &*attr.value == hash {
-                                    return Self::do_matches(&comps[1..], node);
-                                }
+                            if &attr.name.local == "id" && &*attr.value == hash {
+                                return Self::do_matches(&comps[1..], node);
                             }
                         }
                     }
@@ -72,29 +68,25 @@ impl Selector {
                 SelectorComponent::Element(name) => match &node.data {
                     Element { name: eltname, .. } => {
                         if name == eltname.expanded().local.deref() {
-                            return Self::do_matches(&comps[1..], node);
+                            Self::do_matches(&comps[1..], node)
                         } else {
-                            return false;
+                            false
                         }
                     }
-                    _ => {
-                        return false;
-                    }
+                    _ => false,
                 },
-                SelectorComponent::Star => {
-                    return Self::do_matches(&comps[1..], node);
-                }
+                SelectorComponent::Star => Self::do_matches(&comps[1..], node),
                 SelectorComponent::CombChild => {
                     if let Some(parent) = node.parent.take() {
                         let parent_handle = parent.upgrade();
                         node.parent.set(Some(parent));
                         if let Some(ph) = parent_handle {
-                            return Self::do_matches(&comps[1..], &ph);
+                            Self::do_matches(&comps[1..], &ph)
                         } else {
-                            return false;
+                            false
                         }
                     } else {
-                        return false;
+                        false
                     }
                 }
                 SelectorComponent::CombDescendant => {
@@ -102,13 +94,12 @@ impl Selector {
                         let parent_handle = parent.upgrade();
                         node.parent.set(Some(parent));
                         if let Some(ph) = parent_handle {
-                            return Self::do_matches(&comps[1..], &ph)
-                                || Self::do_matches(comps, &ph);
+                            Self::do_matches(&comps[1..], &ph) || Self::do_matches(comps, &ph)
                         } else {
-                            return false;
+                            false
                         }
                     } else {
-                        return false;
+                        false
                     }
                 }
             },
@@ -261,11 +252,11 @@ impl StyleData {
                         let rules = parse_style_attribute(&attr.value).unwrap_or_default();
                         result.extend(rules);
                     } else if &*attr.name.local == "color" {
-                        if let Ok(colour) = parser::parse_color_attribute(&*attr.value) {
+                        if let Ok(colour) = parser::parse_color_attribute(&attr.value) {
                             result.push(Style::Colour(colour.into()));
                         }
                     } else if &*attr.name.local == "bgcolor" {
-                        if let Ok(colour) = parser::parse_color_attribute(&*attr.value) {
+                        if let Ok(colour) = parser::parse_color_attribute(&attr.value) {
                             result.push(Style::BgColour(colour.into()));
                         }
                     }
@@ -303,9 +294,9 @@ fn combine_vecs(vecs: Vec<Vec<String>>) -> Vec<String> {
     }
 }
 
-fn extract_style_nodes<'a, 'b, T: Write>(
+fn extract_style_nodes<'a, T: Write>(
     handle: Handle,
-    _err_out: &'b mut T,
+    _err_out: &mut T,
 ) -> TreeMapResult<'a, (), Handle, Vec<String>> {
     use TreeMapResult::*;
 
