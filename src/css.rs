@@ -5,11 +5,12 @@ use std::ops::Deref;
 mod parser;
 
 use crate::{
+    css::parser::parse_rules,
     markup5ever_rcdom::{
         Handle,
         NodeData::{self, Comment, Document, Element},
     },
-    tree_map_reduce, Result, TreeMapResult, css::parser::parse_rules, Colour,
+    tree_map_reduce, Colour, Result, TreeMapResult,
 };
 
 #[derive(Debug, Clone, PartialEq)]
@@ -139,8 +140,7 @@ pub struct StyleData {
 
 pub(crate) fn parse_style_attribute(text: &str) -> Result<Vec<Style>> {
     html_trace_quiet!("Parsing inline style: {text}");
-    let (_rest, decls) = parse_rules(text)
-        .map_err(|_| crate::Error::CssParseError)?;
+    let (_rest, decls) = parse_rules(text).map_err(|_| crate::Error::CssParseError)?;
 
     let styles = styles_from_properties2(&decls);
     html_trace_quiet!("Parsed inline style: {:?}", styles);
@@ -155,55 +155,59 @@ fn styles_from_properties2(decls: &[parser::Declaration]) -> Vec<Style> {
     for decl in decls {
         html_trace_quiet!("styles:from_properties2: {decl:?}");
         match &decl.data {
-            parser::Decl::Unknown { .. } => {},
-            parser::Decl::Color { value: parser::Colour::Rgb(r, g, b) } => {
-                styles.push(Style::Colour(Colour{
+            parser::Decl::Unknown { .. } => {}
+            parser::Decl::Color {
+                value: parser::Colour::Rgb(r, g, b),
+            } => {
+                styles.push(Style::Colour(Colour {
                     r: *r,
-                    g: *g, b: *b
+                    g: *g,
+                    b: *b,
                 }));
             }
-            parser::Decl::BackgroundColor { value: parser::Colour::Rgb(r, g, b) } => {
-                styles.push(Style::BgColour(Colour{
+            parser::Decl::BackgroundColor {
+                value: parser::Colour::Rgb(r, g, b),
+            } => {
+                styles.push(Style::BgColour(Colour {
                     r: *r,
-                    g: *g, b: *b
+                    g: *g,
+                    b: *b,
                 }));
             }
-            parser::Decl::Height { value } => {
-                match value {
-                    parser::Height::Auto => (),
-                    parser::Height::Length(l, _) => {
-                        if *l == 0.0 {
-                            height_zero = true;
-                        }
+            parser::Decl::Height { value } => match value {
+                parser::Height::Auto => (),
+                parser::Height::Length(l, _) => {
+                    if *l == 0.0 {
+                        height_zero = true;
                     }
                 }
-            }
-            parser::Decl::MaxHeight { value } => {
-                match value {
-                    parser::Height::Auto => (),
-                    parser::Height::Length(l, _) => {
-                        if *l == 0.0 {
-                            height_zero = true;
-                        }
+            },
+            parser::Decl::MaxHeight { value } => match value {
+                parser::Height::Auto => (),
+                parser::Height::Length(l, _) => {
+                    if *l == 0.0 {
+                        height_zero = true;
                     }
                 }
+            },
+            parser::Decl::Overflow {
+                value: parser::Overflow::Hidden,
             }
-            parser::Decl::Overflow { value: parser::Overflow::Hidden } |
-            parser::Decl::OverflowY { value: parser::Overflow::Hidden } => {
+            | parser::Decl::OverflowY {
+                value: parser::Overflow::Hidden,
+            } => {
                 overflow_hidden = true;
             }
-            parser::Decl::Overflow { .. } |
-            parser::Decl::OverflowY { .. } => { }
+            parser::Decl::Overflow { .. } | parser::Decl::OverflowY { .. } => {}
             parser::Decl::Display { value } => {
                 if let parser::Display::None = value {
                     styles.push(Style::DisplayNone);
                 }
-            }
-            /*
-            _ => {
-                html_trace_quiet!("CSS: Unhandled property {:?}", decl);
-            }
-            */
+            } /*
+              _ => {
+                  html_trace_quiet!("CSS: Unhandled property {:?}", decl);
+              }
+              */
         }
     }
     // If the height is set to zero and overflow hidden, treat as display: none
@@ -217,8 +221,7 @@ impl StyleData {
     /// Add some CSS source to be included.  The source will be parsed
     /// and the relevant and supported features extracted.
     pub fn add_css(&mut self, css: &str) -> Result<()> {
-        let (_, ss) = parser::parse_stylesheet(css)
-            .map_err(|_| crate::Error::CssParseError)?;
+        let (_, ss) = parser::parse_stylesheet(css).map_err(|_| crate::Error::CssParseError)?;
 
         for rule in ss {
             let styles = styles_from_properties2(&rule.declarations);

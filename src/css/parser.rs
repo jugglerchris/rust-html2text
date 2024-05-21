@@ -1,8 +1,17 @@
 //! Parsing for the subset of CSS used in html2text.
 
-use std::{str::FromStr, borrow::Cow, ops::Deref};
+use std::{borrow::Cow, ops::Deref, str::FromStr};
 
-use nom::{IResult, branch::alt, character::complete::{self, digit1, digit0}, bytes::complete::{tag, take_until}, combinator::{map, fail, opt, recognize}, multi::{many0, separated_list0, many1}, error::ErrorKind, sequence::tuple, AsChar};
+use nom::{
+    branch::alt,
+    bytes::complete::{tag, take_until},
+    character::complete::{self, digit0, digit1},
+    combinator::{fail, map, opt, recognize},
+    error::ErrorKind,
+    multi::{many0, many1, separated_list0},
+    sequence::tuple,
+    AsChar, IResult,
+};
 
 #[derive(Debug, PartialEq)]
 pub enum Colour {
@@ -12,7 +21,7 @@ pub enum Colour {
 impl Into<crate::Colour> for Colour {
     fn into(self) -> crate::Colour {
         match self {
-            Colour::Rgb(r, g, b) => crate::Colour { r, g, b, }
+            Colour::Rgb(r, g, b) => crate::Colour { r, g, b },
         }
     }
 }
@@ -28,7 +37,7 @@ pub enum LengthUnit {
     Px,
     // Relative units
     Em,
-    Ex
+    Ex,
 }
 
 #[derive(Debug, PartialEq)]
@@ -51,7 +60,7 @@ pub enum Overflow {
 #[derive(Debug, PartialEq)]
 pub enum Display {
     None,
-    Other
+    Other,
 }
 
 #[derive(Debug, PartialEq)]
@@ -79,7 +88,7 @@ pub enum Decl {
     },
     Unknown {
         name: PropertyName,
-//        value: Vec<Token>,
+        //        value: Vec<Token>,
     },
 }
 
@@ -178,23 +187,17 @@ fn skip_optional_whitespace(text: &str) -> IResult<&str, ()> {
 fn nmstart_char(s: &str) -> IResult<&str, char> {
     let mut iter = s.chars();
     match iter.next() {
-        Some(c) => {
-            match c {
-                '_' | 'a'..='z' | 'A' ..= 'Z' => {
-                    Ok((iter.as_str(), c.to_ascii_lowercase()))
-                }
-                _ => {
-                    IResult::Err(nom::Err::Error(nom::error::Error::new(s, ErrorKind::Fail)))
-                }
-            }
-        }
+        Some(c) => match c {
+            '_' | 'a'..='z' | 'A'..='Z' => Ok((iter.as_str(), c.to_ascii_lowercase())),
+            _ => IResult::Err(nom::Err::Error(nom::error::Error::new(s, ErrorKind::Fail))),
+        },
         None => fail(s),
     }
 }
 
 fn is_ident_start(c: char) -> bool {
     match c {
-        'a' ..= 'z' | 'A' ..= 'Z' | '_' => true,
+        'a'..='z' | 'A'..='Z' | '_' => true,
         '\u{0081}'.. => true,
         _ => false,
     }
@@ -202,7 +205,7 @@ fn is_ident_start(c: char) -> bool {
 
 fn is_digit(c: char) -> bool {
     match c {
-        '0' ..= '9' => true,
+        '0'..='9' => true,
         _ => false,
     }
 }
@@ -210,17 +213,13 @@ fn is_digit(c: char) -> bool {
 fn nmchar_char(s: &str) -> IResult<&str, char> {
     let mut iter = s.chars();
     match iter.next() {
-        Some(c) => {
-            match c {
-                '_' | 'a'..='z' | 'A' ..= 'Z' | '0' ..= '9' | '-' => {
-                    Ok((iter.as_str(), c.to_ascii_lowercase()))
-                }
-                _ => {
-                    IResult::Err(nom::Err::Error(nom::error::Error::new(s, ErrorKind::Fail)))
-                }
+        Some(c) => match c {
+            '_' | 'a'..='z' | 'A'..='Z' | '0'..='9' | '-' => {
+                Ok((iter.as_str(), c.to_ascii_lowercase()))
             }
-        }
-        None => fail(s)
+            _ => IResult::Err(nom::Err::Error(nom::error::Error::new(s, ErrorKind::Fail))),
+        },
+        None => fail(s),
     }
 }
 
@@ -236,9 +235,9 @@ fn ident_escape(s: &str) -> IResult<&str, char> {
         Some((i, c)) if c.is_hex_digit() => {
             // Option 1: up to 6 hex digits.
             let start_idx = i;
-            let mut end_idx = i+1;
+            let mut end_idx = i + 1;
             while let Some((nexti, nextc)) = chars.next() {
-                if nextc.is_hex_digit() && nexti-start_idx < 6 {
+                if nextc.is_hex_digit() && nexti - start_idx < 6 {
                     continue;
                 } else {
                     end_idx = nexti;
@@ -256,15 +255,11 @@ fn ident_escape(s: &str) -> IResult<&str, char> {
 }
 
 fn nmstart(text: &str) -> IResult<&str, char> {
-    alt((
-      nmstart_char,
-      ident_escape))(text)
+    alt((nmstart_char, ident_escape))(text)
 }
 
 fn nmchar(text: &str) -> IResult<&str, char> {
-    alt((
-        nmchar_char,
-        ident_escape))(text)
+    alt((nmchar_char, ident_escape))(text)
 }
 
 fn parse_ident(text: &str) -> IResult<&str, String> {
@@ -291,8 +286,7 @@ fn parse_identstring(text: &str) -> IResult<&str, String> {
 }
 
 fn parse_property_name(text: &str) -> IResult<&str, PropertyName> {
-    parse_ident(text)
-        .map(|(r, s)| (r, PropertyName(s)))
+    parse_ident(text).map(|(r, s)| (r, PropertyName(s)))
 }
 
 // For now ignore whitespace
@@ -301,23 +295,18 @@ fn parse_token(text: &str) -> IResult<&str, Token> {
     let mut chars = rest.chars();
     match chars.next() {
         None => fail(rest),
-        Some('"') |
-        Some('\'') => parse_string_token(rest),
-        Some('#') => {
-            match parse_identstring(&rest[1..]) {
-                Ok((rest, id)) => Ok((rest, Token::Hash(id.into()))),
-                Err(_) => Ok((rest, Token::Delim('#'))),
-            }
-        }
+        Some('"') | Some('\'') => parse_string_token(rest),
+        Some('#') => match parse_identstring(&rest[1..]) {
+            Ok((rest, id)) => Ok((rest, Token::Hash(id.into()))),
+            Err(_) => Ok((rest, Token::Delim('#'))),
+        },
         Some(';') => Ok((&rest[1..], Token::Semicolon)),
         Some('(') => Ok((&rest[1..], Token::OpenRound)),
         Some(')') => Ok((&rest[1..], Token::CloseRound)),
-        Some('+') => {
-            match parse_numeric_token(&rest[1..]) {
-                Ok(result) => Ok(result),
-                Err(_) => Ok((&rest[1..], Token::Delim('+'))),
-            }
-        }
+        Some('+') => match parse_numeric_token(&rest[1..]) {
+            Ok(result) => Ok(result),
+            Err(_) => Ok((&rest[1..], Token::Delim('+'))),
+        },
         Some(',') => Ok((&rest[1..], Token::Comma)),
         Some('-') => {
             if let Ok((rest_n, tok)) = parse_numeric_token(rest) {
@@ -363,9 +352,7 @@ fn parse_token(text: &str) -> IResult<&str, Token> {
         Some('}') => Ok((&rest[1..], Token::CloseBrace)),
         Some(c) if is_ident_start(c) => parse_ident_like(rest),
         Some(c) if is_digit(c) => parse_numeric_token(rest),
-        Some('!') => {
-            Ok((&rest[1..], Token::Delim('!')))
-        }
+        Some('!') => Ok((&rest[1..], Token::Delim('!'))),
         Some(c) => {
             let num_bytes = c.len_utf8();
             Ok((&rest[num_bytes..], Token::Delim(c)))
@@ -385,19 +372,19 @@ fn parse_token_not_semicolon(text: &str) -> IResult<&str, Token> {
 fn parse_value(text: &str) -> IResult<&str, RawValue> {
     let (rest, mut tokens) = many0(parse_token_not_semicolon)(text)?;
     let mut important = false;
-    if tokens.len() >= 2 &&
-        &tokens[tokens.len() - 2..] == &[Token::Delim('!'), Token::Ident("important".into())] {
+    if tokens.len() >= 2
+        && &tokens[tokens.len() - 2..] == &[Token::Delim('!'), Token::Ident("important".into())]
+    {
         tokens.pop();
         tokens.pop();
         important = true;
     }
-    Ok((rest, RawValue {
-        tokens,
-        important,
-    }))
+    Ok((rest, RawValue { tokens, important }))
 }
 
-pub(crate) fn parse_color_attribute(text: &str) -> Result<Colour, nom::Err<nom::error::Error<&'static str>>> {
+pub(crate) fn parse_color_attribute(
+    text: &str,
+) -> Result<Colour, nom::Err<nom::error::Error<&'static str>>> {
     let (_rest, value) = parse_value(text).map_err(|_| empty_fail())?;
     parse_color(&value)
 }
@@ -405,17 +392,17 @@ pub(crate) fn parse_color_attribute(text: &str) -> Result<Colour, nom::Err<nom::
 #[derive(Copy, Clone, PartialEq, Eq, Debug)]
 pub enum Importance {
     Default,
-    Important
+    Important,
 }
 
 pub fn parse_declaration(text: &str) -> IResult<&str, Option<Declaration>> {
-    let (rest, (prop, _ws1, _colon, _ws2, value)) =
-        tuple((
-            parse_property_name,
-            skip_optional_whitespace,
-            tag(":"),
-            skip_optional_whitespace,
-            parse_value))(text)?;
+    let (rest, (prop, _ws1, _colon, _ws2, value)) = tuple((
+        parse_property_name,
+        skip_optional_whitespace,
+        tag(":"),
+        skip_optional_whitespace,
+        parse_value,
+    ))(text)?;
     let decl = match prop.0.as_str() {
         "background-color" => {
             let value = parse_color(&value)?;
@@ -447,13 +434,20 @@ pub fn parse_declaration(text: &str) -> IResult<&str, Option<Declaration>> {
         }
         _ => Decl::Unknown {
             name: prop,
-//            value: /*value*/"".into(),
-        }
+            //            value: /*value*/"".into(),
+        },
     };
-    Ok((rest, Some(Declaration {
-        data: decl,
-        important: if value.important { Importance::Important } else { Importance::Default },
-    })))
+    Ok((
+        rest,
+        Some(Declaration {
+            data: decl,
+            important: if value.important {
+                Importance::Important
+            } else {
+                Importance::Default
+            },
+        }),
+    ))
 }
 
 fn empty_fail() -> nom::Err<nom::error::Error<&'static str>> {
@@ -495,7 +489,7 @@ fn parse_color(value: &RawValue) -> Result<Colour, nom::Err<nom::error::Error<&'
             use Token::*;
             match name.deref() {
                 "rgb" => {
-                    let rgb_args = &value.tokens[1..value.tokens.len()-1];
+                    let rgb_args = &value.tokens[1..value.tokens.len() - 1];
                     match rgb_args {
                         [Number(r), Comma, Number(g), Comma, Number(b)] => {
                             let r = r.parse().map_err(|_e| empty_fail())?;
@@ -508,9 +502,7 @@ fn parse_color(value: &RawValue) -> Result<Colour, nom::Err<nom::error::Error<&'
                         }
                     }
                 }
-                _ => {
-                    return Err(empty_fail())
-                }
+                _ => return Err(empty_fail()),
             }
         }
         [Token::Hash(s)] => {
@@ -540,26 +532,24 @@ fn parse_integer(text: &str) -> IResult<&str, f32> {
 }
 
 fn parse_decimal(text: &str) -> IResult<&str, f32> {
-    let (rest, valstr) = recognize(tuple((
-            digit0,
-            tag("."),
-            digit1)))(text)?;
+    let (rest, valstr) = recognize(tuple((digit0, tag("."), digit1)))(text)?;
     Ok((rest, <f32 as FromStr>::from_str(valstr).unwrap()))
 }
 
 fn parse_number(text: &str) -> IResult<&str, f32> {
     let (rest, _) = skip_optional_whitespace(text)?;
-    let (rest, (sign, val)) =
-        tuple((
-            opt(alt((tag("-"), tag("+")))),
-            alt((
-                parse_integer,
-                parse_decimal))))(rest)?;
-    Ok((rest, match sign {
-        Some("-") => -val,
-        None | Some("+") => val,
-        _ => unreachable!(),
-    }))
+    let (rest, (sign, val)) = tuple((
+        opt(alt((tag("-"), tag("+")))),
+        alt((parse_integer, parse_decimal)),
+    ))(rest)?;
+    Ok((
+        rest,
+        match sign {
+            Some("-") => -val,
+            None | Some("+") => val,
+            _ => unreachable!(),
+        },
+    ))
 }
 
 fn parse_numeric_token(text: &str) -> IResult<&str, Token> {
@@ -594,7 +584,7 @@ fn parse_string_token(text: &str) -> IResult<&str, Token> {
         match chars.next() {
             None => return Ok((&text[text.len()..], Token::String(s.into()))),
             Some((i, c)) if c == end_char => {
-                return Ok((&text[i+1..], Token::String(s.into())));
+                return Ok((&text[i + 1..], Token::String(s.into())));
             }
             Some((i, '\n')) => {
                 return Ok((&text[i..], Token::BadString(s.into())));
@@ -603,7 +593,7 @@ fn parse_string_token(text: &str) -> IResult<&str, Token> {
                 match chars.next() {
                     None => {
                         // Backslash at end
-                        return Ok((&text[i+1..], Token::String(s.into())));
+                        return Ok((&text[i + 1..], Token::String(s.into())));
                     }
                     Some((_i, '\n')) => {} // Eat the newline
                     Some((_i, c)) => {
@@ -698,10 +688,9 @@ fn parse_display(value: &RawValue) -> Result<Display, nom::Err<nom::error::Error
 pub fn parse_rules(text: &str) -> IResult<&str, Vec<Declaration>> {
     separated_list0(
         tuple((tag(";"), skip_optional_whitespace)),
-        parse_declaration)(text)
-        .map(|(rest, v)| (rest, v.into_iter()
-                          .flatten()
-                          .collect()))
+        parse_declaration,
+    )(text)
+    .map(|(rest, v)| (rest, v.into_iter().flatten().collect()))
 }
 
 pub fn parse_class(text: &str) -> IResult<&str, SelectorComponent> {
@@ -723,19 +712,24 @@ pub fn parse_ws(text: &str) -> IResult<&str, ()> {
 
 pub fn parse_simple_selector_component(text: &str) -> IResult<&str, SelectorComponent> {
     alt((
-        map(tuple((skip_optional_whitespace, tag(">"), skip_optional_whitespace)), |_| SelectorComponent::CombChild),
-        map(tuple((skip_optional_whitespace, tag("*"), skip_optional_whitespace)), |_| SelectorComponent::Star),
+        map(
+            tuple((skip_optional_whitespace, tag(">"), skip_optional_whitespace)),
+            |_| SelectorComponent::CombChild,
+        ),
+        map(
+            tuple((skip_optional_whitespace, tag("*"), skip_optional_whitespace)),
+            |_| SelectorComponent::Star,
+        ),
         map(parse_ws, |_| SelectorComponent::CombDescendant),
         parse_class,
         parse_hash,
         map(parse_ident, |name| SelectorComponent::Element(name)),
-        ))(text)
+    ))(text)
 }
 
 pub fn parse_selector_with_element(text: &str) -> IResult<&str, Vec<SelectorComponent>> {
     let (rest, ident) = parse_ident(text)?;
-    let (rest, extras) = many0(
-        parse_simple_selector_component)(rest)?;
+    let (rest, extras) = many0(parse_simple_selector_component)(rest)?;
     let mut result = vec![SelectorComponent::Element(ident.into())];
     result.extend(extras);
     Ok((rest, result))
@@ -746,11 +740,11 @@ pub fn parse_selector_without_element(text: &str) -> IResult<&str, Vec<SelectorC
 }
 
 pub fn parse_selector(text: &str) -> IResult<&str, Selector> {
-    let (rest, mut components) =
-        alt((
-            parse_selector_with_element,
-            parse_selector_without_element,
-            fail))(text)?;
+    let (rest, mut components) = alt((
+        parse_selector_with_element,
+        parse_selector_without_element,
+        fail,
+    ))(text)?;
     // Reverse.  Also remove any leading/trailing CombDescendent, as leading/trailing whitespace
     // shouldn't count as a descendent combinator.
     if let Some(&SelectorComponent::CombDescendant) = components.last() {
@@ -760,32 +754,31 @@ pub fn parse_selector(text: &str) -> IResult<&str, Selector> {
     if let Some(&SelectorComponent::CombDescendant) = components.last() {
         components.pop();
     }
-    Ok((rest, Selector {
-        components
-    }))
+    Ok((rest, Selector { components }))
 }
 
 pub fn parse_ruleset(text: &str) -> IResult<&str, RuleSet> {
     let (rest, _) = skip_optional_whitespace(text)?;
-    let (rest, selectors) = separated_list0(
-        tuple((tag(","), skip_optional_whitespace)),
-        parse_selector)(rest)?;
-    let (rest, (_ws1, _bra, _ws2, declarations, _ws3, _optsemi, _ws4,_ket, _ws5)) =
-        tuple((
-            skip_optional_whitespace,
-            tag("{"),
-            skip_optional_whitespace,
-            parse_rules,
-            skip_optional_whitespace,
-            opt(tag(";")),
-            skip_optional_whitespace,
-            tag("}"),
-            skip_optional_whitespace,
-            ))(rest)?;
-    Ok((rest, RuleSet {
-        selectors,
-        declarations,
-    }))
+    let (rest, selectors) =
+        separated_list0(tuple((tag(","), skip_optional_whitespace)), parse_selector)(rest)?;
+    let (rest, (_ws1, _bra, _ws2, declarations, _ws3, _optsemi, _ws4, _ket, _ws5)) = tuple((
+        skip_optional_whitespace,
+        tag("{"),
+        skip_optional_whitespace,
+        parse_rules,
+        skip_optional_whitespace,
+        opt(tag(";")),
+        skip_optional_whitespace,
+        tag("}"),
+        skip_optional_whitespace,
+    ))(rest)?;
+    Ok((
+        rest,
+        RuleSet {
+            selectors,
+            declarations,
+        },
+    ))
 }
 
 pub fn parse_stylesheet(text: &str) -> IResult<&str, Vec<RuleSet>> {
@@ -794,43 +787,60 @@ pub fn parse_stylesheet(text: &str) -> IResult<&str, Vec<RuleSet>> {
 
 #[cfg(test)]
 mod test {
-    use crate::css::{parser::{Height, LengthUnit, RuleSet, Selector, Importance}, SelectorComponent};
+    use crate::css::{
+        parser::{Height, Importance, LengthUnit, RuleSet, Selector},
+        SelectorComponent,
+    };
 
-    use super::{Decl, Declaration, PropertyName, Colour, Overflow};
+    use super::{Colour, Decl, Declaration, Overflow, PropertyName};
 
     #[test]
     fn test_parse_decl() {
-        assert_eq!(super::parse_declaration("foo:bar;"), Ok((";", Some(Declaration {
-            data: Decl::Unknown {
-                name: PropertyName("foo".into()),
-//                value: "bar".into()
-            },
-            important: Importance::Default,
-        }))));
+        assert_eq!(
+            super::parse_declaration("foo:bar;"),
+            Ok((
+                ";",
+                Some(Declaration {
+                    data: Decl::Unknown {
+                        name: PropertyName("foo".into()),
+                        //                value: "bar".into()
+                    },
+                    important: Importance::Default,
+                })
+            ))
+        );
     }
 
     #[test]
     fn test_parse_overflow() {
         assert_eq!(
             super::parse_rules("overflow: hidden; overflow-y: scroll"),
-            Ok(("",
+            Ok((
+                "",
                 vec![
-                Declaration {
-                    data: Decl::Overflow { value: Overflow::Hidden }, 
-                    important: Importance::Default,
-                },
-                Declaration {
-                    data: Decl::OverflowY { value: Overflow::Scroll },
-                    important: Importance::Default,
-                },
-                ])));
+                    Declaration {
+                        data: Decl::Overflow {
+                            value: Overflow::Hidden
+                        },
+                        important: Importance::Default,
+                    },
+                    Declaration {
+                        data: Decl::OverflowY {
+                            value: Overflow::Scroll
+                        },
+                        important: Importance::Default,
+                    },
+                ]
+            ))
+        );
     }
 
     #[test]
     fn test_parse_color() {
         assert_eq!(
             super::parse_rules("color: #123; color: #abcdef"),
-            Ok(("",
+            Ok((
+                "",
                 vec![
                     Declaration {
                         data: Decl::Color {
@@ -844,14 +854,17 @@ mod test {
                         },
                         important: Importance::Default,
                     },
-                ])));
+                ]
+            ))
+        );
     }
 
     #[test]
     fn test_parse_height() {
         assert_eq!(
             super::parse_rules("height: 0; max-height: 100cm"),
-            Ok(("",
+            Ok((
+                "",
                 vec![
                     Declaration {
                         data: Decl::Height {
@@ -865,63 +878,60 @@ mod test {
                         },
                         important: Importance::Default,
                     },
-                ])));
+                ]
+            ))
+        );
     }
 
     #[test]
     fn test_parse_empty_ss() {
-        assert_eq!(
-            super::parse_stylesheet(""),
-            Ok(("", vec![])));
+        assert_eq!(super::parse_stylesheet(""), Ok(("", vec![])));
     }
 
     #[test]
     fn test_parse_ss_col() {
         assert_eq!(
-            super::parse_stylesheet("
+            super::parse_stylesheet(
+                "
             foo {
                 color: #112233;
             }
-            "),
-            Ok(("", vec![
-                RuleSet {
-                    selectors: vec![
-                        Selector {
-                            components: vec![
-                                SelectorComponent::Element("foo".into()),
-                            ],
+            "
+            ),
+            Ok((
+                "",
+                vec![RuleSet {
+                    selectors: vec![Selector {
+                        components: vec![SelectorComponent::Element("foo".into()),],
+                    },],
+                    declarations: vec![Declaration {
+                        data: Decl::Color {
+                            value: Colour::Rgb(0x11, 0x22, 0x33)
                         },
-                    ],
-                    declarations: vec![
-                        Declaration {
-                            data: Decl::Color {
-                                value: Colour::Rgb(0x11, 0x22, 0x33)
-                            },
-                            important: Importance::Default,
-                        },
-                    ],
-                }
-            ])));
+                        important: Importance::Default,
+                    },],
+                }]
+            ))
+        );
     }
 
     #[test]
     fn test_parse_class() {
         assert_eq!(
-            super::parse_stylesheet("
+            super::parse_stylesheet(
+                "
             .foo {
                 color: #112233;
                 background-color: #332211 !important;
             }
-            "),
-            Ok(("", vec![
-                RuleSet {
-                    selectors: vec![
-                        Selector {
-                            components: vec![
-                                SelectorComponent::Class("foo".into()),
-                            ],
-                        },
-                    ],
+            "
+            ),
+            Ok((
+                "",
+                vec![RuleSet {
+                    selectors: vec![Selector {
+                        components: vec![SelectorComponent::Class("foo".into()),],
+                    },],
                     declarations: vec![
                         Declaration {
                             data: Decl::Color {
@@ -936,27 +946,40 @@ mod test {
                             important: Importance::Important,
                         },
                     ],
-                }
-            ])));
+                }]
+            ))
+        );
     }
 
     #[test]
     fn test_parse_named_colour() {
         assert_eq!(
             super::parse_declaration("color: white"),
-            Ok(("", Some(Declaration {
-                data: Decl::Color { value: Colour::Rgb(0xff, 0xff, 0xff) },
-                important: Importance::Default,
-            }))));
+            Ok((
+                "",
+                Some(Declaration {
+                    data: Decl::Color {
+                        value: Colour::Rgb(0xff, 0xff, 0xff)
+                    },
+                    important: Importance::Default,
+                })
+            ))
+        );
     }
 
     #[test]
     fn test_parse_colour_func() {
         assert_eq!(
             super::parse_declaration("color: rgb(1, 2, 3)"),
-            Ok(("", Some(Declaration {
-                data: Decl::Color { value: Colour::Rgb(1, 2, 3) },
-                important: Importance::Default,
-            }))));
+            Ok((
+                "",
+                Some(Declaration {
+                    data: Decl::Color {
+                        value: Colour::Rgb(1, 2, 3)
+                    },
+                    important: Importance::Default,
+                })
+            ))
+        );
     }
 }
