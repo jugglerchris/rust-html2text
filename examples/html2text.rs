@@ -2,13 +2,13 @@ extern crate argparse;
 extern crate html2text;
 use argparse::{ArgumentParser, Store, StoreOption, StoreTrue};
 use html2text::config::{self, Config};
-use html2text::render::text_renderer::{TextDecorator, TrivialDecorator};
+use html2text::render::{TextDecorator, TrivialDecorator};
 use log::trace;
 use std::io;
 use std::io::Write;
 
 #[cfg(unix)]
-use html2text::render::text_renderer::RichAnnotation;
+use html2text::render::RichAnnotation;
 #[cfg(unix)]
 fn default_colour_map(
     annotations: &[RichAnnotation],

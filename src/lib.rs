@@ -67,10 +67,12 @@ pub mod css;
 pub mod render;
 
 use render::text_renderer::{
-    PlainDecorator, RenderLine, RenderOptions, RichAnnotation, RichDecorator, SubRenderer,
-    TaggedLine, TextDecorator, TextRenderer,
+    RenderLine, RenderOptions, RichAnnotation, SubRenderer, TaggedLine, TextRenderer,
 };
+use render::PlainDecorator;
 use render::Renderer;
+use render::RichDecorator;
+use render::TextDecorator;
 
 use html5ever::driver::ParseOpts;
 use html5ever::parse_document;

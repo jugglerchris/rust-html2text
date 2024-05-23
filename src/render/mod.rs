@@ -4,7 +4,12 @@
 use crate::Colour;
 use crate::Error;
 
-pub mod text_renderer;
+pub(crate) mod text_renderer;
+
+pub use text_renderer::{
+    PlainDecorator, RichAnnotation, RichDecorator, TaggedLine, TaggedLineElement, TextDecorator,
+    TrivialDecorator,
+};
 
 /// A type which is a backend for HTML to text rendering.
 pub(crate) trait Renderer {
