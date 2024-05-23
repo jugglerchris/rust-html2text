@@ -173,12 +173,10 @@ impl<T: Debug + Eq + PartialEq + Clone + Default> TaggedLine<T> {
     fn push_str(&mut self, ts: TaggedString<T>) {
         use self::TaggedLineElement::Str;
 
-        if !self.v.is_empty() {
-            if let Str(ref mut ts_prev) = self.v.last_mut().unwrap() {
-                if ts_prev.tag == ts.tag {
-                    ts_prev.s.push_str(&ts.s);
-                    return;
-                }
+        if let Some(Str(ts_prev)) = self.v.last_mut() {
+            if ts_prev.tag == ts.tag {
+                ts_prev.s.push_str(&ts.s);
+                return;
             }
         }
         self.v.push(Str(ts));
@@ -206,12 +204,10 @@ impl<T: Debug + Eq + PartialEq + Clone + Default> TaggedLine<T> {
     fn push_char(&mut self, c: char, tag: &T) {
         use self::TaggedLineElement::Str;
 
-        if !self.v.is_empty() {
-            if let Str(ref mut ts_prev) = self.v.last_mut().unwrap() {
-                if ts_prev.tag == *tag {
-                    ts_prev.s.push(c);
-                    return;
-                }
+        if let Some(Str(ts_prev)) = self.v.last_mut() {
+            if ts_prev.tag == *tag {
+                ts_prev.s.push(c);
+                return;
             }
         }
         let mut s = String::new();
