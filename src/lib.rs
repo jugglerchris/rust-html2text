@@ -2336,8 +2336,7 @@ fn parse_with_context(mut input: impl io::Read, context: &mut HtmlContext) -> Re
     };
     let dom = parse_document(RcDom::default(), opts)
         .from_utf8()
-        .read_from(&mut input)
-        .unwrap();
+        .read_from(&mut input)?;
     let render_tree =
         dom_to_render_tree_with_context(dom.document.clone(), &mut Discard {}, context)?
             .ok_or(Error::Fail)?;
