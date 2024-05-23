@@ -954,6 +954,24 @@ impl Default for RenderOptions {
     }
 }
 
+fn get_wrapping_or_insert<'w, D: TextDecorator>(
+    wrapping: &'w mut Option<WrappedBlock<Vec<D::Annotation>>>,
+    options: &RenderOptions,
+    width: usize,
+) -> &'w mut WrappedBlock<Vec<D::Annotation>> {
+    wrapping.get_or_insert_with(|| {
+        let wwidth = match options.wrap_width {
+            Some(ww) => ww.min(width),
+            None => width,
+        };
+        WrappedBlock::new(
+            wwidth,
+            options.pad_block_width,
+            options.allow_width_overflow,
+        )
+    })
+}
+
 impl<D: TextDecorator> SubRenderer<D> {
     /// Render links as lines
     pub fn finalise(&mut self, links: Vec<String>) -> Vec<TaggedLine<D::Annotation>> {
@@ -974,27 +992,6 @@ impl<D: TextDecorator> SubRenderer<D> {
             pre_depth: 0,
             text_filter_stack: Vec::new(),
         }
-    }
-
-    fn ensure_wrapping_exists(&mut self) {
-        if self.wrapping.is_none() {
-            let wwidth = match self.options.wrap_width {
-                Some(ww) => ww.min(self.width),
-                None => self.width,
-            };
-            self.wrapping = Some(WrappedBlock::new(
-                wwidth,
-                self.options.pad_block_width,
-                self.options.allow_width_overflow,
-            ));
-        }
-    }
-
-    /// Get the current line wrapping context (and create if
-    /// needed).
-    fn current_text(&mut self) -> &mut WrappedBlock<Vec<D::Annotation>> {
-        self.ensure_wrapping_exists();
-        self.wrapping.as_mut().unwrap()
     }
 
     /// Add a prerendered (multiline) string with the current annotations.
@@ -1226,8 +1223,6 @@ impl<D: TextDecorator> Renderer for SubRenderer<D> {
         if self.at_block_end {
             self.start_block()?;
         }
-        // ensure wrapping is set
-        let _ = self.current_text();
         let mut s = None;
         // Do any filtering of the text
         for filter in &self.text_filter_stack {
@@ -1238,20 +1233,15 @@ impl<D: TextDecorator> Renderer for SubRenderer<D> {
         }
         let filtered_text = s.as_deref().unwrap_or(text);
         if self.pre_depth == 0 {
-            self.wrapping
-                .as_mut()
-                .unwrap()
+            get_wrapping_or_insert::<D>(&mut self.wrapping, &self.options, self.width)
                 .add_text(filtered_text, &self.ann_stack)?;
         } else {
             let mut tag_first = self.ann_stack.clone();
             let mut tag_cont = self.ann_stack.clone();
             tag_first.push(self.decorator.decorate_preformat_first());
             tag_cont.push(self.decorator.decorate_preformat_cont());
-            self.wrapping.as_mut().unwrap().add_preformatted_text(
-                filtered_text,
-                &tag_first,
-                &tag_cont,
-            )?;
+            get_wrapping_or_insert::<D>(&mut self.wrapping, &self.options, self.width)
+                .add_preformatted_text(filtered_text, &tag_first, &tag_cont)?;
         }
         Ok(())
     }
@@ -1591,10 +1581,7 @@ impl<D: TextDecorator> Renderer for SubRenderer<D> {
     fn record_frag_start(&mut self, fragname: &str) {
         use self::TaggedLineElement::FragmentStart;
 
-        self.ensure_wrapping_exists();
-        self.wrapping
-            .as_mut()
-            .unwrap()
+        get_wrapping_or_insert::<D>(&mut self.wrapping, &self.options, self.width)
             .add_element(FragmentStart(fragname.to_string()));
     }
 
