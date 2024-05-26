@@ -31,7 +31,9 @@ Possible log types:
   let text = html2text::config::plain()
       .render_to_string(html2text::parse(html)?)?
   ```
-
+- [changed] Some names moved out of `text_renderer` module, so some `use` statements
+  may need updating.
+- [changed] Replace some `unwrap()` with improved patterns (thanks sftse).
 - [changed] Updated some dependencies
 
 ### 0.12.5
