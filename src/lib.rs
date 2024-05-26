@@ -65,10 +65,9 @@ pub mod css;
 pub mod render;
 
 use render::text_renderer::{
-    RenderLine, RenderOptions, RichAnnotation, RichDecorator, SubRenderer, TaggedLine,
-    TextDecorator, TextRenderer,
+    RenderLine, RenderOptions, RichAnnotation, SubRenderer, TaggedLine, TextRenderer,
 };
-use render::Renderer;
+use render::{Renderer, RichDecorator, TextDecorator};
 
 use html5ever::driver::ParseOpts;
 use html5ever::parse_document;
@@ -927,34 +926,26 @@ where
         to_process: std::vec::IntoIter<N>,
     }
 
-    let mut pending_stack = vec![PendingNode {
+    let mut last = PendingNode {
         // We only expect one child, which we'll just return.
         construct: Box::new(|_, mut cs| Ok(cs.pop())),
         prefn: None,
         postfn: None,
         children: Vec::new(),
         to_process: vec![top].into_iter(),
-    }];
+    };
+    let mut pending_stack = Vec::new();
     loop {
         // Get the next child node to process
-        let next_node = pending_stack.last_mut().unwrap().to_process.next();
-        if let Some(h) = next_node {
-            pending_stack
-                .last_mut()
-                .unwrap()
-                .prefn
+        if let Some(h) = last.to_process.next() {
+            last.prefn
                 .as_ref()
                 .map(|ref f| f(context, &h))
                 .transpose()?;
             match process_node(context, h)? {
                 TreeMapResult::Finished(result) => {
-                    pending_stack
-                        .last_mut()
-                        .unwrap()
-                        .postfn
-                        .as_ref()
-                        .map(|ref f| f(context, &result));
-                    pending_stack.last_mut().unwrap().children.push(result);
+                    last.postfn.as_ref().map(|ref f| f(context, &result));
+                    last.children.push(result);
                 }
                 TreeMapResult::PendingChildren {
                     children,
@@ -962,32 +953,35 @@ where
                     prefn,
                     postfn,
                 } => {
-                    pending_stack.push(PendingNode {
+                    pending_stack.push(last);
+                    last = PendingNode {
                         construct: cons,
                         prefn,
                         postfn,
                         children: Vec::new(),
                         to_process: children.into_iter(),
-                    });
+                    };
                 }
                 TreeMapResult::Nothing => {}
             };
         } else {
             // No more children, so finally construct the parent.
-            let completed = pending_stack.pop().unwrap();
-            let reduced = (completed.construct)(context, completed.children)?;
+            let reduced = (last.construct)(context, last.children)?;
+            let parent = pending_stack.pop();
             if let Some(node) = reduced {
-                if let Some(parent) = pending_stack.last_mut() {
+                if let Some(mut parent) = parent {
                     parent.postfn.as_ref().map(|ref f| f(context, &node));
                     parent.children.push(node);
+                    last = parent;
                 } else {
                     // Finished the whole stack!
                     break Ok(Some(node));
                 }
             } else {
                 /* Finished the stack, and have nothing */
-                if pending_stack.is_empty() {
-                    break Ok(None);
+                match parent {
+                    Some(parent) => last = parent,
+                    None => break Ok(None),
                 }
             }
         }
@@ -2257,8 +2251,7 @@ fn parse_with_context(mut input: impl io::Read, context: &mut HtmlContext) -> Re
     };
     let dom = parse_document(RcDom::default(), opts)
         .from_utf8()
-        .read_from(&mut input)
-        .unwrap();
+        .read_from(&mut input)?;
     let render_tree =
         dom_to_render_tree_with_context(dom.document.clone(), &mut Discard {}, context)?
             .ok_or(Error::Fail)?;

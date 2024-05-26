@@ -10,7 +10,7 @@ mod top {
     use ::std;
     use ::termion;
     use argparse::{ArgumentParser, Store};
-    use html2text::render::text_renderer::{RichAnnotation, TaggedLine, TaggedLineElement};
+    use html2text::render::{RichAnnotation, TaggedLine, TaggedLineElement};
     use std::collections::HashMap;
     use std::io::{self, Write};
     use termion::cursor::Goto;
