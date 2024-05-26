@@ -47,8 +47,6 @@
 //! read keys from stdin.
 //!
 
-#![cfg_attr(feature = "clippy", feature(plugin))]
-#![cfg_attr(feature = "clippy", plugin(clippy))]
 #![deny(missing_docs)]
 
 // Check code in README.md
@@ -69,10 +67,7 @@ pub mod render;
 use render::text_renderer::{
     RenderLine, RenderOptions, RichAnnotation, SubRenderer, TaggedLine, TextRenderer,
 };
-use render::PlainDecorator;
-use render::Renderer;
-use render::RichDecorator;
-use render::TextDecorator;
+use render::{Renderer, RichDecorator, TextDecorator};
 
 use html5ever::driver::ParseOpts;
 use html5ever::parse_document;
@@ -88,11 +83,6 @@ use std::cell::Cell;
 use std::cmp::{max, min};
 use unicode_width::UnicodeWidthStr;
 
-#[cfg(feature = "css")]
-use lightningcss::values::color::CssColor;
-#[cfg(feature = "css")]
-use std::convert::TryFrom;
-
 use std::io;
 use std::io::Write;
 use std::iter::{once, repeat};
@@ -106,22 +96,6 @@ pub struct Colour {
     pub g: u8,
     /// Blue value
     pub b: u8,
-}
-
-#[cfg(feature = "css")]
-impl TryFrom<&CssColor> for Colour {
-    type Error = ();
-
-    fn try_from(value: &CssColor) -> std::result::Result<Self, Self::Error> {
-        match value {
-            CssColor::RGBA(rgba) => Ok(Colour {
-                r: rgba.red,
-                g: rgba.green,
-                b: rgba.blue,
-            }),
-            _ => Err(()),
-        }
-    }
 }
 
 /// Errors from reading or rendering HTML
@@ -224,16 +198,6 @@ struct RenderTableCell {
 }
 
 impl RenderTableCell {
-    /// Render this cell to a renderer.
-    fn render<T: Write, D: TextDecorator>(
-        &mut self,
-        _renderer: &mut TextRenderer<D>,
-        _err_out: &mut T,
-    ) {
-        unimplemented!()
-        //render_tree_children_to_string(builder, &mut self.content, err_out)
-    }
-
     /// Calculate or return the estimate size of the cell
     fn get_size_estimate(&self) -> SizeEstimate {
         if self.size_estimate.get().is_none() {
@@ -268,18 +232,6 @@ impl RenderTableRow {
     /// Takes into account colspan.
     fn num_cells(&self) -> usize {
         self.cells.iter().map(|cell| cell.colspan.max(1)).sum()
-    }
-    /// Return an iterator over (column, &cell)s, which
-    /// takes into account colspan.
-    fn cell_columns(&mut self) -> Vec<(usize, &mut RenderTableCell)> {
-        let mut result = Vec::new();
-        let mut colno = 0;
-        for cell in &mut self.cells {
-            let colspan = cell.colspan;
-            result.push((colno, cell));
-            colno += colspan;
-        }
-        result
     }
 
     /// Return the contained cells as RenderNodes, annotated with their
@@ -330,10 +282,6 @@ impl RenderTable {
         self.rows.iter()
     }
 
-    /// Return an iterator over the rows.
-    fn rows_mut(&mut self) -> std::slice::IterMut<RenderTableRow> {
-        self.rows.iter_mut()
-    }
     /// Consume this and return a `Vec<RenderNode>` containing the children;
     /// the children know the column sizes required.
     fn into_rows(self, col_sizes: Vec<usize>, vert: bool) -> Vec<RenderNode> {
@@ -382,11 +330,6 @@ impl RenderTable {
         };
         self.size_estimate.set(Some(result));
         result
-    }
-
-    /// Calculate and store (or return stored value) of estimated size
-    fn get_size_estimate(&self) -> SizeEstimate {
-        self.size_estimate.get().unwrap()
     }
 }
 
@@ -445,8 +388,10 @@ enum RenderNodeInfo {
     /// Start of a named HTML fragment
     FragStart(String),
     /// A region with a foreground colour
+    #[allow(unused)]
     Coloured(Colour, Vec<RenderNode>),
     /// A region with a background colour
+    #[allow(unused)]
     BgColoured(Colour, Vec<RenderNode>),
     /// A list item
     ListItem(Vec<RenderNode>),
@@ -759,9 +704,9 @@ fn desc_list_children_to_render_nodes<T: Write>(
 }
 
 /// Convert a table into a RenderNode
-fn table_to_render_tree<'a, 'b, T: Write>(
+fn table_to_render_tree<'a, T: Write>(
     handle: Handle,
-    _err_out: &'b mut T,
+    _err_out: &mut T,
 ) -> TreeMapResult<'a, HtmlContext, Handle, RenderNode> {
     pending(handle, |_, rowset| {
         let mut rows = vec![];
@@ -783,9 +728,9 @@ fn table_to_render_tree<'a, 'b, T: Write>(
 }
 
 /// Add rows from a thead or tbody.
-fn tbody_to_render_tree<'a, 'b, T: Write>(
+fn tbody_to_render_tree<'a, T: Write>(
     handle: Handle,
-    _err_out: &'b mut T,
+    _err_out: &mut T,
 ) -> TreeMapResult<'a, HtmlContext, Handle, RenderNode> {
     pending_noempty(handle, |_, rowchildren| {
         let mut rows = rowchildren
@@ -832,9 +777,9 @@ fn tbody_to_render_tree<'a, 'b, T: Write>(
 }
 
 /// Convert a table row to a RenderTableRow
-fn tr_to_render_tree<'a, 'b, T: Write>(
+fn tr_to_render_tree<'a, T: Write>(
     handle: Handle,
-    _err_out: &'b mut T,
+    _err_out: &mut T,
 ) -> TreeMapResult<'a, HtmlContext, Handle, RenderNode> {
     pending(handle, |_, cellnodes| {
         let cells = cellnodes
@@ -859,9 +804,9 @@ fn tr_to_render_tree<'a, 'b, T: Write>(
 }
 
 /// Convert a single table cell to a render node.
-fn td_to_render_tree<'a, 'b, T: Write>(
+fn td_to_render_tree<'a, T: Write>(
     handle: Handle,
-    _err_out: &'b mut T,
+    _err_out: &mut T,
 ) -> TreeMapResult<'a, HtmlContext, Handle, RenderNode> {
     let mut colspan = 1;
     if let Element { ref attrs, .. } = handle.data {
@@ -1079,11 +1024,6 @@ fn dom_to_render_tree_with_context<T: Write>(
     result
 }
 
-/// Convert a DOM tree or subtree into a render tree.
-fn dom_to_render_tree<T: Write>(handle: Handle, err_out: &mut T) -> Result<Option<RenderNode>> {
-    dom_to_render_tree_with_context(handle, err_out, &mut Default::default())
-}
-
 fn pending<'a, F>(handle: Handle, f: F) -> TreeMapResult<'a, HtmlContext, Handle, RenderNode>
 where
     for<'r> F:
@@ -1180,11 +1120,11 @@ fn prepend_marker(prefix: RenderNode, mut orig: RenderNode) -> RenderNode {
     orig
 }
 
-fn process_dom_node<'a, 'b, 'c, T: Write>(
+fn process_dom_node<'a, T: Write>(
     handle: Handle,
-    err_out: &'b mut T,
+    err_out: &mut T,
     #[allow(unused)] // Used with css feature
-    context: &'c mut HtmlContext,
+    context: &mut HtmlContext,
 ) -> Result<TreeMapResult<'a, HtmlContext, Handle, RenderNode>> {
     use RenderNodeInfo::*;
     use TreeMapResult::*;
@@ -1212,15 +1152,11 @@ fn process_dom_node<'a, 'b, 'c, T: Write>(
                     .matching_rules(&handle, context.use_doc_css)
                 {
                     match style {
-                        css::Style::Colour(col) => {
-                            if let Ok(colour) = Colour::try_from(&col) {
-                                css_colour = Some(colour);
-                            }
+                        css::Style::Colour(colour) => {
+                            css_colour = Some(colour);
                         }
-                        css::Style::BgColour(col) => {
-                            if let Ok(colour) = Colour::try_from(&col) {
-                                css_bgcolour = Some(colour);
-                            }
+                        css::Style::BgColour(colour) => {
+                            css_bgcolour = Some(colour);
                         }
                         css::Style::DisplayNone => {
                             return Ok(Nothing);
@@ -1415,14 +1351,12 @@ fn process_dom_node<'a, 'b, 'c, T: Write>(
 
             #[cfg(feature = "css")]
             let result = if let Some(colour) = css_colour {
-                let colour = colour.into();
                 result.wrap_render_nodes(move |children| Coloured(colour, children))
             } else {
                 result
             };
             #[cfg(feature = "css")]
             let result = if let Some(colour) = css_bgcolour {
-                let colour = colour.into();
                 result.wrap_render_nodes(move |children| BgColoured(colour, children))
             } else {
                 result
@@ -1487,10 +1421,10 @@ fn pending2<
     }
 }
 
-fn do_render_node<'b, T: Write, D: TextDecorator>(
+fn do_render_node<T: Write, D: TextDecorator>(
     renderer: &mut TextRenderer<D>,
     tree: RenderNode,
-    err_out: &'b mut T,
+    err_out: &mut T,
 ) -> Result<TreeMapResult<'static, TextRenderer<D>, RenderNode, Option<SubRenderer<D>>>> {
     html_trace!("do_render_node({:?}", tree);
     use RenderNodeInfo::*;
@@ -1726,7 +1660,7 @@ fn do_render_node<'b, T: Write, D: TextDecorator>(
         Sup(children) => {
             // Special case for digit-only superscripts - use superscript
             // characters.
-            fn sup_digits(children: &Vec<RenderNode>) -> Option<String> {
+            fn sup_digits(children: &[RenderNode]) -> Option<String> {
                 if children.len() != 1 {
                     return None;
                 }
@@ -2266,13 +2200,13 @@ impl RenderTree {
         if width == 0 {
             return Err(Error::TooNarrow);
         }
-        let mut render_options = RenderOptions::default();
-        render_options.wrap_width = context.max_wrap_width;
-        render_options.pad_block_width = context.pad_block_width;
-        render_options.min_wrap_width = context.min_wrap_width;
-        render_options.allow_width_overflow = context.allow_width_overflow;
-        render_options.raw = context.raw;
-        render_options.draw_borders = context.draw_borders;
+        let render_options = RenderOptions {
+            wrap_width: context.max_wrap_width,
+            pad_block_width: context.pad_block_width,
+            allow_width_overflow: context.allow_width_overflow,
+            raw: context.raw,
+            draw_borders: context.draw_borders,
+        };
         let test_decorator = decorator.make_subblock_decorator();
         let builder = SubRenderer::new(width, render_options, decorator);
         let builder =
@@ -2283,22 +2217,6 @@ impl RenderTree {
     /// Render this document using the given `decorator` and wrap it to `width` columns.
     fn render<D: TextDecorator>(self, width: usize, decorator: D) -> Result<RenderedText<D>> {
         self.render_with_context(&mut Default::default(), width, decorator)
-    }
-
-    /// Render this document as plain text using the [`PlainDecorator`][] and wrap it to `width`
-    /// columns.
-    ///
-    /// [`PlainDecorator`]: render/text_renderer/struct.PlainDecorator.html
-    fn render_plain(self, width: usize) -> Result<RenderedText<PlainDecorator>> {
-        self.render(width, PlainDecorator::new())
-    }
-
-    /// Render this document as rich text using the [`RichDecorator`][] and wrap it to `width`
-    /// columns.
-    ///
-    /// [`RichDecorator`]: render/text_renderer/struct.RichDecorator.html
-    fn render_rich(self, width: usize) -> Result<RenderedText<RichDecorator>> {
-        self.render(width, RichDecorator::new())
     }
 }
 

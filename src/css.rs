@@ -1,40 +1,30 @@
 //! Some basic CSS support.
-use std::convert::TryFrom;
 use std::io::Write;
 use std::ops::Deref;
 
-use lightningcss::{
-    declaration::DeclarationBlock,
-    properties::{
-        display::{self, DisplayKeyword},
-        overflow::{Overflow, OverflowKeyword},
-        Property,
-    },
-    rules::CssRule,
-    stylesheet::{ParserOptions, StyleAttribute, StyleSheet},
-    traits::Parse,
-    values::color::CssColor,
-};
+mod parser;
 
 use crate::{
+    css::parser::parse_rules,
     markup5ever_rcdom::{
         Handle,
         NodeData::{self, Comment, Document, Element},
     },
-    tree_map_reduce, Result, TreeMapResult,
+    tree_map_reduce, Colour, Result, TreeMapResult,
 };
 
-#[derive(Debug, Clone)]
-enum SelectorComponent {
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) enum SelectorComponent {
     Class(String),
     Element(String),
+    Hash(String),
     Star,
     CombChild,
     CombDescendant,
 }
 
-#[derive(Debug, Clone)]
-struct Selector {
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) struct Selector {
     // List of components, right first so we match from the leaf.
     components: Vec<SelectorComponent>,
 }
@@ -42,16 +32,14 @@ struct Selector {
 impl Selector {
     fn do_matches(comps: &[SelectorComponent], node: &Handle) -> bool {
         match comps.first() {
-            None => return true,
+            None => true,
             Some(comp) => match comp {
                 SelectorComponent::Class(class) => match &node.data {
                     Document
                     | NodeData::Doctype { .. }
                     | NodeData::Text { .. }
                     | Comment { .. }
-                    | NodeData::ProcessingInstruction { .. } => {
-                        return false;
-                    }
+                    | NodeData::ProcessingInstruction { .. } => false,
                     Element { attrs, .. } => {
                         let attrs = attrs.borrow();
                         for attr in attrs.iter() {
@@ -63,35 +51,42 @@ impl Selector {
                                 }
                             }
                         }
-                        return false;
+                        false
                     }
                 },
+                SelectorComponent::Hash(hash) => {
+                    if let Element { attrs, .. } = &node.data {
+                        let attrs = attrs.borrow();
+                        for attr in attrs.iter() {
+                            if &attr.name.local == "id" && &*attr.value == hash {
+                                return Self::do_matches(&comps[1..], node);
+                            }
+                        }
+                    }
+                    false
+                }
                 SelectorComponent::Element(name) => match &node.data {
                     Element { name: eltname, .. } => {
                         if name == eltname.expanded().local.deref() {
-                            return Self::do_matches(&comps[1..], node);
+                            Self::do_matches(&comps[1..], node)
                         } else {
-                            return false;
+                            false
                         }
                     }
-                    _ => {
-                        return false;
-                    }
+                    _ => false,
                 },
-                SelectorComponent::Star => {
-                    return Self::do_matches(&comps[1..], node);
-                }
+                SelectorComponent::Star => Self::do_matches(&comps[1..], node),
                 SelectorComponent::CombChild => {
                     if let Some(parent) = node.parent.take() {
                         let parent_handle = parent.upgrade();
                         node.parent.set(Some(parent));
                         if let Some(ph) = parent_handle {
-                            return Self::do_matches(&comps[1..], &ph);
+                            Self::do_matches(&comps[1..], &ph)
                         } else {
-                            return false;
+                            false
                         }
                     } else {
-                        return false;
+                        false
                     }
                 }
                 SelectorComponent::CombDescendant => {
@@ -99,13 +94,12 @@ impl Selector {
                         let parent_handle = parent.upgrade();
                         node.parent.set(Some(parent));
                         if let Some(ph) = parent_handle {
-                            return Self::do_matches(&comps[1..], &ph)
-                                || Self::do_matches(comps, &ph);
+                            Self::do_matches(&comps[1..], &ph) || Self::do_matches(comps, &ph)
                         } else {
-                            return false;
+                            false
                         }
                     } else {
-                        return false;
+                        false
                     }
                 }
             },
@@ -116,63 +110,10 @@ impl Selector {
     }
 }
 
-impl<'r, 'i> TryFrom<&'r lightningcss::selector::Selector<'i>> for Selector {
-    type Error = ();
-
-    fn try_from(
-        selector: &'r lightningcss::selector::Selector<'i>,
-    ) -> std::result::Result<Self, Self::Error> {
-        let mut components = Vec::new();
-
-        use lightningcss::selector::Combinator;
-        use lightningcss::selector::Component;
-
-        let mut si = selector.iter();
-        loop {
-            while let Some(item) = si.next() {
-                match item {
-                    Component::Class(id) => {
-                        components.push(SelectorComponent::Class(String::from(id.deref())));
-                    }
-                    Component::LocalName(name) => {
-                        components.push(SelectorComponent::Element(String::from(
-                            name.lower_name.deref(),
-                        )));
-                    }
-                    Component::ExplicitUniversalType => {
-                        components.push(SelectorComponent::Star);
-                    }
-                    _ => {
-                        html_trace!("Unknown component {:?}", item);
-                        return Err(());
-                    }
-                }
-            }
-            if let Some(comb) = si.next_sequence() {
-                match comb {
-                    Combinator::Child => {
-                        components.push(SelectorComponent::CombChild);
-                    }
-                    Combinator::Descendant => {
-                        components.push(SelectorComponent::CombDescendant);
-                    }
-                    _ => {
-                        html_trace!("Unknown combinator {:?}", comb);
-                        return Err(());
-                    }
-                }
-            } else {
-                break;
-            }
-        }
-        Ok(Selector { components })
-    }
-}
-
 #[derive(Debug, Clone)]
 pub(crate) enum Style {
-    Colour(CssColor),
-    BgColour(CssColor),
+    Colour(Colour),
+    BgColour(Colour),
     DisplayNone,
 }
 
@@ -184,101 +125,80 @@ struct Ruleset {
 
 /// Stylesheet data which can be used while building the render tree.
 #[derive(Clone, Default, Debug)]
-pub struct StyleData {
+pub(crate) struct StyleData {
     rules: Vec<Ruleset>,
 }
 
 pub(crate) fn parse_style_attribute(text: &str) -> Result<Vec<Style>> {
     html_trace_quiet!("Parsing inline style: {text}");
-    let sattr = StyleAttribute::parse(text, ParserOptions::default())
-        .map_err(|_| crate::Error::CssParseError)?;
+    let (_rest, decls) = parse_rules(text).map_err(|_| crate::Error::CssParseError)?;
 
-    let styles = styles_from_properties(&sattr.declarations);
+    let styles = styles_from_properties2(&decls);
     html_trace_quiet!("Parsed inline style: {:?}", styles);
     Ok(styles)
 }
 
-fn is_transparent(color: &CssColor) -> bool {
-    match color {
-        CssColor::CurrentColor => false,
-        CssColor::RGBA(rgba) => rgba.alpha == 0,
-        CssColor::LAB(_) => false,
-        CssColor::Predefined(_) => false,
-        CssColor::Float(_) => false,
-        CssColor::LightDark(_, _) => false,
-        CssColor::System(_) => false,
-    }
-}
-
-fn styles_from_properties(decls: &DeclarationBlock<'_>) -> Vec<Style> {
+fn styles_from_properties2(decls: &[parser::Declaration]) -> Vec<Style> {
     let mut styles = Vec::new();
-    html_trace_quiet!("styles:from_properties: {decls:?}");
+    html_trace_quiet!("styles:from_properties2: {decls:?}");
     let mut overflow_hidden = false;
     let mut height_zero = false;
-    for decl in decls
-        .declarations
-        .iter()
-        .chain(decls.important_declarations.iter())
-    {
-        html_trace_quiet!("styles:from_properties: {decl:?}");
-        match decl {
-            Property::Color(color) => {
-                if is_transparent(&color) {
-                    continue;
-                }
-                styles.push(Style::Colour(color.clone()));
+    for decl in decls {
+        html_trace_quiet!("styles:from_properties2: {decl:?}");
+        match &decl.data {
+            parser::Decl::Unknown { .. } => {}
+            parser::Decl::Color {
+                value: parser::Colour::Rgb(r, g, b),
+            } => {
+                styles.push(Style::Colour(Colour {
+                    r: *r,
+                    g: *g,
+                    b: *b,
+                }));
             }
-            Property::Background(bginfo) => {
-                let color = bginfo.last().unwrap().color.clone();
-                if is_transparent(&color) {
-                    continue;
-                }
-                styles.push(Style::BgColour(color));
+            parser::Decl::BackgroundColor {
+                value: parser::Colour::Rgb(r, g, b),
+            } => {
+                styles.push(Style::BgColour(Colour {
+                    r: *r,
+                    g: *g,
+                    b: *b,
+                }));
             }
-            Property::BackgroundColor(color) => {
-                if is_transparent(&color) {
-                    continue;
-                }
-                styles.push(Style::BgColour(color.clone()));
-            }
-            Property::Height(height) => {
-                use lightningcss::properties::size::Size::*;
-                use lightningcss::values::percentage::DimensionPercentage::*;
-                match height {
-                    LengthPercentage(Dimension(dim)) if dim.to_px() == Some(0.0) => {
+            parser::Decl::Height { value } => match value {
+                parser::Height::Auto => (),
+                parser::Height::Length(l, _) => {
+                    if *l == 0.0 {
                         height_zero = true;
                     }
-                    _ => (),
                 }
-            }
-            Property::MaxHeight(height) => {
-                use lightningcss::properties::size::MaxSize::*;
-                use lightningcss::values::percentage::DimensionPercentage::*;
-                match height {
-                    LengthPercentage(Dimension(dim)) => {
-                        // Treat max-height: 0 the same as display: none.
-                        if Some(0.0) == dim.to_px() {
-                            height_zero = true;
-                        }
+            },
+            parser::Decl::MaxHeight { value } => match value {
+                parser::Height::Auto => (),
+                parser::Height::Length(l, _) => {
+                    if *l == 0.0 {
+                        height_zero = true;
                     }
-                    _ => (),
                 }
+            },
+            parser::Decl::Overflow {
+                value: parser::Overflow::Hidden,
             }
-            Property::OverflowY(OverflowKeyword::Hidden)
-            | Property::Overflow(Overflow {
-                y: OverflowKeyword::Hidden,
-                ..
-            }) => {
+            | parser::Decl::OverflowY {
+                value: parser::Overflow::Hidden,
+            } => {
                 overflow_hidden = true;
             }
-            Property::Display(disp) => {
-                if let display::Display::Keyword(DisplayKeyword::None) = disp {
+            parser::Decl::Overflow { .. } | parser::Decl::OverflowY { .. } => {}
+            parser::Decl::Display { value } => {
+                if let parser::Display::None = value {
                     styles.push(Style::DisplayNone);
                 }
-            }
-            _ => {
-                html_trace_quiet!("CSS: Unhandled property {:?}", decl);
-            }
+            } /*
+              _ => {
+                  html_trace_quiet!("CSS: Unhandled property {:?}", decl);
+              }
+              */
         }
     }
     // If the height is set to zero and overflow hidden, treat as display: none
@@ -292,33 +212,19 @@ impl StyleData {
     /// Add some CSS source to be included.  The source will be parsed
     /// and the relevant and supported features extracted.
     pub fn add_css(&mut self, css: &str) -> Result<()> {
-        let ss = StyleSheet::parse(css, ParserOptions::default())
-            .map_err(|_| crate::Error::CssParseError)?;
+        let (_, ss) = parser::parse_stylesheet(css).map_err(|_| crate::Error::CssParseError)?;
 
-        for rule in &ss.rules.0 {
-            match rule {
-                CssRule::Style(style) => {
-                    let styles = styles_from_properties(&style.declarations);
-                    if !styles.is_empty() {
-                        for selector in &style.selectors.0 {
-                            match Selector::try_from(selector) {
-                                Ok(selector) => {
-                                    let ruleset = Ruleset {
-                                        selector,
-                                        styles: styles.clone(),
-                                    };
-                                    html_trace_quiet!("Adding ruleset {ruleset:?}");
-                                    self.rules.push(ruleset);
-                                }
-                                Err(_) => {
-                                    html_trace!("Ignoring selector {:?}", selector);
-                                    continue;
-                                }
-                            }
-                        }
-                    }
+        for rule in ss {
+            let styles = styles_from_properties2(&rule.declarations);
+            if !styles.is_empty() {
+                for selector in rule.selectors {
+                    let ruleset = Ruleset {
+                        selector,
+                        styles: styles.clone(),
+                    };
+                    html_trace_quiet!("Adding ruleset {ruleset:?}");
+                    self.rules.push(ruleset);
                 }
-                _ => (),
             }
         }
         Ok(())
@@ -346,12 +252,12 @@ impl StyleData {
                         let rules = parse_style_attribute(&attr.value).unwrap_or_default();
                         result.extend(rules);
                     } else if &*attr.name.local == "color" {
-                        if let Ok(colour) = CssColor::parse_string(&*attr.value) {
-                            result.push(Style::Colour(colour));
+                        if let Ok(colour) = parser::parse_color_attribute(&attr.value) {
+                            result.push(Style::Colour(colour.into()));
                         }
                     } else if &*attr.name.local == "bgcolor" {
-                        if let Ok(colour) = CssColor::parse_string(&*attr.value) {
-                            result.push(Style::BgColour(colour));
+                        if let Ok(colour) = parser::parse_color_attribute(&attr.value) {
+                            result.push(Style::BgColour(colour.into()));
                         }
                     }
                 }
@@ -388,9 +294,9 @@ fn combine_vecs(vecs: Vec<Vec<String>>) -> Vec<String> {
     }
 }
 
-fn extract_style_nodes<'a, 'b, T: Write>(
+fn extract_style_nodes<'a, T: Write>(
     handle: Handle,
-    _err_out: &'b mut T,
+    _err_out: &mut T,
 ) -> TreeMapResult<'a, (), Handle, Vec<String>> {
     use TreeMapResult::*;
 
@@ -423,7 +329,7 @@ fn extract_style_nodes<'a, 'b, T: Write>(
 }
 
 /// Extract stylesheet data from document.
-pub fn dom_to_stylesheet<T: Write>(handle: Handle, err_out: &mut T) -> Result<StyleData> {
+pub(crate) fn dom_to_stylesheet<T: Write>(handle: Handle, err_out: &mut T) -> Result<StyleData> {
     let styles = tree_map_reduce(&mut (), handle, |_, handle| {
         Ok(extract_style_nodes(handle, err_out))
     })?;
