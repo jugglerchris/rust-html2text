@@ -687,24 +687,24 @@ pub fn parse_rules(text: &str) -> IResult<&str, Vec<Declaration>> {
     .map(|(rest, v)| (rest, v.into_iter().flatten().collect()))
 }
 
-pub fn parse_class(text: &str) -> IResult<&str, SelectorComponent> {
+fn parse_class(text: &str) -> IResult<&str, SelectorComponent> {
     let (rest, _) = tag(".")(text)?;
     let (rest, classname) = parse_ident(rest)?;
     Ok((rest, SelectorComponent::Class(classname)))
 }
 
-pub fn parse_hash(text: &str) -> IResult<&str, SelectorComponent> {
+fn parse_hash(text: &str) -> IResult<&str, SelectorComponent> {
     let (rest, _) = tag("#")(text)?;
     let (rest, word) = parse_identstring(rest)?;
     Ok((rest, SelectorComponent::Hash(word)))
 }
 
 // Match some (not zero) whitespace
-pub fn parse_ws(text: &str) -> IResult<&str, ()> {
+fn parse_ws(text: &str) -> IResult<&str, ()> {
     map(many1(match_whitespace_item), |_| ())(text)
 }
 
-pub fn parse_simple_selector_component(text: &str) -> IResult<&str, SelectorComponent> {
+fn parse_simple_selector_component(text: &str) -> IResult<&str, SelectorComponent> {
     alt((
         map(
             tuple((skip_optional_whitespace, tag(">"), skip_optional_whitespace)),
@@ -721,7 +721,7 @@ pub fn parse_simple_selector_component(text: &str) -> IResult<&str, SelectorComp
     ))(text)
 }
 
-pub fn parse_selector_with_element(text: &str) -> IResult<&str, Vec<SelectorComponent>> {
+fn parse_selector_with_element(text: &str) -> IResult<&str, Vec<SelectorComponent>> {
     let (rest, ident) = parse_ident(text)?;
     let (rest, extras) = many0(parse_simple_selector_component)(rest)?;
     let mut result = vec![SelectorComponent::Element(ident)];
@@ -729,11 +729,11 @@ pub fn parse_selector_with_element(text: &str) -> IResult<&str, Vec<SelectorComp
     Ok((rest, result))
 }
 
-pub fn parse_selector_without_element(text: &str) -> IResult<&str, Vec<SelectorComponent>> {
+fn parse_selector_without_element(text: &str) -> IResult<&str, Vec<SelectorComponent>> {
     many1(parse_simple_selector_component)(text)
 }
 
-pub fn parse_selector(text: &str) -> IResult<&str, Selector> {
+fn parse_selector(text: &str) -> IResult<&str, Selector> {
     let (rest, mut components) = alt((
         parse_selector_with_element,
         parse_selector_without_element,
@@ -751,7 +751,7 @@ pub fn parse_selector(text: &str) -> IResult<&str, Selector> {
     Ok((rest, Selector { components }))
 }
 
-pub fn parse_ruleset(text: &str) -> IResult<&str, RuleSet> {
+fn parse_ruleset(text: &str) -> IResult<&str, RuleSet> {
     let (rest, _) = skip_optional_whitespace(text)?;
     let (rest, selectors) =
         separated_list0(tuple((tag(","), skip_optional_whitespace)), parse_selector)(rest)?;
@@ -775,7 +775,7 @@ pub fn parse_ruleset(text: &str) -> IResult<&str, RuleSet> {
     ))
 }
 
-pub fn parse_stylesheet(text: &str) -> IResult<&str, Vec<RuleSet>> {
+pub(crate) fn parse_stylesheet(text: &str) -> IResult<&str, Vec<RuleSet>> {
     many0(parse_ruleset)(text)
 }
 
