@@ -881,7 +881,7 @@ impl<T: PartialEq + Eq + Clone + Debug + Default> RenderLine<T> {
 #[derive(Clone)]
 pub(crate) struct SubRenderer<D: TextDecorator> {
     /// Text width
-    pub width: usize,
+    width: usize,
     /// Rendering options
     pub options: RenderOptions,
     lines: LinkedList<RenderLine<Vec<D::Annotation>>>,
