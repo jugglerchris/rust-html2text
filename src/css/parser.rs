@@ -164,7 +164,7 @@ pub struct Declaration {
 use super::{Selector, SelectorComponent};
 
 #[derive(Debug, PartialEq)]
-pub struct RuleSet {
+pub(crate) struct RuleSet {
     pub selectors: Vec<Selector>,
     pub declarations: Vec<Declaration>,
 }

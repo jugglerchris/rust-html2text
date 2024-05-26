@@ -14,7 +14,7 @@ use crate::{
 };
 
 #[derive(Debug, Clone, PartialEq)]
-enum SelectorComponent {
+pub(crate) enum SelectorComponent {
     Class(String),
     Element(String),
     Hash(String),
@@ -24,7 +24,7 @@ enum SelectorComponent {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-struct Selector {
+pub(crate) struct Selector {
     // List of components, right first so we match from the leaf.
     components: Vec<SelectorComponent>,
 }
@@ -125,7 +125,7 @@ struct Ruleset {
 
 /// Stylesheet data which can be used while building the render tree.
 #[derive(Clone, Default, Debug)]
-pub struct StyleData {
+pub(crate) struct StyleData {
     rules: Vec<Ruleset>,
 }
 
@@ -329,7 +329,7 @@ fn extract_style_nodes<'a, T: Write>(
 }
 
 /// Extract stylesheet data from document.
-pub fn dom_to_stylesheet<T: Write>(handle: Handle, err_out: &mut T) -> Result<StyleData> {
+pub(crate) fn dom_to_stylesheet<T: Write>(handle: Handle, err_out: &mut T) -> Result<StyleData> {
     let styles = tree_map_reduce(&mut (), handle, |_, handle| {
         Ok(extract_style_nodes(handle, err_out))
     })?;
