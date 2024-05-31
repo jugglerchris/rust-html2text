@@ -892,6 +892,20 @@ impl<'a, C: 'a, N> TreeMapResult<'a, C, N, RenderNode> {
                                     cellinfo.content = vec![wrapped];
                                     RenderNode::new(RenderNodeInfo::TableCell(cellinfo))
                                 }
+                                RenderNodeInfo::TableRow(mut row, vert) => {
+                                    let cells = row.cells;
+                                    let cells = cells
+                                        .into_iter()
+                                        .map(|mut child| {
+                                            let children = child.content;
+                                            let wrapped = RenderNode::new(f(children));
+                                            child.content = vec![wrapped];
+                                            child
+                                        })
+                                        .collect();
+                                    row.cells = cells;
+                                    RenderNode::new(RenderNodeInfo::TableRow(row, vert))
+                                }
                                 ni => RenderNode::new(f(vec![RenderNode::new(ni)])),
                             }
                         }))
