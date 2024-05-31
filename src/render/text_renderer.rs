@@ -993,22 +993,6 @@ impl<D: TextDecorator> SubRenderer<D> {
         }
     }
 
-    /// Add a prerendered (multiline) string with the current annotations.
-    fn add_subblock(&mut self, s: &str) {
-        use self::TaggedLineElement::Str;
-
-        html_trace!("add_subblock({}, {})", self.width, s);
-        let tag = self.ann_stack.clone();
-        self.lines.extend(s.lines().map(|l| {
-            let mut line = TaggedLine::new();
-            line.push(Str(TaggedString {
-                s: l.into(),
-                tag: tag.clone(),
-            }));
-            RenderLine::Text(line)
-        }));
-    }
-
     /// Flushes the current wrapped block into the lines.
     fn flush_wrapping(&mut self) -> Result<(), Error> {
         if let Some(w) = self.wrapping.take() {
@@ -1249,10 +1233,6 @@ impl<D: TextDecorator> Renderer for SubRenderer<D> {
         self.width
     }
 
-    fn add_block_line(&mut self, line: &str) {
-        self.add_subblock(line);
-    }
-
     fn append_subrender<'a, I>(&mut self, other: Self, prefixes: I) -> Result<(), Error>
     where
         I: Iterator<Item = &'a str>,
@@ -1476,20 +1456,6 @@ impl<D: TextDecorator> Renderer for SubRenderer<D> {
             } else {
                 true
             }
-    }
-
-    fn text_len(&self) -> usize {
-        let mut result = 0;
-        for line in &self.lines {
-            result += match *line {
-                RenderLine::Text(ref tline) => tline.width(),
-                RenderLine::Line(_) => 0, // FIXME: should borders count?
-            };
-        }
-        if let Some(ref w) = self.wrapping {
-            result += w.text_len();
-        }
-        result
     }
 
     fn start_link(&mut self, target: &str) -> crate::Result<()> {
