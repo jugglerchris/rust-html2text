@@ -9,6 +9,10 @@ Possible log types:
 - `[fixed]` for any bug fixes.
 - `[security]` to invite users to upgrade in case of vulnerabilities.
 
+### 0.13.0-alpha.1
+
+- [fixed] Table rows with colours would disappear. (thanks tkapias)
+
 ### 0.13.0-alpha.0
 
 - [changed] Replaced LightningCSS with a smaller CSS parser.  There is a chance

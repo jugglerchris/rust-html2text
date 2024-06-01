@@ -58,9 +58,6 @@ pub(crate) trait Renderer {
     /// Return the current width in character cells
     fn width(&self) -> usize;
 
-    /// Add a line to the current block without starting a new one.
-    fn add_block_line(&mut self, line: &str);
-
     /// Add a new block from a sub renderer, and prefix every line by the
     /// corresponding text from each iteration of prefixes.
     fn append_subrender<'a, I>(&mut self, other: Self, prefixes: I) -> Result<(), Error>
@@ -85,9 +82,6 @@ pub(crate) trait Renderer {
 
     /// Returns true if this renderer has no content.
     fn empty(&self) -> bool;
-
-    /// Return the length of the contained text.
-    fn text_len(&self) -> usize;
 
     /// Start a hyperlink
     /// TODO: return sub-builder or similar to make misuse

@@ -2392,4 +2392,36 @@ Baz
             20,
         );
     }
+
+    #[test]
+    fn test_colour_row() {
+        test_html_coloured(
+            br#"<head><style>
+        tr.r {
+            color: #f00;
+        }
+        </style></head><body>
+        <table>
+         <tr>
+           <td>Row</td><td>One</td>
+         </tr>
+         <tr class="r">
+           <td>Row</td><td>Two</td>
+         </tr>
+         <tr>
+           <td>Row</td><td>Three</td>
+         </tr>
+        </table>
+        "#,
+            r#"───┬─────
+Row│One  
+───┼─────
+<R>Row</R>│<R>Two</R>  
+───┼─────
+Row│Three
+───┴─────
+"#,
+            20,
+        );
+    }
 }
