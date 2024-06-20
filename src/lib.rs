@@ -1203,27 +1203,17 @@ fn process_dom_node<'a, T: Write>(
             let mut frag_from_name_attr = false;
 
             #[cfg(feature = "css")]
-            let mut css_colour = None;
+            let css_colour;
             #[cfg(feature = "css")]
-            let mut css_bgcolour = None;
+            let css_bgcolour;
             #[cfg(feature = "css")]
             {
-                for style in context
-                    .style_data
-                    .matching_rules(&handle, context.use_doc_css)
-                {
-                    match style {
-                        css::Style::Colour(colour) => {
-                            css_colour = Some(colour);
-                        }
-                        css::Style::BgColour(colour) => {
-                            css_bgcolour = Some(colour);
-                        }
-                        css::Style::DisplayNone => {
-                            return Ok(Nothing);
-                        }
-                    }
+                let computed = context.style_data.computed_style(&handle, context.use_doc_css);
+                if let Some(true) = computed.display_none {
+                    return Ok(Nothing);
                 }
+                css_colour = computed.colour;
+                css_bgcolour = computed.bg_colour;
             };
             let result = match name.expanded() {
                 expanded_name!(html "html") | expanded_name!(html "body") => {
@@ -2073,7 +2063,7 @@ pub mod config {
         /// Add some CSS rules which will be used (if supported) with any
         /// HTML processed.
         pub fn add_css(mut self, css: &str) -> Result<Self> {
-            self.style.add_css(css)?;
+            self.style.add_user_css(css)?;
             Ok(self)
         }
 
