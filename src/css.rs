@@ -13,6 +13,8 @@ use crate::{
     tree_map_reduce, Colour, Result, TreeMapResult,
 };
 
+use self::parser::Importance;
+
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) enum SelectorComponent {
     Class(String),
@@ -118,18 +120,43 @@ pub(crate) enum Style {
 }
 
 #[derive(Debug, Clone)]
+pub(crate) struct StyleDecl {
+    style: Style,
+    importance: Importance,
+}
+
+#[derive(Debug, Clone, Default)]
+pub(crate) struct ComputedStyle {
+    /// The computed foreground colour, if any
+    pub(crate) colour: Option<Colour>,
+    /// The computed background colour, if any
+    pub(crate) bg_colour: Option<Colour>,
+    /// If set, indicates whether `display: none` or something equivalent applies
+    pub(crate) display_none: Option<bool>,
+}
+
+#[derive(Debug, Clone, Default)]
+struct ComputedImportance {
+    colour: bool,
+    bg_colour: bool,
+    display_none: bool,
+}
+
+#[derive(Debug, Clone)]
 struct Ruleset {
     selector: Selector,
-    styles: Vec<Style>,
+    styles: Vec<StyleDecl>,
 }
 
 /// Stylesheet data which can be used while building the render tree.
 #[derive(Clone, Default, Debug)]
 pub(crate) struct StyleData {
-    rules: Vec<Ruleset>,
+    agent_rules: Vec<Ruleset>,
+    user_rules: Vec<Ruleset>,
+    author_rules: Vec<Ruleset>,
 }
 
-pub(crate) fn parse_style_attribute(text: &str) -> Result<Vec<Style>> {
+pub(crate) fn parse_style_attribute(text: &str) -> Result<Vec<StyleDecl>> {
     html_trace_quiet!("Parsing inline style: {text}");
     let (_rest, decls) = parse_rules(text).map_err(|_| crate::Error::CssParseError)?;
 
@@ -138,7 +165,7 @@ pub(crate) fn parse_style_attribute(text: &str) -> Result<Vec<Style>> {
     Ok(styles)
 }
 
-fn styles_from_properties2(decls: &[parser::Declaration]) -> Vec<Style> {
+fn styles_from_properties2(decls: &[parser::Declaration]) -> Vec<StyleDecl> {
     let mut styles = Vec::new();
     html_trace_quiet!("styles:from_properties2: {decls:?}");
     let mut overflow_hidden = false;
@@ -150,20 +177,26 @@ fn styles_from_properties2(decls: &[parser::Declaration]) -> Vec<Style> {
             parser::Decl::Color {
                 value: parser::Colour::Rgb(r, g, b),
             } => {
-                styles.push(Style::Colour(Colour {
-                    r: *r,
-                    g: *g,
-                    b: *b,
-                }));
+                styles.push(StyleDecl {
+                    style: Style::Colour(Colour {
+                        r: *r,
+                        g: *g,
+                        b: *b,
+                    }),
+                    importance: decl.important,
+                });
             }
             parser::Decl::BackgroundColor {
                 value: parser::Colour::Rgb(r, g, b),
             } => {
-                styles.push(Style::BgColour(Colour {
-                    r: *r,
-                    g: *g,
-                    b: *b,
-                }));
+                styles.push(StyleDecl {
+                    style: Style::BgColour(Colour {
+                        r: *r,
+                        g: *g,
+                        b: *b,
+                    }),
+                    importance: decl.important,
+                });
             }
             parser::Decl::Height { value } => match value {
                 parser::Height::Auto => (),
@@ -192,7 +225,10 @@ fn styles_from_properties2(decls: &[parser::Declaration]) -> Vec<Style> {
             parser::Decl::Overflow { .. } | parser::Decl::OverflowY { .. } => {}
             parser::Decl::Display { value } => {
                 if let parser::Display::None = value {
-                    styles.push(Style::DisplayNone);
+                    styles.push(StyleDecl {
+                        style: Style::DisplayNone,
+                        importance: decl.important,
+                    });
                 }
             } /*
               _ => {
@@ -203,7 +239,10 @@ fn styles_from_properties2(decls: &[parser::Declaration]) -> Vec<Style> {
     }
     // If the height is set to zero and overflow hidden, treat as display: none
     if height_zero && overflow_hidden {
-        styles.push(Style::DisplayNone);
+        styles.push(StyleDecl {
+            style: Style::DisplayNone,
+            importance: Importance::Default,
+        });
     }
     styles
 }
@@ -211,7 +250,7 @@ fn styles_from_properties2(decls: &[parser::Declaration]) -> Vec<Style> {
 impl StyleData {
     /// Add some CSS source to be included.  The source will be parsed
     /// and the relevant and supported features extracted.
-    pub fn add_css(&mut self, css: &str) -> Result<()> {
+    fn do_add_css(css: &str, rules: &mut Vec<Ruleset>) -> Result<()> {
         let (_, ss) = parser::parse_stylesheet(css).map_err(|_| crate::Error::CssParseError)?;
 
         for rule in ss {
@@ -223,26 +262,49 @@ impl StyleData {
                         styles: styles.clone(),
                     };
                     html_trace_quiet!("Adding ruleset {ruleset:?}");
-                    self.rules.push(ruleset);
+                    rules.push(ruleset);
                 }
             }
         }
         Ok(())
     }
+    /// Add some CSS source to be included as part of the user agent ("browser") CSS rules.
+    pub fn add_agent_css(&mut self, css: &str) -> Result<()> {
+        Self::do_add_css(css, &mut self.agent_rules)
+    }
+
+    /// Add some CSS source to be included as part of the user CSS rules.
+    pub fn add_user_css(&mut self, css: &str) -> Result<()> {
+        Self::do_add_css(css, &mut self.user_rules)
+    }
+
+    /// Add some CSS source to be included as part of the document/author CSS rules.
+    pub fn add_author_css(&mut self, css: &str) -> Result<()> {
+        Self::do_add_css(css, &mut self.author_rules)
+    }
 
     /// Merge style data from other into this one.
     /// Data on other takes precedence.
     pub fn merge(&mut self, other: Self) {
-        self.rules.extend(other.rules);
+        self.agent_rules.extend(other.agent_rules);
+        self.user_rules.extend(other.user_rules);
+        self.author_rules.extend(other.author_rules);
     }
 
-    pub(crate) fn matching_rules(&self, handle: &Handle, use_doc_css: bool) -> Vec<Style> {
-        let mut result = Vec::new();
-        for rule in &self.rules {
-            if rule.selector.matches(handle) {
-                result.extend(rule.styles.iter().cloned());
+    pub(crate) fn computed_style(&self, handle: &Handle, use_doc_css: bool) -> ComputedStyle {
+        let mut result = Default::default();
+        let mut importance = ComputedImportance::default();
+
+        for ruleset in [&self.agent_rules, &self.user_rules, &self.author_rules] {
+            for rule in ruleset {
+                if rule.selector.matches(handle) {
+                    for style in rule.styles.iter() {
+                        Self::merge_computed_style(&mut result, &mut importance, style);
+                    }
+                }
             }
         }
+
         if use_doc_css {
             // Now look for a style attribute
             if let Element { attrs, .. } = &handle.data {
@@ -250,14 +312,22 @@ impl StyleData {
                 for attr in borrowed.iter() {
                     if &attr.name.local == "style" {
                         let rules = parse_style_attribute(&attr.value).unwrap_or_default();
-                        result.extend(rules);
+                        for style in rules {
+                            Self::merge_computed_style(&mut result, &mut importance, &style);
+                        }
                     } else if &*attr.name.local == "color" {
                         if let Ok(colour) = parser::parse_color_attribute(&attr.value) {
-                            result.push(Style::Colour(colour.into()));
+                            Self::merge_computed_style(&mut result, &mut importance, &StyleDecl {
+                                style: Style::Colour(colour.into()),
+                                importance: Importance::Default,
+                            });
                         }
                     } else if &*attr.name.local == "bgcolor" {
                         if let Ok(colour) = parser::parse_color_attribute(&attr.value) {
-                            result.push(Style::BgColour(colour.into()));
+                            Self::merge_computed_style(&mut result, &mut importance, &StyleDecl {
+                                style: Style::BgColour(colour.into()),
+                                importance: Importance::Default,
+                            });
                         }
                     }
                 }
@@ -265,6 +335,45 @@ impl StyleData {
         }
 
         result
+    }
+
+    fn merge_computed_style(result: &mut ComputedStyle, importance: &mut ComputedImportance, style: &StyleDecl) {
+        // The increasing priority is:
+        // * agent
+        // * user
+        // * author
+        // * author !important
+        // * user !important
+        // * agent !important
+        // Since we view in the order agent, user, author, we always want to
+        // replace the value if we haven't yet seen an !important rule, and
+        // never afterwards.
+        // TODO: handle selectivity.
+        match style.style {
+            Style::Colour(col) => {
+                if !importance.colour {
+                    result.colour = Some(col);
+                    if let Importance::Important = style.importance {
+                        importance.colour = true;
+                    }
+                }
+            }
+            Style::BgColour(col) => {
+                if !importance.bg_colour {
+                    result.bg_colour = Some(col);
+                    if let Importance::Important = style.importance {
+                        importance.bg_colour = true;
+                    }
+                }
+            }
+            Style::DisplayNone => {
+                // We don't have a "not DisplayNone" - we might need to fix this.
+                result.display_none = Some(true);
+                if let Importance::Important = style.importance {
+                    importance.display_none = true;
+                }
+            }
+        }
     }
 }
 
@@ -338,7 +447,7 @@ pub(crate) fn dom_to_stylesheet<T: Write>(handle: Handle, err_out: &mut T) -> Re
     if let Some(styles) = styles {
         for css in styles {
             // Ignore CSS parse errors.
-            let _ = result.add_css(&css);
+            let _ = result.add_author_css(&css);
         }
     }
     Ok(result)
