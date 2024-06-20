@@ -160,12 +160,12 @@ pub(crate) fn parse_style_attribute(text: &str) -> Result<Vec<StyleDecl>> {
     html_trace_quiet!("Parsing inline style: {text}");
     let (_rest, decls) = parse_rules(text).map_err(|_| crate::Error::CssParseError)?;
 
-    let styles = styles_from_properties2(&decls);
+    let styles = styles_from_properties(&decls);
     html_trace_quiet!("Parsed inline style: {:?}", styles);
     Ok(styles)
 }
 
-fn styles_from_properties2(decls: &[parser::Declaration]) -> Vec<StyleDecl> {
+fn styles_from_properties(decls: &[parser::Declaration]) -> Vec<StyleDecl> {
     let mut styles = Vec::new();
     html_trace_quiet!("styles:from_properties2: {decls:?}");
     let mut overflow_hidden = false;
@@ -254,7 +254,7 @@ impl StyleData {
         let (_, ss) = parser::parse_stylesheet(css).map_err(|_| crate::Error::CssParseError)?;
 
         for rule in ss {
-            let styles = styles_from_properties2(&rule.declarations);
+            let styles = styles_from_properties(&rule.declarations);
             if !styles.is_empty() {
                 for selector in rule.selectors {
                     let ruleset = Ruleset {
