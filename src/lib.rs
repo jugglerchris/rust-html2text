@@ -432,9 +432,6 @@ enum RenderNodeInfo {
     TableCell(RenderTableCell),
     /// Start of a named HTML fragment
     FragStart(String),
-    /// A region with a foreground colour
-    #[allow(unused)]
-    Coloured(Colour, Vec<RenderNode>),
     /// A list item
     ListItem(Vec<RenderNode>),
     /// Superscript text
@@ -590,10 +587,6 @@ impl RenderNode {
             Table(ref t) => t.calc_size_estimate(context),
             TableRow(..) | TableBody(_) | TableCell(_) => unimplemented!(),
             FragStart(_) => Default::default(),
-            Coloured(_, ref v) => v
-                .iter()
-                .map(recurse)
-                .fold(Default::default(), SizeEstimate::add),
         };
         self.size_estimate.set(Some(estimate));
         estimate
@@ -634,7 +627,6 @@ impl RenderNode {
             Table(ref _t) => false,
             TableRow(..) | TableBody(_) | TableCell(_) => false,
             FragStart(_) => true,
-            Coloured(_, ref v) => v.is_empty(),
         }
     }
 }
@@ -699,15 +691,6 @@ fn precalc_size_estimate<'a, 'b: 'a, D: TextDecorator>(
             }
         }
         TableRow(..) | TableBody(_) | TableCell(_) => unimplemented!(),
-        Coloured(_, ref v) => TreeMapResult::PendingChildren {
-            children: v.iter().collect(),
-            cons: Box::new(move |context, _cs| {
-                node.calc_size_estimate(context, decorator);
-                Ok(None)
-            }),
-            prefn: None,
-            postfn: None,
-        },
     })
 }
 
@@ -909,65 +892,6 @@ enum TreeMapResult<'a, C, N, R> {
     },
     /// Nothing (e.g. a comment or other ignored element).
     Nothing,
-}
-
-impl<'a, C: 'a, N> TreeMapResult<'a, C, N, RenderNode> {
-    #[cfg(feature = "css")]
-    fn wrap_render_nodes<F>(self, f: F) -> Self
-    where
-        F: Fn(Vec<RenderNode>) -> RenderNodeInfo + 'a,
-    {
-        use TreeMapResult::*;
-        match self {
-            Finished(node) => Finished(RenderNode::new(f(vec![node]))),
-            PendingChildren {
-                children,
-                cons,
-                prefn,
-                postfn,
-            } => {
-                PendingChildren {
-                    children,
-                    prefn,
-                    postfn,
-                    cons: Box::new(move |ctx, ch| {
-                        Ok(cons(ctx, ch)?.map(|n| {
-                            // Special case: lists need to recognise ListItem nodes as
-                            // direct children.
-                            match n.info {
-                                RenderNodeInfo::ListItem(children) => {
-                                    let wrapped = RenderNode::new(f(children));
-                                    RenderNode::new(RenderNodeInfo::ListItem(vec![wrapped]))
-                                }
-                                RenderNodeInfo::TableCell(mut cellinfo) => {
-                                    let children = cellinfo.content;
-                                    let wrapped = RenderNode::new(f(children));
-                                    cellinfo.content = vec![wrapped];
-                                    RenderNode::new(RenderNodeInfo::TableCell(cellinfo))
-                                }
-                                RenderNodeInfo::TableRow(mut row, vert) => {
-                                    let cells = row.cells;
-                                    let cells = cells
-                                        .into_iter()
-                                        .map(|mut child| {
-                                            let children = child.content;
-                                            let wrapped = RenderNode::new(f(children));
-                                            child.content = vec![wrapped];
-                                            child
-                                        })
-                                        .collect();
-                                    row.cells = cells;
-                                    RenderNode::new(RenderNodeInfo::TableRow(row, vert))
-                                }
-                                ni => RenderNode::new(f(vec![RenderNode::new_styled(ni, n.style)])),
-                            }
-                        }))
-                    }),
-                }
-            }
-            Nothing => Nothing,
-        }
-    }
 }
 
 fn tree_map_reduce<'a, C, N, R, M>(
@@ -1210,14 +1134,11 @@ fn process_dom_node<'a, T: Write>(
             let mut frag_from_name_attr = false;
 
             #[cfg(feature = "css")]
-            let css_colour;
-            #[cfg(feature = "css")]
             let computed = {
                 let computed = context.style_data.computed_style(&handle, context.use_doc_css);
                 if let Some(true) = computed.display_none {
                     return Ok(Nothing);
                 }
-                css_colour = computed.colour;
                 computed
             };
             #[cfg(not(feature = "css"))]
@@ -1259,13 +1180,13 @@ fn process_dom_node<'a, T: Write>(
                             let href: String = href.into();
                             Box::new(move |_, cs: Vec<RenderNode>| {
                                 if cs.iter().any(|c| !c.is_shallow_empty()) {
-                                    Ok(Some(RenderNode::new(Link(href, cs))))
+                                    Ok(Some(RenderNode::new_styled(Link(href, cs), computed)))
                                 } else {
                                     Ok(None)
                                 }
                             })
                         } else {
-                            Box::new(|_, cs| Ok(Some(RenderNode::new(Container(cs)))))
+                            Box::new(move |_, cs| Ok(Some(RenderNode::new_styled(Container(cs), computed))))
                         },
                         prefn: None,
                         postfn: None,
@@ -1410,13 +1331,6 @@ fn process_dom_node<'a, T: Write>(
                 result
             };
 
-            #[cfg(feature = "css")]
-            let result = if let Some(colour) = css_colour {
-                result.wrap_render_nodes(move |children| Coloured(colour, children))
-            } else {
-                result
-            };
-
             result
         }
         markup5ever_rcdom::NodeData::Text { contents: ref tstr } => {
@@ -1480,12 +1394,17 @@ fn pending2<
 /// can undo it.
 #[derive(Default)]
 struct PushedStyleInfo {
+    colour: bool,
     bgcolour: bool,
 }
 
 impl PushedStyleInfo {
     fn apply<D: TextDecorator>(render: &mut TextRenderer<D>, style: &css::ComputedStyle) -> Self {
         let mut result: PushedStyleInfo = Default::default();
+        if let Some(col) = style.colour {
+            render.push_colour(col);
+            result.colour = true;
+        }
         if let Some(col) = style.bg_colour {
             render.push_bgcolour(col);
             result.bgcolour = true;
@@ -1495,6 +1414,9 @@ impl PushedStyleInfo {
     fn unwind<D: TextDecorator>(self, renderer: &mut TextRenderer<D>) {
         if self.bgcolour {
             renderer.pop_bgcolour();
+        }
+        if self.colour {
+            renderer.pop_colour();
         }
     }
 }
@@ -1751,14 +1673,6 @@ fn do_render_node<T: Write, D: TextDecorator>(
             renderer.record_frag_start(&fragname);
             pushed_style.unwind(renderer);
             Finished(None)
-        }
-        Coloured(colour, children) => {
-            renderer.push_colour(colour);
-            pending2(children, |renderer: &mut TextRenderer<D>, _| {
-                renderer.pop_colour();
-                pushed_style.unwind(renderer);
-                Ok(Some(None))
-            })
         }
         Sup(children) => {
             // Special case for digit-only superscripts - use superscript
