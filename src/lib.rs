@@ -82,6 +82,7 @@ use markup5ever_rcdom::{
 use std::cell::Cell;
 use std::cmp::{max, min};
 use std::collections::{BTreeSet, HashMap};
+use std::rc::Rc;
 use unicode_width::UnicodeWidthStr;
 
 use std::io;
@@ -746,11 +747,11 @@ fn desc_list_children_to_render_nodes<T: Write>(
 
 /// Convert a table into a RenderNode
 fn table_to_render_tree<'a, T: Write>(
-    handle: Handle,
+    input: RenderInput,
     computed: css::ComputedStyle,
     _err_out: &mut T,
-) -> TreeMapResult<'a, HtmlContext, Handle, RenderNode> {
-    pending(handle, move |_, rowset| {
+) -> TreeMapResult<'a, HtmlContext, RenderInput, RenderNode> {
+    pending(input, move |_, rowset| {
         let mut rows = vec![];
         for bodynode in rowset {
             if let RenderNodeInfo::TableBody(body) = bodynode.info {
@@ -770,11 +771,11 @@ fn table_to_render_tree<'a, T: Write>(
 
 /// Add rows from a thead or tbody.
 fn tbody_to_render_tree<'a, T: Write>(
-    handle: Handle,
+    input: RenderInput,
     computed: css::ComputedStyle,
     _err_out: &mut T,
-) -> TreeMapResult<'a, HtmlContext, Handle, RenderNode> {
-    pending_noempty(handle, move |_, rowchildren| {
+) -> TreeMapResult<'a, HtmlContext, RenderInput, RenderNode> {
+    pending_noempty(input, move |_, rowchildren| {
         let mut rows = rowchildren
             .into_iter()
             .flat_map(|rownode| {
@@ -820,11 +821,11 @@ fn tbody_to_render_tree<'a, T: Write>(
 
 /// Convert a table row to a RenderTableRow
 fn tr_to_render_tree<'a, T: Write>(
-    handle: Handle,
+    input: RenderInput,
     computed: css::ComputedStyle,
     _err_out: &mut T,
-) -> TreeMapResult<'a, HtmlContext, Handle, RenderNode> {
-    pending(handle, move |_, cellnodes| {
+) -> TreeMapResult<'a, HtmlContext, RenderInput, RenderNode> {
+    pending(input, move |_, cellnodes| {
         let cells = cellnodes
             .into_iter()
             .flat_map(|cellnode| {
@@ -850,12 +851,12 @@ fn tr_to_render_tree<'a, T: Write>(
 
 /// Convert a single table cell to a render node.
 fn td_to_render_tree<'a, T: Write>(
-    handle: Handle,
+    input: RenderInput,
     computed: css::ComputedStyle,
     _err_out: &mut T,
-) -> TreeMapResult<'a, HtmlContext, Handle, RenderNode> {
+) -> TreeMapResult<'a, HtmlContext, RenderInput, RenderNode> {
     let mut colspan = 1;
-    if let Element { ref attrs, .. } = handle.data {
+    if let Element { ref attrs, .. } = input.handle.data {
         for attr in attrs.borrow().iter() {
             if &attr.name.local == "colspan" {
                 let v: &str = &attr.value;
@@ -863,7 +864,7 @@ fn td_to_render_tree<'a, T: Write>(
             }
         }
     }
-    pending(handle, move |_, children| {
+    pending(input, move |_, children| {
         Ok(Some(RenderNode::new_styled(RenderNodeInfo::TableCell(
             RenderTableCell {
                 colspan,
@@ -1007,6 +1008,26 @@ struct HtmlContext {
     wrap_links: bool,
 }
 
+// Input to render tree conversion.
+struct RenderInput {
+    handle: Handle,
+    parent_style: Rc<ComputedStyle>,
+}
+
+impl RenderInput {
+    // Return the children in the right form
+    fn children(&self) -> Vec<RenderInput> {
+        self.handle
+            .children
+            .borrow()
+            .iter()
+            .map(|child| RenderInput {
+                handle: child.clone(),
+                parent_style: Rc::clone(&self.parent_style)
+            }).collect()
+    }
+}
+
 fn dom_to_render_tree_with_context<T: Write>(
     handle: Handle,
     err_out: &mut T,
@@ -1020,21 +1041,22 @@ fn dom_to_render_tree_with_context<T: Write>(
         context.style_data = doc_style_data;
     }
 
-    let result = tree_map_reduce(context, handle, |context, handle| {
-        process_dom_node(handle, err_out, context)
+    let parent_style = Default::default();
+    let result = tree_map_reduce(context, RenderInput { handle, parent_style }, |context, input| {
+        process_dom_node(input, err_out, context)
     });
 
     html_trace!("### dom_to_render_tree: out= {:#?}", result);
     result
 }
 
-fn pending<'a, F>(handle: Handle, f: F) -> TreeMapResult<'a, HtmlContext, Handle, RenderNode>
+fn pending<'a, F>(input: RenderInput, f: F) -> TreeMapResult<'a, HtmlContext, RenderInput, RenderNode>
 where
     for<'r> F:
         Fn(&'r mut HtmlContext, std::vec::Vec<RenderNode>) -> Result<Option<RenderNode>> + 'static,
 {
     TreeMapResult::PendingChildren {
-        children: handle.children.borrow().clone(),
+        children: input.children(),
         cons: Box::new(f),
         prefn: None,
         postfn: None,
@@ -1042,15 +1064,20 @@ where
 }
 
 fn pending_noempty<'a, F>(
-    handle: Handle,
+    input: RenderInput,
     f: F,
-) -> TreeMapResult<'a, HtmlContext, Handle, RenderNode>
+) -> TreeMapResult<'a, HtmlContext, RenderInput, RenderNode>
 where
     for<'r> F:
         Fn(&'r mut HtmlContext, std::vec::Vec<RenderNode>) -> Result<Option<RenderNode>> + 'static,
 {
+    let handle = &input.handle;
+    let style = &input.parent_style;
     TreeMapResult::PendingChildren {
-        children: handle.children.borrow().clone(),
+        children: handle.children.borrow().iter().map(|child| RenderInput {
+            handle: child.clone(),
+            parent_style: Rc::clone(style)
+        }).collect(),
         cons: Box::new(move |ctx, children| {
             if children.is_empty() {
                 Ok(None)
@@ -1125,16 +1152,16 @@ fn prepend_marker(prefix: RenderNode, mut orig: RenderNode) -> RenderNode {
 }
 
 fn process_dom_node<'a, T: Write>(
-    handle: Handle,
+    input: RenderInput,
     err_out: &mut T,
     #[allow(unused)] // Used with css feature
     context: &mut HtmlContext,
-) -> Result<TreeMapResult<'a, HtmlContext, Handle, RenderNode>> {
+) -> Result<TreeMapResult<'a, HtmlContext, RenderInput, RenderNode>> {
     use RenderNodeInfo::*;
     use TreeMapResult::*;
 
-    Ok(match handle.clone().data {
-        Document => pending(handle, |_context, cs| {
+    Ok(match input.handle.clone().data {
+        Document => pending(input, |_context, cs| {
             Ok(Some(RenderNode::new(Container(cs))))
         }),
         Comment { .. } => Nothing,
@@ -1145,21 +1172,25 @@ fn process_dom_node<'a, T: Write>(
         } => {
             let mut frag_from_name_attr = false;
 
+            let RenderInput {
+                ref handle, ref parent_style
+            } = input;
+
             #[cfg(feature = "css")]
             let computed = {
-                let computed = context.style_data.computed_style(&handle, context.use_doc_css);
+                let computed = context.style_data.computed_style(&parent_style, &handle, context.use_doc_css);
                 if let Some(true) = computed.display_none {
                     return Ok(Nothing);
                 }
                 computed
             };
             #[cfg(not(feature = "css"))]
-            let computed = Default::default();
+            let computed = parent_style;
 
             let result = match name.expanded() {
                 expanded_name!(html "html") | expanded_name!(html "body") => {
                     /* process children, but don't add anything */
-                    pending(handle, move |_, cs| Ok(Some(RenderNode::new_styled(Container(cs), computed))))
+                    pending(input, move |_, cs| Ok(Some(RenderNode::new_styled(Container(cs), computed))))
                 }
                 expanded_name!(html "link")
                 | expanded_name!(html "meta")
@@ -1172,7 +1203,7 @@ fn process_dom_node<'a, T: Write>(
                 }
                 expanded_name!(html "span") => {
                     /* process children, but don't add anything */
-                    pending_noempty(handle, move |_, cs| {
+                    pending_noempty(input, move |_, cs| {
                         Ok(Some(RenderNode::new_styled(Container(cs), computed)))
                     })
                 }
@@ -1187,7 +1218,7 @@ fn process_dom_node<'a, T: Write>(
                         }
                     }
                     PendingChildren {
-                        children: handle.children.borrow().clone(),
+                        children: input.children(),
                         cons: if let Some(href) = target {
                             let href: String = href.into();
                             Box::new(move |_, cs: Vec<RenderNode>| {
@@ -1207,16 +1238,16 @@ fn process_dom_node<'a, T: Write>(
                 expanded_name!(html "em")
                 | expanded_name!(html "i")
                 | expanded_name!(html "ins") => {
-                    pending(handle, move |_, cs| Ok(Some(RenderNode::new_styled(Em(cs), computed))))
+                    pending(input, move |_, cs| Ok(Some(RenderNode::new_styled(Em(cs), computed))))
                 }
                 expanded_name!(html "strong") => {
-                    pending(handle, move |_, cs| Ok(Some(RenderNode::new_styled(Strong(cs), computed))))
+                    pending(input, move |_, cs| Ok(Some(RenderNode::new_styled(Strong(cs), computed))))
                 }
                 expanded_name!(html "s") | expanded_name!(html "del") => {
-                    pending(handle, move |_, cs| Ok(Some(RenderNode::new_styled(Strikeout(cs), computed))))
+                    pending(input, move |_, cs| Ok(Some(RenderNode::new_styled(Strikeout(cs), computed))))
                 }
                 expanded_name!(html "code") => {
-                    pending(handle, move |_, cs| Ok(Some(RenderNode::new_styled(Code(cs), computed))))
+                    pending(input, move |_, cs| Ok(Some(RenderNode::new_styled(Code(cs), computed))))
                 }
                 expanded_name!(html "img") => {
                     let borrowed = attrs.borrow();
@@ -1244,39 +1275,39 @@ fn process_dom_node<'a, T: Write>(
                 | expanded_name!(html "h3")
                 | expanded_name!(html "h4") => {
                     let level: usize = name.local[1..].parse().unwrap();
-                    pending(handle, move |_, cs| {
+                    pending(input, move |_, cs| {
                         Ok(Some(RenderNode::new_styled(Header(level, cs), computed)))
                     })
                 }
                 expanded_name!(html "p") => {
-                    pending_noempty(handle, move |_, cs| Ok(Some(RenderNode::new_styled(Block(cs), computed))))
+                    pending_noempty(input, move |_, cs| Ok(Some(RenderNode::new_styled(Block(cs), computed))))
                 }
                 expanded_name!(html "li") => {
-                    pending(handle, move |_, cs| Ok(Some(RenderNode::new_styled(ListItem(cs), computed))))
+                    pending(input, move |_, cs| Ok(Some(RenderNode::new_styled(ListItem(cs), computed))))
                 }
                 expanded_name!(html "sup") => {
-                    pending(handle, move |_, cs| Ok(Some(RenderNode::new_styled(Sup(cs), computed))))
+                    pending(input, move |_, cs| Ok(Some(RenderNode::new_styled(Sup(cs), computed))))
                 }
                 expanded_name!(html "div") => {
-                    pending_noempty(handle, move |_, cs| Ok(Some(RenderNode::new_styled(Div(cs), computed))))
+                    pending_noempty(input, move |_, cs| Ok(Some(RenderNode::new_styled(Div(cs), computed))))
                 }
                 expanded_name!(html "pre") => {
-                    pending(handle, move |_, cs| Ok(Some(RenderNode::new_styled(Pre(cs), computed))))
+                    pending(input, move |_, cs| Ok(Some(RenderNode::new_styled(Pre(cs), computed))))
                 }
                 expanded_name!(html "br") => Finished(RenderNode::new_styled(Break, computed)),
-                expanded_name!(html "table") => table_to_render_tree(handle.clone(), computed, err_out),
+                expanded_name!(html "table") => table_to_render_tree(input, computed, err_out),
                 expanded_name!(html "thead") | expanded_name!(html "tbody") => {
-                    tbody_to_render_tree(handle.clone(), computed, err_out)
+                    tbody_to_render_tree(input, computed, err_out)
                 }
-                expanded_name!(html "tr") => tr_to_render_tree(handle.clone(), computed, err_out),
+                expanded_name!(html "tr") => tr_to_render_tree(input, computed, err_out),
                 expanded_name!(html "th") | expanded_name!(html "td") => {
-                    td_to_render_tree(handle.clone(), computed, err_out)
+                    td_to_render_tree(input, computed, err_out)
                 }
                 expanded_name!(html "blockquote") => {
-                    pending_noempty(handle, move |_, cs| Ok(Some(RenderNode::new_styled(BlockQuote(cs), computed))))
+                    pending_noempty(input, move |_, cs| Ok(Some(RenderNode::new_styled(BlockQuote(cs), computed))))
                 }
                 expanded_name!(html "ul") => {
-                    pending_noempty(handle, move |_, cs| Ok(Some(RenderNode::new_styled(Ul(cs), computed))))
+                    pending_noempty(input, move |_, cs| Ok(Some(RenderNode::new_styled(Ul(cs), computed))))
                 }
                 expanded_name!(html "ol") => {
                     let borrowed = attrs.borrow();
@@ -1288,7 +1319,7 @@ fn process_dom_node<'a, T: Write>(
                         }
                     }
 
-                    pending_noempty(handle, move |_, cs| {
+                    pending_noempty(input, move |_, cs| {
                         let cs = cs
                             .into_iter()
                             .filter(|n| matches!(n.info, RenderNodeInfo::ListItem(..)))
@@ -1301,7 +1332,7 @@ fn process_dom_node<'a, T: Write>(
                 ), computed)),
                 _ => {
                     html_trace!("Unhandled element: {:?}\n", name.local);
-                    pending_noempty(handle, move |_, cs| Ok(Some(RenderNode::new_styled(Container(cs), computed))))
+                    pending_noempty(input, move |_, cs| Ok(Some(RenderNode::new_styled(Container(cs), computed))))
                     //None
                 }
             };
