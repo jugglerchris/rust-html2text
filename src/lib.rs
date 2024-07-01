@@ -1195,16 +1195,16 @@ fn process_dom_node<'a, T: Write>(
                 expanded_name!(html "em")
                 | expanded_name!(html "i")
                 | expanded_name!(html "ins") => {
-                    pending(handle, |_, cs| Ok(Some(RenderNode::new(Em(cs)))))
+                    pending(handle, move |_, cs| Ok(Some(RenderNode::new_styled(Em(cs), computed))))
                 }
                 expanded_name!(html "strong") => {
-                    pending(handle, |_, cs| Ok(Some(RenderNode::new(Strong(cs)))))
+                    pending(handle, move |_, cs| Ok(Some(RenderNode::new_styled(Strong(cs), computed))))
                 }
                 expanded_name!(html "s") | expanded_name!(html "del") => {
-                    pending(handle, |_, cs| Ok(Some(RenderNode::new(Strikeout(cs)))))
+                    pending(handle, move |_, cs| Ok(Some(RenderNode::new_styled(Strikeout(cs), computed))))
                 }
                 expanded_name!(html "code") => {
-                    pending(handle, |_, cs| Ok(Some(RenderNode::new(Code(cs)))))
+                    pending(handle, move |_, cs| Ok(Some(RenderNode::new_styled(Code(cs), computed))))
                 }
                 expanded_name!(html "img") => {
                     let borrowed = attrs.borrow();
@@ -1222,7 +1222,7 @@ fn process_dom_node<'a, T: Write>(
                         }
                     }
                     if let (Some(title), Some(src)) = (title, src) {
-                        Finished(RenderNode::new(Img(src.into(), title.into())))
+                        Finished(RenderNode::new_styled(Img(src.into(), title.into()), computed))
                     } else {
                         Nothing
                     }
@@ -1233,25 +1233,25 @@ fn process_dom_node<'a, T: Write>(
                 | expanded_name!(html "h4") => {
                     let level: usize = name.local[1..].parse().unwrap();
                     pending(handle, move |_, cs| {
-                        Ok(Some(RenderNode::new(Header(level, cs))))
+                        Ok(Some(RenderNode::new_styled(Header(level, cs), computed)))
                     })
                 }
                 expanded_name!(html "p") => {
-                    pending_noempty(handle, |_, cs| Ok(Some(RenderNode::new(Block(cs)))))
+                    pending_noempty(handle, move |_, cs| Ok(Some(RenderNode::new_styled(Block(cs), computed))))
                 }
                 expanded_name!(html "li") => {
-                    pending(handle, |_, cs| Ok(Some(RenderNode::new(ListItem(cs)))))
+                    pending(handle, move |_, cs| Ok(Some(RenderNode::new_styled(ListItem(cs), computed))))
                 }
                 expanded_name!(html "sup") => {
-                    pending(handle, |_, cs| Ok(Some(RenderNode::new(Sup(cs)))))
+                    pending(handle, move |_, cs| Ok(Some(RenderNode::new_styled(Sup(cs), computed))))
                 }
                 expanded_name!(html "div") => {
-                    pending_noempty(handle, |_, cs| Ok(Some(RenderNode::new(Div(cs)))))
+                    pending_noempty(handle, move |_, cs| Ok(Some(RenderNode::new_styled(Div(cs), computed))))
                 }
                 expanded_name!(html "pre") => {
-                    pending(handle, |_, cs| Ok(Some(RenderNode::new(Pre(cs)))))
+                    pending(handle, move |_, cs| Ok(Some(RenderNode::new_styled(Pre(cs), computed))))
                 }
-                expanded_name!(html "br") => Finished(RenderNode::new(Break)),
+                expanded_name!(html "br") => Finished(RenderNode::new_styled(Break, computed)),
                 expanded_name!(html "table") => table_to_render_tree(handle.clone(), err_out),
                 expanded_name!(html "thead") | expanded_name!(html "tbody") => {
                     tbody_to_render_tree(handle.clone(), err_out)
@@ -1261,10 +1261,10 @@ fn process_dom_node<'a, T: Write>(
                     td_to_render_tree(handle.clone(), err_out)
                 }
                 expanded_name!(html "blockquote") => {
-                    pending_noempty(handle, |_, cs| Ok(Some(RenderNode::new(BlockQuote(cs)))))
+                    pending_noempty(handle, move |_, cs| Ok(Some(RenderNode::new_styled(BlockQuote(cs), computed))))
                 }
                 expanded_name!(html "ul") => {
-                    pending_noempty(handle, |_, cs| Ok(Some(RenderNode::new(Ul(cs)))))
+                    pending_noempty(handle, move |_, cs| Ok(Some(RenderNode::new_styled(Ul(cs), computed))))
                 }
                 expanded_name!(html "ol") => {
                     let borrowed = attrs.borrow();
@@ -1281,15 +1281,15 @@ fn process_dom_node<'a, T: Write>(
                             .into_iter()
                             .filter(|n| matches!(n.info, RenderNodeInfo::ListItem(..)))
                             .collect();
-                        Ok(Some(RenderNode::new(Ol(start, cs))))
+                        Ok(Some(RenderNode::new_styled(Ol(start, cs), computed)))
                     })
                 }
-                expanded_name!(html "dl") => Finished(RenderNode::new(Dl(
+                expanded_name!(html "dl") => Finished(RenderNode::new_styled(Dl(
                     desc_list_children_to_render_nodes(handle.clone(), err_out, context)?,
-                ))),
+                ), computed)),
                 _ => {
                     html_trace!("Unhandled element: {:?}\n", name.local);
-                    pending_noempty(handle, |_, cs| Ok(Some(RenderNode::new(Container(cs)))))
+                    pending_noempty(handle, move |_, cs| Ok(Some(RenderNode::new_styled(Container(cs), computed))))
                     //None
                 }
             };
