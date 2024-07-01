@@ -63,6 +63,7 @@ mod macros;
 pub mod css;
 pub mod render;
 
+use css::ComputedStyle;
 use render::text_renderer::{
     RenderLine, RenderOptions, RichAnnotation, SubRenderer, TaggedLine, TextRenderer,
 };
@@ -194,6 +195,7 @@ struct RenderTableCell {
     content: Vec<RenderNode>,
     size_estimate: Cell<Option<SizeEstimate>>,
     col_width: Option<usize>, // Actual width to use
+    style: ComputedStyle,
 }
 
 impl RenderTableCell {
@@ -216,6 +218,7 @@ impl RenderTableCell {
 struct RenderTableRow {
     cells: Vec<RenderTableCell>,
     col_sizes: Option<Vec<usize>>,
+    style: ComputedStyle,
 }
 
 impl RenderTableRow {
@@ -249,7 +252,8 @@ impl RenderTableRow {
             // Skip any zero-width columns
             if col_width > 0 {
                 cell.col_width = Some(col_width + cell.colspan - 1);
-                result.push(RenderNode::new(RenderNodeInfo::TableCell(cell)));
+                let style = cell.style.clone();
+                result.push(RenderNode::new_styled(RenderNodeInfo::TableCell(cell), style));
             }
             colno += colspan;
         }
@@ -288,7 +292,8 @@ impl RenderTable {
             .into_iter()
             .map(|mut tr| {
                 tr.col_sizes = Some(col_sizes.clone());
-                RenderNode::new(RenderNodeInfo::TableRow(tr, vert))
+                let style = tr.style.clone();
+                RenderNode::new_styled(RenderNodeInfo::TableRow(tr, vert), style)
             })
             .collect()
     }
@@ -696,9 +701,10 @@ fn desc_list_children_to_render_nodes<T: Write>(
 /// Convert a table into a RenderNode
 fn table_to_render_tree<'a, T: Write>(
     handle: Handle,
+    computed: css::ComputedStyle,
     _err_out: &mut T,
 ) -> TreeMapResult<'a, HtmlContext, Handle, RenderNode> {
-    pending(handle, |_, rowset| {
+    pending(handle, move |_, rowset| {
         let mut rows = vec![];
         for bodynode in rowset {
             if let RenderNodeInfo::TableBody(body) = bodynode.info {
@@ -710,9 +716,8 @@ fn table_to_render_tree<'a, T: Write>(
         if rows.is_empty() {
             Ok(None)
         } else {
-            Ok(Some(RenderNode::new(RenderNodeInfo::Table(
-                RenderTable::new(rows),
-            ))))
+            Ok(Some(RenderNode::new_styled(RenderNodeInfo::Table(
+                RenderTable::new(rows)), computed)))
         }
     })
 }
@@ -720,9 +725,10 @@ fn table_to_render_tree<'a, T: Write>(
 /// Add rows from a thead or tbody.
 fn tbody_to_render_tree<'a, T: Write>(
     handle: Handle,
+    computed: css::ComputedStyle,
     _err_out: &mut T,
 ) -> TreeMapResult<'a, HtmlContext, Handle, RenderNode> {
-    pending_noempty(handle, |_, rowchildren| {
+    pending_noempty(handle, move |_, rowchildren| {
         let mut rows = rowchildren
             .into_iter()
             .flat_map(|rownode| {
@@ -762,16 +768,17 @@ fn tbody_to_render_tree<'a, T: Write>(
             }
         }
 
-        Ok(Some(RenderNode::new(RenderNodeInfo::TableBody(rows))))
+        Ok(Some(RenderNode::new_styled(RenderNodeInfo::TableBody(rows), computed)))
     })
 }
 
 /// Convert a table row to a RenderTableRow
 fn tr_to_render_tree<'a, T: Write>(
     handle: Handle,
+    computed: css::ComputedStyle,
     _err_out: &mut T,
 ) -> TreeMapResult<'a, HtmlContext, Handle, RenderNode> {
-    pending(handle, |_, cellnodes| {
+    pending(handle, move |_, cellnodes| {
         let cells = cellnodes
             .into_iter()
             .flat_map(|cellnode| {
@@ -783,19 +790,22 @@ fn tr_to_render_tree<'a, T: Write>(
                 }
             })
             .collect();
-        Ok(Some(RenderNode::new(RenderNodeInfo::TableRow(
+        Ok(Some(RenderNode::new_styled(RenderNodeInfo::TableRow(
             RenderTableRow {
                 cells,
                 col_sizes: None,
+                style: computed.clone(),
             },
             false,
-        ))))
+        ),
+        computed)))
     })
 }
 
 /// Convert a single table cell to a render node.
 fn td_to_render_tree<'a, T: Write>(
     handle: Handle,
+    computed: css::ComputedStyle,
     _err_out: &mut T,
 ) -> TreeMapResult<'a, HtmlContext, Handle, RenderNode> {
     let mut colspan = 1;
@@ -808,14 +818,16 @@ fn td_to_render_tree<'a, T: Write>(
         }
     }
     pending(handle, move |_, children| {
-        Ok(Some(RenderNode::new(RenderNodeInfo::TableCell(
+        Ok(Some(RenderNode::new_styled(RenderNodeInfo::TableCell(
             RenderTableCell {
                 colspan,
                 content: children,
                 size_estimate: Cell::new(None),
                 col_width: None,
+                style: computed,
             },
-        ))))
+        ),
+        computed)))
     })
 }
 
@@ -1206,13 +1218,13 @@ fn process_dom_node<'a, T: Write>(
                     pending(handle, move |_, cs| Ok(Some(RenderNode::new_styled(Pre(cs), computed))))
                 }
                 expanded_name!(html "br") => Finished(RenderNode::new_styled(Break, computed)),
-                expanded_name!(html "table") => table_to_render_tree(handle.clone(), err_out),
+                expanded_name!(html "table") => table_to_render_tree(handle.clone(), computed, err_out),
                 expanded_name!(html "thead") | expanded_name!(html "tbody") => {
-                    tbody_to_render_tree(handle.clone(), err_out)
+                    tbody_to_render_tree(handle.clone(), computed, err_out)
                 }
-                expanded_name!(html "tr") => tr_to_render_tree(handle.clone(), err_out),
+                expanded_name!(html "tr") => tr_to_render_tree(handle.clone(), computed, err_out),
                 expanded_name!(html "th") | expanded_name!(html "td") => {
-                    td_to_render_tree(handle.clone(), err_out)
+                    td_to_render_tree(handle.clone(), computed, err_out)
                 }
                 expanded_name!(html "blockquote") => {
                     pending_noempty(handle, move |_, cs| Ok(Some(RenderNode::new_styled(BlockQuote(cs), computed))))
@@ -1619,10 +1631,10 @@ fn do_render_node<T: Write, D: TextDecorator>(
             Finished(None)
         }
         Table(tab) => render_table_tree(renderer, tab, err_out)?,
-        TableRow(row, false) => render_table_row(renderer, row, err_out),
-        TableRow(row, true) => render_table_row_vert(renderer, row, err_out),
+        TableRow(row, false) => render_table_row(renderer, row, pushed_style, err_out),
+        TableRow(row, true) => render_table_row_vert(renderer, row, pushed_style, err_out),
         TableBody(_) => unimplemented!("Unexpected TableBody while rendering"),
-        TableCell(cell) => render_table_cell(renderer, cell, err_out),
+        TableCell(cell) => render_table_cell(renderer, cell, pushed_style, err_out),
         FragStart(fragname) => {
             renderer.record_frag_start(&fragname);
             pushed_style.unwind(renderer);
@@ -1780,6 +1792,7 @@ fn render_table_tree<T: Write, D: TextDecorator>(
 fn render_table_row<T: Write, D: TextDecorator>(
     _renderer: &mut TextRenderer<D>,
     row: RenderTableRow,
+    pushed_style: PushedStyleInfo,
     _err_out: &mut T,
 ) -> TreeMapResult<'static, TextRenderer<D>, RenderNode, Option<SubRenderer<D>>> {
     TreeMapResult::PendingChildren {
@@ -1789,6 +1802,7 @@ fn render_table_row<T: Write, D: TextDecorator>(
             if children.iter().any(|c| !c.empty()) {
                 builders.append_columns_with_borders(children, true)?;
             }
+            pushed_style.unwind(builders);
             Ok(Some(None))
         }),
         prefn: Some(Box::new(|renderer: &mut TextRenderer<D>, node| {
@@ -1807,6 +1821,7 @@ fn render_table_row<T: Write, D: TextDecorator>(
 fn render_table_row_vert<T: Write, D: TextDecorator>(
     _renderer: &mut TextRenderer<D>,
     row: RenderTableRow,
+    pushed_style: PushedStyleInfo,
     _err_out: &mut T,
 ) -> TreeMapResult<'static, TextRenderer<D>, RenderNode, Option<SubRenderer<D>>> {
     TreeMapResult::PendingChildren {
@@ -1814,6 +1829,7 @@ fn render_table_row_vert<T: Write, D: TextDecorator>(
         cons: Box::new(|builders, children| {
             let children: Vec<_> = children.into_iter().map(Option::unwrap).collect();
             builders.append_vert_row(children)?;
+            pushed_style.unwind(builders);
             Ok(Some(None))
         }),
         prefn: Some(Box::new(|renderer: &mut TextRenderer<D>, node| {
@@ -1832,10 +1848,13 @@ fn render_table_row_vert<T: Write, D: TextDecorator>(
 fn render_table_cell<T: Write, D: TextDecorator>(
     _renderer: &mut TextRenderer<D>,
     cell: RenderTableCell,
+    pushed_style: PushedStyleInfo,
     _err_out: &mut T,
 ) -> TreeMapResult<'static, TextRenderer<D>, RenderNode, Option<SubRenderer<D>>> {
     pending2(cell.content, |renderer: &mut TextRenderer<D>, _| {
+        pushed_style.unwind(renderer);
         let sub_builder = renderer.pop();
+
         Ok(Some(Some(sub_builder)))
     })
 }
