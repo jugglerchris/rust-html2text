@@ -291,8 +291,8 @@ impl StyleData {
         self.author_rules.extend(other.author_rules);
     }
 
-    pub(crate) fn computed_style(&self, handle: &Handle, use_doc_css: bool) -> ComputedStyle {
-        let mut result = Default::default();
+    pub(crate) fn computed_style(&self, parent_style: &ComputedStyle, handle: &Handle, use_doc_css: bool) -> ComputedStyle {
+        let mut result = *parent_style;
         let mut importance = ComputedImportance::default();
 
         for ruleset in [&self.agent_rules, &self.user_rules, &self.author_rules] {
