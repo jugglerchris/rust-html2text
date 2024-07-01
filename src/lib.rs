@@ -60,7 +60,6 @@ extern crate html5ever;
 #[macro_use]
 mod macros;
 
-#[cfg(feature = "css")]
 pub mod css;
 pub mod render;
 
@@ -390,9 +389,6 @@ enum RenderNodeInfo {
     /// A region with a foreground colour
     #[allow(unused)]
     Coloured(Colour, Vec<RenderNode>),
-    /// A region with a background colour
-    #[allow(unused)]
-    BgColoured(Colour, Vec<RenderNode>),
     /// A list item
     ListItem(Vec<RenderNode>),
     /// Superscript text
@@ -404,6 +400,7 @@ enum RenderNodeInfo {
 struct RenderNode {
     size_estimate: Cell<Option<SizeEstimate>>,
     info: RenderNodeInfo,
+    style: css::ComputedStyle,
 }
 
 impl RenderNode {
@@ -412,6 +409,16 @@ impl RenderNode {
         RenderNode {
             size_estimate: Cell::new(None),
             info,
+            style: Default::default(),
+        }
+    }
+
+    /// Create a node from the RenderNodeInfo.
+    fn new_styled(info: RenderNodeInfo, style: css::ComputedStyle) -> RenderNode {
+        RenderNode {
+            size_estimate: Cell::new(None),
+            info,
+            style,
         }
     }
 
@@ -537,7 +544,7 @@ impl RenderNode {
             Table(ref t) => t.calc_size_estimate(context),
             TableRow(..) | TableBody(_) | TableCell(_) => unimplemented!(),
             FragStart(_) => Default::default(),
-            BgColoured(_, ref v) | Coloured(_, ref v) => v
+            Coloured(_, ref v) => v
                 .iter()
                 .map(recurse)
                 .fold(Default::default(), SizeEstimate::add),
@@ -581,7 +588,7 @@ impl RenderNode {
             Table(ref _t) => false,
             TableRow(..) | TableBody(_) | TableCell(_) => false,
             FragStart(_) => true,
-            BgColoured(_, ref v) | Coloured(_, ref v) => v.is_empty(),
+            Coloured(_, ref v) => v.is_empty(),
         }
     }
 }
@@ -646,7 +653,7 @@ fn precalc_size_estimate<'a, 'b: 'a, D: TextDecorator>(
             }
         }
         TableRow(..) | TableBody(_) | TableCell(_) => unimplemented!(),
-        BgColoured(_, ref v) | Coloured(_, ref v) => TreeMapResult::PendingChildren {
+        Coloured(_, ref v) => TreeMapResult::PendingChildren {
             children: v.iter().collect(),
             cons: Box::new(move |context, _cs| {
                 node.calc_size_estimate(context, decorator);
@@ -906,7 +913,7 @@ impl<'a, C: 'a, N> TreeMapResult<'a, C, N, RenderNode> {
                                     row.cells = cells;
                                     RenderNode::new(RenderNodeInfo::TableRow(row, vert))
                                 }
-                                ni => RenderNode::new(f(vec![RenderNode::new(ni)])),
+                                ni => RenderNode::new(f(vec![RenderNode::new_styled(ni, n.style)])),
                             }
                         }))
                     }),
@@ -1159,20 +1166,21 @@ fn process_dom_node<'a, T: Write>(
             #[cfg(feature = "css")]
             let css_colour;
             #[cfg(feature = "css")]
-            let css_bgcolour;
-            #[cfg(feature = "css")]
-            {
+            let computed = {
                 let computed = context.style_data.computed_style(&handle, context.use_doc_css);
                 if let Some(true) = computed.display_none {
                     return Ok(Nothing);
                 }
                 css_colour = computed.colour;
-                css_bgcolour = computed.bg_colour;
+                computed
             };
+            #[cfg(not(feature = "css"))]
+            let computed = Default::default();
+
             let result = match name.expanded() {
                 expanded_name!(html "html") | expanded_name!(html "body") => {
                     /* process children, but don't add anything */
-                    pending(handle, |_, cs| Ok(Some(RenderNode::new(Container(cs)))))
+                    pending(handle, move |_, cs| Ok(Some(RenderNode::new_styled(Container(cs), computed))))
                 }
                 expanded_name!(html "link")
                 | expanded_name!(html "meta")
@@ -1185,7 +1193,9 @@ fn process_dom_node<'a, T: Write>(
                 }
                 expanded_name!(html "span") => {
                     /* process children, but don't add anything */
-                    pending_noempty(handle, |_, cs| Ok(Some(RenderNode::new(Container(cs)))))
+                    pending_noempty(handle, move |_, cs| {
+                        Ok(Some(RenderNode::new_styled(Container(cs), computed)))
+                    })
                 }
                 expanded_name!(html "a") => {
                     let borrowed = attrs.borrow();
@@ -1360,12 +1370,6 @@ fn process_dom_node<'a, T: Write>(
             } else {
                 result
             };
-            #[cfg(feature = "css")]
-            let result = if let Some(colour) = css_bgcolour {
-                result.wrap_render_nodes(move |children| BgColoured(colour, children))
-            } else {
-                result
-            };
 
             result
         }
@@ -1409,7 +1413,7 @@ fn render_tree_to_string<T: Write, D: TextDecorator>(
 fn pending2<
     'a,
     D: TextDecorator,
-    F: Fn(
+    F: FnOnce(
             &mut TextRenderer<D>,
             Vec<Option<SubRenderer<D>>>,
         ) -> Result<Option<Option<SubRenderer<D>>>>
@@ -1426,6 +1430,29 @@ fn pending2<
     }
 }
 
+/// Keep track of what style state has been applied to a renderer so that we
+/// can undo it.
+#[derive(Default)]
+struct PushedStyleInfo {
+    bgcolour: bool,
+}
+
+impl PushedStyleInfo {
+    fn apply<D: TextDecorator>(render: &mut TextRenderer<D>, style: &css::ComputedStyle) -> Self {
+        let mut result: PushedStyleInfo = Default::default();
+        if let Some(col) = style.bg_colour {
+            render.push_bgcolour(col);
+            result.bgcolour = true;
+        }
+        result
+    }
+    fn unwind<D: TextDecorator>(self, renderer: &mut TextRenderer<D>) {
+        if self.bgcolour {
+            renderer.pop_bgcolour();
+        }
+    }
+}
+
 fn do_render_node<T: Write, D: TextDecorator>(
     renderer: &mut TextRenderer<D>,
     tree: RenderNode,
@@ -1437,16 +1464,24 @@ fn do_render_node<T: Write, D: TextDecorator>(
 
     let size_estimate = tree.size_estimate.get().unwrap_or_default();
 
+    let pushed_style = PushedStyleInfo::apply(renderer, &tree.style);
+
     Ok(match tree.info {
         Text(ref tstr) => {
             renderer.add_inline_text(tstr)?;
+            pushed_style.unwind(renderer);
             Finished(None)
         }
-        Container(children) => pending2(children, |_, _| Ok(Some(None))),
+        Container(children) =>
+            pending2(children, |renderer, _| {
+                pushed_style.unwind(renderer);
+                Ok(Some(None))
+            }),
         Link(href, children) => {
             renderer.start_link(&href)?;
-            pending2(children, |renderer: &mut TextRenderer<D>, _| {
+            pending2(children, move |renderer: &mut TextRenderer<D>, _| {
                 renderer.end_link()?;
+                pushed_style.unwind(renderer);
                 Ok(Some(None))
             })
         }
@@ -1454,6 +1489,7 @@ fn do_render_node<T: Write, D: TextDecorator>(
             renderer.start_emphasis()?;
             pending2(children, |renderer: &mut TextRenderer<D>, _| {
                 renderer.end_emphasis()?;
+                pushed_style.unwind(renderer);
                 Ok(Some(None))
             })
         }
@@ -1461,6 +1497,7 @@ fn do_render_node<T: Write, D: TextDecorator>(
             renderer.start_strong()?;
             pending2(children, |renderer: &mut TextRenderer<D>, _| {
                 renderer.end_strong()?;
+                pushed_style.unwind(renderer);
                 Ok(Some(None))
             })
         }
@@ -1468,6 +1505,7 @@ fn do_render_node<T: Write, D: TextDecorator>(
             renderer.start_strikeout()?;
             pending2(children, |renderer: &mut TextRenderer<D>, _| {
                 renderer.end_strikeout()?;
+                pushed_style.unwind(renderer);
                 Ok(Some(None))
             })
         }
@@ -1475,17 +1513,20 @@ fn do_render_node<T: Write, D: TextDecorator>(
             renderer.start_code()?;
             pending2(children, |renderer: &mut TextRenderer<D>, _| {
                 renderer.end_code()?;
+                pushed_style.unwind(renderer);
                 Ok(Some(None))
             })
         }
         Img(src, title) => {
             renderer.add_image(&src, &title)?;
+            pushed_style.unwind(renderer);
             Finished(None)
         }
         Block(children) | ListItem(children) => {
             renderer.start_block()?;
             pending2(children, |renderer: &mut TextRenderer<D>, _| {
                 renderer.end_block();
+                pushed_style.unwind(renderer);
                 Ok(Some(None))
             })
         }
@@ -1504,6 +1545,7 @@ fn do_render_node<T: Write, D: TextDecorator>(
                 renderer.start_block()?;
                 renderer.append_subrender(sub_builder, repeat(&prefix[..]))?;
                 renderer.end_block();
+                pushed_style.unwind(renderer);
                 Ok(Some(None))
             })
         }
@@ -1511,6 +1553,7 @@ fn do_render_node<T: Write, D: TextDecorator>(
             renderer.new_line()?;
             pending2(children, |renderer: &mut TextRenderer<D>, _| {
                 renderer.new_line()?;
+                pushed_style.unwind(renderer);
                 Ok(Some(None))
             })
         }
@@ -1520,6 +1563,7 @@ fn do_render_node<T: Write, D: TextDecorator>(
             pending2(children, |renderer: &mut TextRenderer<D>, _| {
                 renderer.new_line()?;
                 renderer.end_pre();
+                pushed_style.unwind(renderer);
                 Ok(Some(None))
             })
         }
@@ -1536,6 +1580,7 @@ fn do_render_node<T: Write, D: TextDecorator>(
                 renderer.start_block()?;
                 renderer.append_subrender(sub_builder, repeat(&prefix[..]))?;
                 renderer.end_block();
+                pushed_style.unwind(renderer);
                 Ok(Some(None))
             })
         }
@@ -1547,7 +1592,10 @@ fn do_render_node<T: Write, D: TextDecorator>(
 
             TreeMapResult::PendingChildren {
                 children: items,
-                cons: Box::new(|_, _| Ok(Some(None))),
+                cons: Box::new(|renderer, _| {
+                    pushed_style.unwind(renderer);
+                    Ok(Some(None))
+                }),
                 prefn: Some(Box::new(move |renderer: &mut TextRenderer<D>, _| {
                     let inner_width = size_estimate.min_width - prefix_len;
                     let sub_builder = renderer
@@ -1585,7 +1633,10 @@ fn do_render_node<T: Write, D: TextDecorator>(
 
             TreeMapResult::PendingChildren {
                 children: items,
-                cons: Box::new(|_, _| Ok(Some(None))),
+                cons: Box::new(|renderer, _| {
+                    pushed_style.unwind(renderer);
+                    Ok(Some(None))
+                }),
                 prefn: Some(Box::new(move |renderer: &mut TextRenderer<D>, _| {
                     let inner_min = size_estimate.min_width - size_estimate.prefix_size;
                     let sub_builder = renderer
@@ -1612,7 +1663,10 @@ fn do_render_node<T: Write, D: TextDecorator>(
 
             TreeMapResult::PendingChildren {
                 children: items,
-                cons: Box::new(|_, _| Ok(Some(None))),
+                cons: Box::new(|renderer, _| {
+                    pushed_style.unwind(renderer);
+                    Ok(Some(None))
+                }),
                 prefn: None,
                 postfn: None,
             }
@@ -1622,6 +1676,7 @@ fn do_render_node<T: Write, D: TextDecorator>(
             renderer.start_emphasis()?;
             pending2(children, |renderer: &mut TextRenderer<D>, _| {
                 renderer.end_emphasis()?;
+                pushed_style.unwind(renderer);
                 Ok(Some(None))
             })
         }
@@ -1632,11 +1687,13 @@ fn do_render_node<T: Write, D: TextDecorator>(
             pending2(children, |renderer: &mut TextRenderer<D>, _| {
                 let sub_builder = renderer.pop();
                 renderer.append_subrender(sub_builder, repeat("  "))?;
+                pushed_style.unwind(renderer);
                 Ok(Some(None))
             })
         }
         Break => {
             renderer.new_line_hard()?;
+            pushed_style.unwind(renderer);
             Finished(None)
         }
         Table(tab) => render_table_tree(renderer, tab, err_out)?,
@@ -1646,19 +1703,14 @@ fn do_render_node<T: Write, D: TextDecorator>(
         TableCell(cell) => render_table_cell(renderer, cell, err_out),
         FragStart(fragname) => {
             renderer.record_frag_start(&fragname);
+            pushed_style.unwind(renderer);
             Finished(None)
         }
         Coloured(colour, children) => {
             renderer.push_colour(colour);
             pending2(children, |renderer: &mut TextRenderer<D>, _| {
                 renderer.pop_colour();
-                Ok(Some(None))
-            })
-        }
-        BgColoured(colour, children) => {
-            renderer.push_bgcolour(colour);
-            pending2(children, |renderer: &mut TextRenderer<D>, _| {
-                renderer.pop_bgcolour();
+                pushed_style.unwind(renderer);
                 Ok(Some(None))
             })
         }
@@ -1685,11 +1737,13 @@ fn do_render_node<T: Write, D: TextDecorator>(
             }
             if let Some(digitstr) = sup_digits(&children) {
                 renderer.add_inline_text(&digitstr)?;
+                pushed_style.unwind(renderer);
                 Finished(None)
             } else {
                 renderer.start_superscript()?;
                 pending2(children, |renderer: &mut TextRenderer<D>, _| {
                     renderer.end_superscript()?;
+                    pushed_style.unwind(renderer);
                     Ok(Some(None))
                 })
             }
