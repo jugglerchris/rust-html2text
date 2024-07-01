@@ -125,7 +125,7 @@ pub(crate) struct StyleDecl {
     importance: Importance,
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Copy, Clone, Default)]
 pub(crate) struct ComputedStyle {
     /// The computed foreground colour, if any
     pub(crate) colour: Option<Colour>,
