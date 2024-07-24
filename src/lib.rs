@@ -1015,6 +1015,7 @@ struct HtmlContext {
     min_wrap_width: usize,
     raw: bool,
     draw_borders: bool,
+    wrap_links: bool,
 }
 
 fn dom_to_render_tree_with_context<T: Write>(
@@ -1912,6 +1913,7 @@ pub mod config {
         min_wrap_width: usize,
         raw: bool,
         draw_borders: bool,
+        wrap_links: bool,
     }
 
     impl<D: TextDecorator> Config<D> {
@@ -1929,6 +1931,7 @@ pub mod config {
                 min_wrap_width: self.min_wrap_width,
                 raw: self.raw,
                 draw_borders: self.draw_borders,
+                wrap_links: self.wrap_links,
             }
         }
         /// Parse with context.
@@ -2086,6 +2089,11 @@ pub mod config {
             self.draw_borders = false;
             self
         }
+        /// Do not wrap links
+        pub fn no_link_wrapping(mut self) -> Self {
+            self.wrap_links = false;
+            self
+        }
     }
 
     impl Config<RichDecorator> {
@@ -2158,6 +2166,7 @@ pub mod config {
             min_wrap_width: MIN_WIDTH,
             raw: false,
             draw_borders: true,
+            wrap_links: true,
         }
     }
 
@@ -2175,6 +2184,7 @@ pub mod config {
             min_wrap_width: MIN_WIDTH,
             raw: false,
             draw_borders: true,
+            wrap_links: true,
         }
     }
 
@@ -2192,6 +2202,7 @@ pub mod config {
             min_wrap_width: MIN_WIDTH,
             raw: false,
             draw_borders: true,
+            wrap_links: true,
         }
     }
 }
@@ -2220,6 +2231,7 @@ impl RenderTree {
             allow_width_overflow: context.allow_width_overflow,
             raw: context.raw,
             draw_borders: context.draw_borders,
+            wrap_links: context.wrap_links,
         };
         let test_decorator = decorator.make_subblock_decorator();
         let builder = SubRenderer::new(width, render_options, decorator);

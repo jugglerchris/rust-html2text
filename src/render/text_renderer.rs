@@ -939,6 +939,9 @@ pub(crate) struct RenderOptions {
 
     /// Whether to draw table borders
     pub draw_borders: bool,
+
+    /// Whether to wrap links as normal text
+    pub wrap_links: bool,
 }
 
 impl Default for RenderOptions {
@@ -949,6 +952,7 @@ impl Default for RenderOptions {
             pad_block_width: Default::default(),
             raw: false,
             draw_borders: true,
+            wrap_links: true,
         }
     }
 }
@@ -1046,7 +1050,7 @@ impl<D: TextDecorator> SubRenderer<D> {
                 let tag = vec![ts.tag];
 
                 let width = s.width();
-                if pos + width > self.width {
+                if self.options.wrap_links && pos + width > self.width {
                     // split the string and start a new line
                     let mut buf = String::new();
                     for c in s.chars() {
