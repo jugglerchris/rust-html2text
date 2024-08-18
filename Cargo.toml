@@ -7,15 +7,15 @@ repository = "https://github.com/jugglerchris/rust-html2text/"
 readme = "README.md"
 documentation = "https://docs.rs/html2text/"
 edition = "2021"
-rust-version = "1.63"
+rust-version = "1.72"
 categories = ["text-processing"]
 
 keywords = ["html", "text"]
 license = "MIT"
 
 [dependencies]
-html5ever = "0.27.0"
-markup5ever = "0.12.0"
+html5ever = "0.28.0"
+markup5ever = "0.13.0"
 tendril = "0.4"
 unicode-width = "0.1.5"
 backtrace = { version = "0.3", optional=true }
