@@ -9,6 +9,11 @@ Possible log types:
 - `[fixed]` for any bug fixes.
 - `[security]` to invite users to upgrade in case of vulnerabilities.
 
+### Latest
+
+- [changed] Updated html5ever and markup5ever crate versions.  This has meant
+  updating the MSRV, which is now set to 1.72.
+
 ### 0.13.0-alpha.1
 
 - [fixed] Table rows with colours would disappear. (thanks tkapias)
