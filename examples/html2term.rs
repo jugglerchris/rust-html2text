@@ -1,14 +1,9 @@
 #[cfg(unix)]
 extern crate argparse;
 #[cfg(unix)]
-extern crate termion;
-#[cfg(unix)]
 extern crate unicode_width;
 #[cfg(unix)]
 mod top {
-    use ::html2text;
-    use ::std;
-    use ::termion;
     use argparse::{ArgumentParser, Store};
     use html2text::render::{RichAnnotation, TaggedLine, TaggedLineElement};
     use std::collections::HashMap;

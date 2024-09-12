@@ -1128,14 +1128,14 @@ hi
     .take(rpt - 3)
     .collect::<Vec<_>>()
     .concat()
-        + &r#"──┬────
+        + r#"──┬────
 hi│hi  
   │////
   │──  
   │hi  
   │──  
 ──┴────
-"# + &repeat("──────────\n").take(rpt - 3).collect::<String>();
+"# + &"──────────\n".repeat(rpt - 3);
     test_html(html.as_bytes(), &result, 10);
 }
 
