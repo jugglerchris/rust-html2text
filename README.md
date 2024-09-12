@@ -29,7 +29,7 @@ let html = b"
          <li>Item two</li>
          <li>Item three</li>
        </ul>";
-assert_eq!(from_read(&html[..], 20),
+assert_eq!(from_read(&html[..], 20).unwrap(),
            "\
 * Item one
 * Item two

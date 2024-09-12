@@ -16,7 +16,7 @@ macro_rules! assert_eq_str {
 }
 #[track_caller]
 fn test_html(input: &[u8], expected: &str, width: usize) {
-    let output = from_read(input, width);
+    let output = from_read(input, width).unwrap();
     assert_eq_str!(output, expected);
 }
 #[track_caller]
@@ -166,7 +166,7 @@ fn test_html_decorator<D>(input: &[u8], expected: &str, width: usize, decorator:
 where
     D: TextDecorator,
 {
-    let output = from_read_with_decorator(input, width, decorator);
+    let output = from_read_with_decorator(input, width, decorator).unwrap();
     assert_eq_str!(output, expected);
 }
 
@@ -354,34 +354,29 @@ fn test_colspan_large() {
 
 #[test]
 fn test_para() {
-    assert_eq_str!(from_read(&b"<p>Hello</p>"[..], 10), "Hello\n");
+    test_html(&b"<p>Hello</p>"[..], "Hello\n", 10);
 }
 
 #[test]
 fn test_para2() {
-    assert_eq_str!(
-        from_read(&b"<p>Hello, world!</p>"[..], 20),
-        "Hello, world!\n"
-    );
+    test_html(&b"<p>Hello, world!</p>"[..], "Hello, world!\n", 20);
 }
 
 #[test]
 fn test_blockquote() {
-    assert_eq_str!(
-        from_read(
-            &br#"<p>Hello</p>
+    test_html(
+        &br#"<p>Hello</p>
     <blockquote>One, two, three</blockquote>
     <p>foo</p>
 "#[..],
-            12
-        ),
         r#"Hello
 
 > One, two,
 > three
 
 foo
-"#
+"#,
+        12,
     );
 }
 
@@ -1791,7 +1786,7 @@ fn test_list_in_table() {
 fn test_max_width() {
     let html = r#"<table><td><p>3,266</p>"#;
     let decorator = crate::render::text_renderer::PlainDecorator::new();
-    let text = from_read_with_decorator(html.as_bytes(), usize::MAX, decorator.clone());
+    let text = from_read_with_decorator(html.as_bytes(), usize::MAX, decorator.clone()).unwrap();
     println!("{}", text);
 }
 
@@ -1804,7 +1799,7 @@ Test.
 End.
 </pre>"#;
     let decorator = crate::render::text_renderer::TrivialDecorator::new();
-    let text = from_read_with_decorator(html.as_bytes(), 20, decorator.clone());
+    let text = from_read_with_decorator(html.as_bytes(), 20, decorator.clone()).unwrap();
     assert_eq!(text, "Test.\n\n\nEnd.\n");
 }
 
@@ -1819,7 +1814,7 @@ fn test_links_outside_table() {
         </tbody>
         </table>
 "#;
-    let text = from_read(html.as_bytes(), 80);
+    let text = from_read(html.as_bytes(), 80).unwrap();
     assert_eq!(
         text,
         "──────────────┬───────────────
@@ -2008,7 +2003,7 @@ fn test_table_too_narrow() {
     </td>
 </tr></table>"
         .as_bytes();
-    from_read(tbl, 80);
+    from_read(tbl, 80).unwrap();
 }
 
 #[cfg(feature = "css")]
