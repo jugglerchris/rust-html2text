@@ -2011,6 +2011,20 @@ fn test_table_too_narrow() {
     from_read(tbl, 80);
 }
 
+#[test]
+fn test_empty_table_in_list() {
+    test_html(
+        b"
+<ul>
+  <table>
+    <tr></tr>
+  </table>
+</ul>",
+        "",
+        80,
+    );
+}
+
 #[cfg(feature = "css")]
 mod css_tests {
     use super::{test_html_coloured, test_html_css, test_html_style};
