@@ -1873,13 +1873,9 @@ fn render_table_tree<T: Write, D: TextDecorator>(
                 .saturating_sub(1)
     };
 
-    if table_width == 0 {
-        return Ok(TreeMapResult::Nothing);
-    }
-
     renderer.start_block()?;
 
-    if renderer.options.draw_borders {
+    if table_width != 0 && renderer.options.draw_borders {
         renderer.add_horizontal_border_width(table_width)?;
     }
 
