@@ -1128,14 +1128,14 @@ hi
     .take(rpt - 3)
     .collect::<Vec<_>>()
     .concat()
-        + &r#"──┬────
+        + r#"──┬────
 hi│hi  
   │////
   │──  
   │hi  
   │──  
 ──┴────
-"# + &repeat("──────────\n").take(rpt - 3).collect::<String>();
+"# + &"──────────\n".repeat(rpt - 3);
     test_html(html.as_bytes(), &result, 10);
 }
 
@@ -2009,6 +2009,20 @@ fn test_table_too_narrow() {
 </tr></table>"
         .as_bytes();
     from_read(tbl, 80);
+}
+
+#[test]
+fn test_empty_table_in_list() {
+    test_html(
+        b"
+<ul>
+  <table>
+    <tr></tr>
+  </table>
+</ul>",
+        "",
+        80,
+    );
 }
 
 #[cfg(feature = "css")]

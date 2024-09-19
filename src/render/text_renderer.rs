@@ -1032,7 +1032,7 @@ impl<D: TextDecorator> SubRenderer<D> {
         let mut result = String::new();
         for line in &self.lines {
             result += &line.to_string();
-            result.push_str("\n");
+            result.push('\n');
         }
         result
     }

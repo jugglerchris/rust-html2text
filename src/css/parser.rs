@@ -225,7 +225,7 @@ fn ident_escape(s: &str) -> IResult<&str, char> {
     match chars.next() {
         None => {
             // EOF: return replacement char
-            Ok((&rest, '\u{fffd}'))
+            Ok((rest, '\u{fffd}'))
         }
         Some((i, c)) if c.is_hex_digit() => {
             // Option 1: up to 6 hex digits.
