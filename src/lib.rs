@@ -14,7 +14,7 @@
 //!          <li>Item two</li>
 //!          <li>Item three</li>
 //!        </ul>";
-//! assert_eq!(from_read(&html[..], 20),
+//! assert_eq!(from_read(&html[..], 20).unwrap(),
 //!            "\
 //! * Item one
 //! * Item two
@@ -2287,37 +2287,31 @@ pub fn parse(input: impl io::Read) -> Result<RenderTree> {
 
 /// Reads HTML from `input`, decorates it using `decorator`, and
 /// returns a `String` with text wrapped to `width` columns.
-pub fn from_read_with_decorator<R, D>(input: R, width: usize, decorator: D) -> String
+pub fn from_read_with_decorator<R, D>(input: R, width: usize, decorator: D) -> Result<String>
 where
     R: io::Read,
     D: TextDecorator,
 {
-    config::with_decorator(decorator)
-        .string_from_read(input, width)
-        .expect("Failed to convert to HTML")
+    config::with_decorator(decorator).string_from_read(input, width)
 }
 
 /// Reads HTML from `input`, and returns a `String` with text wrapped to
 /// `width` columns.
-pub fn from_read<R>(input: R, width: usize) -> String
+pub fn from_read<R>(input: R, width: usize) -> Result<String>
 where
     R: io::Read,
 {
-    config::plain()
-        .string_from_read(input, width)
-        .expect("Failed to convert to HTML")
+    config::plain().string_from_read(input, width)
 }
 
 /// Reads HTML from `input`, and returns text wrapped to `width` columns.
 /// The text is returned as a `Vec<TaggedLine<_>>`; the annotations are vectors
 /// of `RichAnnotation`.  The "outer" annotation comes first in the `Vec`.
-pub fn from_read_rich<R>(input: R, width: usize) -> Vec<TaggedLine<Vec<RichAnnotation>>>
+pub fn from_read_rich<R>(input: R, width: usize) -> Result<Vec<TaggedLine<Vec<RichAnnotation>>>>
 where
     R: io::Read,
 {
-    config::rich()
-        .lines_from_read(input, width)
-        .expect("Failed to convert to HTML")
+    config::rich().lines_from_read(input, width)
 }
 
 mod ansi_colours;

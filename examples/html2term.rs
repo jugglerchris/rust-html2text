@@ -145,7 +145,8 @@ mod top {
         let (width, height) = (width as usize, height as usize);
 
         let mut file = std::fs::File::open(filename).expect("Tried to open file");
-        let annotated = html2text::from_read_rich(&mut file, width);
+        let annotated =
+            html2text::from_read_rich(&mut file, width).expect("Failed to convert from HTML");
 
         let link_map = find_links(&annotated);
         let frag_map = find_frags(&annotated);
