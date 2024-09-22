@@ -900,14 +900,15 @@ pub struct SubRenderer<D: TextDecorator> {
     pre_depth: usize,
 }
 
-impl<D: TextDecorator + Debug> std::fmt::Debug for SubRenderer<D> {
+impl<D: TextDecorator> std::fmt::Debug for SubRenderer<D> {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         f.debug_struct("SubRenderer")
             .field("width", &self.width)
             .field("lines", &self.lines)
-            .field("decorator", &self.decorator)
+            //.field("decorator", &self.decorator)
             .field("ann_stack", &self.ann_stack)
             .field("pre_depth", &self.pre_depth)
+            .field("wrapping", &self.wrapping)
             .finish()
     }
 }

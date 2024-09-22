@@ -325,21 +325,46 @@ fn test_colspan_large() {
      </tr>
    </table>
 "##,
-        r#"────────────
-1
-////////////
-2
-////////////
-3
-────────────
-12
-////////////
-3
-────────────
-1
-////////////
-23
-────────────
+        // FIXME: The extra long line blow is not ideal
+        r#"─┬─┬─
+1│2│3
+─┴─┼─
+12 │3
+─┬─┴─
+1│23  
+─┴────
+"#,
+        12,
+    );
+}
+
+#[test]
+fn test_colspan_larger() {
+    test_html(
+        br##"
+   <table>
+     <tr>
+       <td colspan="50">1</td>
+       <td colspan="50">2</td>
+       <td colspan="50">3</td>
+     </tr>
+     <tr>
+       <td colspan="100">12</td>
+       <td colspan="50">3</td>
+     </tr>
+     <tr>
+       <td colspan="50">1</td>
+       <td colspan="100">23</td>
+     </tr>
+   </table>
+"##,
+        r#"─┬─┬─
+1│2│3
+─┴─┼─
+12 │3
+─┬─┴─
+1│23 
+─┴───
 "#,
         12,
     );
@@ -2038,6 +2063,24 @@ fn test_empty_table_in_list() {
   </table>
 </ul>",
         "",
+        80,
+    );
+}
+
+#[test]
+fn test_silly_colspan() {
+    test_html(
+        br#"
+  <table>
+    <tr>
+      <td colspan="9007199254740991">foo</td.
+    </tr>
+  </table>
+"#,
+        r#"───
+foo
+───
+"#,
         80,
     );
 }
