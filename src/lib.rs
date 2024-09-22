@@ -297,8 +297,7 @@ impl RenderTable {
             }
         }
 
-        let colmap: HashMap<_, _> =
-            col_positions
+        let colmap: HashMap<_, _> = col_positions
             .into_iter()
             .enumerate()
             .map(|(i, pos)| (pos, i))
