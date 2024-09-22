@@ -81,6 +81,7 @@ use markup5ever_rcdom::{
 };
 use std::cell::Cell;
 use std::cmp::{max, min};
+use std::collections::{BTreeSet, HashMap};
 use unicode_width::UnicodeWidthStr;
 
 use std::io;
@@ -268,7 +269,52 @@ struct RenderTable {
 
 impl RenderTable {
     /// Create a new RenderTable with the given rows
-    fn new(rows: Vec<RenderTableRow>) -> RenderTable {
+    fn new(mut rows: Vec<RenderTableRow>) -> RenderTable {
+        // We later on want to allocate a vector sized by the column count,
+        // but occasionally we see something like colspan="1000000000".  We
+        // handle this by remapping the column ids to the smallest values
+        // possible.
+        //
+        // Tables with no explicit colspan will be unchanged, but if there
+        // are multiple columns each covered by a single <td> on every row,
+        // they will be collapsed into a single column.  For example:
+        //
+        //    <td><td colspan=1000><td>
+        //    <td colspan=1000><td><td>
+        //
+        //  becomes the equivalent:
+        //    <td><td colspan=2><td>
+        //    <td colspan=2><td><td>
+
+        // This will include 0 and the index after the last colspan.
+        let mut col_positions = BTreeSet::new();
+        col_positions.insert(0);
+        for row in &rows {
+            let mut col = 0;
+            for cell in row.cells() {
+                col += cell.colspan;
+                col_positions.insert(col);
+            }
+        }
+
+        let colmap: HashMap<_, _> = col_positions
+            .into_iter()
+            .enumerate()
+            .map(|(i, pos)| (pos, i))
+            .collect();
+
+        for row in &mut rows {
+            let mut pos = 0;
+            let mut mapped_pos = 0;
+            for cell in row.cells_mut() {
+                let nextpos = pos + cell.colspan.max(1);
+                let next_mapped_pos = *colmap.get(&nextpos).unwrap();
+                cell.colspan = next_mapped_pos - mapped_pos;
+                pos = nextpos;
+                mapped_pos = next_mapped_pos;
+            }
+        }
+
         let num_columns = rows.iter().map(|r| r.num_cells()).max().unwrap_or(0);
         RenderTable {
             rows,
