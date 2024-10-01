@@ -9,6 +9,12 @@ Possible log types:
 - `[fixed]` for any bug fixes.
 - `[security]` to invite users to upgrade in case of vulnerabilities.
 
+### 0.12.6
+
+- [fixed] Table rows with colours would disappear. (thanks tkapias)
+- [fixed] A re-introduced panic on some empty tables (thanks sftse)
+- [fixed] Out of memory panic with crazy colspans (thanks pycui)
+
 ### 0.12.5
 
 - [changed] Updated some dependencies
