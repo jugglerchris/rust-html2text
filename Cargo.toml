@@ -17,7 +17,8 @@ license = "MIT"
 html5ever = "0.27.0"
 markup5ever = "0.12.0"
 tendril = "0.4"
-unicode-width = "0.1.5"
+# unicode-width 0.1.14 increased MSRV
+unicode-width = "=0.1.13"
 backtrace = { version = "0.3", optional=true }
 thiserror = "1.0.50"
 lightningcss = { version = "1.0.0-alpha.54", optional=true }
