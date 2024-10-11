@@ -11,8 +11,18 @@ Possible log types:
 
 ### Latest
 
+### 0.13.0-alpha.2
+
 - [changed] Updated html5ever and markup5ever crate versions.  This has meant
   updating the MSRV, which is now set to 1.72.
+- [fixed] Add `Config::no_link_wrapping()` (thanks JadeBlueEyes)
+- [fixed] Fix panic with empty table inside a list (thanks sftse)
+- [changed] Top level convenience functions (`from_read` etc.) now return
+  `Result<..>` instead of panicking (thanks sftse)
+- [fixed] Fix panic with very large HTML `colspan` (thanks pycui)
+- [changed] CSS updates:
+  - Separate user agent, author, and user CSS layers
+  - Improve the style precedence between layers and implement specificity.
 
 ### 0.13.0-alpha.1
 

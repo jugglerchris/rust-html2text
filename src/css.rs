@@ -13,6 +13,8 @@ use crate::{
     tree_map_reduce, Colour, Result, TreeMapResult,
 };
 
+use self::parser::Importance;
+
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) enum SelectorComponent {
     Class(String),
@@ -21,6 +23,43 @@ pub(crate) enum SelectorComponent {
     Star,
     CombChild,
     CombDescendant,
+}
+
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Default)]
+pub(crate) struct Specificity {
+    inline: bool,
+    id: u16,
+    class: u16,
+    typ: u16,
+}
+
+impl Specificity {
+    fn inline() -> Self {
+        Specificity {
+            inline: true,
+            id: 0,
+            class: 0,
+            typ: 0,
+        }
+    }
+}
+
+impl PartialOrd for Specificity {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        match self.inline.partial_cmp(&other.inline) {
+            Some(core::cmp::Ordering::Equal) => {}
+            ord => return ord,
+        }
+        match self.id.partial_cmp(&other.id) {
+            Some(core::cmp::Ordering::Equal) => {}
+            ord => return ord,
+        }
+        match self.class.partial_cmp(&other.class) {
+            Some(core::cmp::Ordering::Equal) => {}
+            ord => return ord,
+        }
+        self.typ.partial_cmp(&other.typ)
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -108,6 +147,28 @@ impl Selector {
     fn matches(&self, node: &Handle) -> bool {
         Self::do_matches(&self.components, node)
     }
+    fn specificity(&self) -> Specificity {
+        let mut result: Specificity = Default::default();
+
+        for component in &self.components {
+            match component {
+                SelectorComponent::Class(_) => {
+                    result.class += 1;
+                }
+                SelectorComponent::Element(_) => {
+                    result.typ += 1;
+                }
+                SelectorComponent::Hash(_) => {
+                    result.id += 1;
+                }
+                SelectorComponent::Star => {}
+                SelectorComponent::CombChild => {}
+                SelectorComponent::CombDescendant => {}
+            }
+        }
+
+        result
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -118,27 +179,119 @@ pub(crate) enum Style {
 }
 
 #[derive(Debug, Clone)]
+pub(crate) struct StyleDecl {
+    style: Style,
+    importance: Importance,
+}
+
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Default, PartialOrd)]
+pub(crate) enum StyleOrigin {
+    #[default]
+    None,
+    Agent,
+    User,
+    Author,
+}
+
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct WithSpec<T: Copy + Clone> {
+    val: Option<T>,
+    origin: StyleOrigin,
+    specificity: Specificity,
+    important: bool,
+}
+impl<T: Copy + Clone> WithSpec<T> {
+    fn maybe_update(
+        &mut self,
+        important: bool,
+        origin: StyleOrigin,
+        specificity: Specificity,
+        val: T,
+    ) {
+        if self.val.is_some() {
+            // We already have a value, so need to check.
+            if self.important && !important {
+                // important takes priority over not important.
+                return;
+            }
+            // importance is the same.  Next is checking the origin.
+            {
+                use StyleOrigin::*;
+                match (self.origin, origin) {
+                    (Agent, Agent) | (User, User) | (Author, Author) => {
+                        // They're the same so continue the comparison
+                    }
+                    (mine, theirs) => {
+                        if important && theirs > mine {
+                            return;
+                        } else if !important && mine > theirs {
+                            return;
+                        }
+                    }
+                }
+            }
+            // We're now from the same origin an importance
+            if specificity < self.specificity {
+                return;
+            }
+        }
+        self.val = Some(val);
+        self.origin = origin;
+        self.specificity = specificity;
+        self.important = important;
+    }
+
+    pub fn val(&self) -> Option<T> {
+        self.val.clone()
+    }
+}
+
+impl<T: Copy + Clone> Default for WithSpec<T> {
+    fn default() -> Self {
+        WithSpec {
+            val: None,
+            origin: StyleOrigin::None,
+            specificity: Default::default(),
+            important: false,
+        }
+    }
+}
+
+#[derive(Debug, Copy, Clone, Default)]
+pub(crate) struct ComputedStyle {
+    /// The computed foreground colour, if any
+    pub(crate) colour: WithSpec<Colour>,
+    /// The specificity for colour
+    /// The computed background colour, if any
+    pub(crate) bg_colour: WithSpec<Colour>,
+    /// If set, indicates whether `display: none` or something equivalent applies
+    pub(crate) display_none: WithSpec<bool>,
+}
+
+#[derive(Debug, Clone)]
 struct Ruleset {
     selector: Selector,
-    styles: Vec<Style>,
+    styles: Vec<StyleDecl>,
 }
 
 /// Stylesheet data which can be used while building the render tree.
 #[derive(Clone, Default, Debug)]
 pub(crate) struct StyleData {
-    rules: Vec<Ruleset>,
+    agent_rules: Vec<Ruleset>,
+    user_rules: Vec<Ruleset>,
+    author_rules: Vec<Ruleset>,
 }
 
-pub(crate) fn parse_style_attribute(text: &str) -> Result<Vec<Style>> {
+pub(crate) fn parse_style_attribute(text: &str) -> Result<Vec<StyleDecl>> {
     html_trace_quiet!("Parsing inline style: {text}");
     let (_rest, decls) = parse_rules(text).map_err(|_| crate::Error::CssParseError)?;
 
-    let styles = styles_from_properties2(&decls);
+    let styles = styles_from_properties(&decls);
     html_trace_quiet!("Parsed inline style: {:?}", styles);
     Ok(styles)
 }
 
-fn styles_from_properties2(decls: &[parser::Declaration]) -> Vec<Style> {
+fn styles_from_properties(decls: &[parser::Declaration]) -> Vec<StyleDecl> {
     let mut styles = Vec::new();
     html_trace_quiet!("styles:from_properties2: {decls:?}");
     let mut overflow_hidden = false;
@@ -150,20 +303,26 @@ fn styles_from_properties2(decls: &[parser::Declaration]) -> Vec<Style> {
             parser::Decl::Color {
                 value: parser::Colour::Rgb(r, g, b),
             } => {
-                styles.push(Style::Colour(Colour {
-                    r: *r,
-                    g: *g,
-                    b: *b,
-                }));
+                styles.push(StyleDecl {
+                    style: Style::Colour(Colour {
+                        r: *r,
+                        g: *g,
+                        b: *b,
+                    }),
+                    importance: decl.important,
+                });
             }
             parser::Decl::BackgroundColor {
                 value: parser::Colour::Rgb(r, g, b),
             } => {
-                styles.push(Style::BgColour(Colour {
-                    r: *r,
-                    g: *g,
-                    b: *b,
-                }));
+                styles.push(StyleDecl {
+                    style: Style::BgColour(Colour {
+                        r: *r,
+                        g: *g,
+                        b: *b,
+                    }),
+                    importance: decl.important,
+                });
             }
             parser::Decl::Height { value } => match value {
                 parser::Height::Auto => (),
@@ -192,7 +351,10 @@ fn styles_from_properties2(decls: &[parser::Declaration]) -> Vec<Style> {
             parser::Decl::Overflow { .. } | parser::Decl::OverflowY { .. } => {}
             parser::Decl::Display { value } => {
                 if let parser::Display::None = value {
-                    styles.push(Style::DisplayNone);
+                    styles.push(StyleDecl {
+                        style: Style::DisplayNone,
+                        importance: decl.important,
+                    });
                 }
             } /*
               _ => {
@@ -203,7 +365,10 @@ fn styles_from_properties2(decls: &[parser::Declaration]) -> Vec<Style> {
     }
     // If the height is set to zero and overflow hidden, treat as display: none
     if height_zero && overflow_hidden {
-        styles.push(Style::DisplayNone);
+        styles.push(StyleDecl {
+            style: Style::DisplayNone,
+            importance: Importance::Default,
+        });
     }
     styles
 }
@@ -211,11 +376,11 @@ fn styles_from_properties2(decls: &[parser::Declaration]) -> Vec<Style> {
 impl StyleData {
     /// Add some CSS source to be included.  The source will be parsed
     /// and the relevant and supported features extracted.
-    pub fn add_css(&mut self, css: &str) -> Result<()> {
+    fn do_add_css(css: &str, rules: &mut Vec<Ruleset>) -> Result<()> {
         let (_, ss) = parser::parse_stylesheet(css).map_err(|_| crate::Error::CssParseError)?;
 
         for rule in ss {
-            let styles = styles_from_properties2(&rule.declarations);
+            let styles = styles_from_properties(&rule.declarations);
             if !styles.is_empty() {
                 for selector in rule.selectors {
                     let ruleset = Ruleset {
@@ -223,26 +388,63 @@ impl StyleData {
                         styles: styles.clone(),
                     };
                     html_trace_quiet!("Adding ruleset {ruleset:?}");
-                    self.rules.push(ruleset);
+                    rules.push(ruleset);
                 }
             }
         }
         Ok(())
     }
+    /// Add some CSS source to be included as part of the user agent ("browser") CSS rules.
+    pub fn add_agent_css(&mut self, css: &str) -> Result<()> {
+        Self::do_add_css(css, &mut self.agent_rules)
+    }
+
+    /// Add some CSS source to be included as part of the user CSS rules.
+    pub fn add_user_css(&mut self, css: &str) -> Result<()> {
+        Self::do_add_css(css, &mut self.user_rules)
+    }
+
+    /// Add some CSS source to be included as part of the document/author CSS rules.
+    pub fn add_author_css(&mut self, css: &str) -> Result<()> {
+        Self::do_add_css(css, &mut self.author_rules)
+    }
 
     /// Merge style data from other into this one.
     /// Data on other takes precedence.
     pub fn merge(&mut self, other: Self) {
-        self.rules.extend(other.rules);
+        self.agent_rules.extend(other.agent_rules);
+        self.user_rules.extend(other.user_rules);
+        self.author_rules.extend(other.author_rules);
     }
 
-    pub(crate) fn matching_rules(&self, handle: &Handle, use_doc_css: bool) -> Vec<Style> {
-        let mut result = Vec::new();
-        for rule in &self.rules {
-            if rule.selector.matches(handle) {
-                result.extend(rule.styles.iter().cloned());
+    pub(crate) fn computed_style(
+        &self,
+        parent_style: &ComputedStyle,
+        handle: &Handle,
+        use_doc_css: bool,
+    ) -> ComputedStyle {
+        let mut result = *parent_style;
+
+        for (origin, ruleset) in [
+            (StyleOrigin::Agent, &self.agent_rules),
+            (StyleOrigin::User, &self.user_rules),
+            (StyleOrigin::Author, &self.author_rules),
+        ] {
+            for rule in ruleset {
+                if rule.selector.matches(handle) {
+                    for style in rule.styles.iter() {
+                        Self::merge_computed_style(
+                            &mut result,
+                            style.importance == Importance::Important,
+                            origin,
+                            rule.selector.specificity(),
+                            style,
+                        );
+                    }
+                }
             }
         }
+
         if use_doc_css {
             // Now look for a style attribute
             if let Element { attrs, .. } = &handle.data {
@@ -250,14 +452,40 @@ impl StyleData {
                 for attr in borrowed.iter() {
                     if &attr.name.local == "style" {
                         let rules = parse_style_attribute(&attr.value).unwrap_or_default();
-                        result.extend(rules);
+                        for style in rules {
+                            Self::merge_computed_style(
+                                &mut result,
+                                false,
+                                StyleOrigin::Author,
+                                Specificity::inline(),
+                                &style,
+                            );
+                        }
                     } else if &*attr.name.local == "color" {
                         if let Ok(colour) = parser::parse_color_attribute(&attr.value) {
-                            result.push(Style::Colour(colour.into()));
+                            Self::merge_computed_style(
+                                &mut result,
+                                false,
+                                StyleOrigin::Author,
+                                Specificity::inline(),
+                                &StyleDecl {
+                                    style: Style::Colour(colour.into()),
+                                    importance: Importance::Default,
+                                },
+                            );
                         }
                     } else if &*attr.name.local == "bgcolor" {
                         if let Ok(colour) = parser::parse_color_attribute(&attr.value) {
-                            result.push(Style::BgColour(colour.into()));
+                            Self::merge_computed_style(
+                                &mut result,
+                                false,
+                                StyleOrigin::Author,
+                                Specificity::inline(),
+                                &StyleDecl {
+                                    style: Style::BgColour(colour.into()),
+                                    importance: Importance::Default,
+                                },
+                            );
                         }
                     }
                 }
@@ -265,6 +493,43 @@ impl StyleData {
         }
 
         result
+    }
+
+    fn merge_computed_style(
+        result: &mut ComputedStyle,
+        important: bool,
+        origin: StyleOrigin,
+        specificity: Specificity,
+        style: &StyleDecl,
+    ) {
+        // The increasing priority is:
+        // * agent
+        // * user
+        // * author
+        // * author !important
+        // * user !important
+        // * agent !important
+        // Since we view in the order agent, user, author, we always want to
+        // replace the value if we haven't yet seen an !important rule, and
+        // never afterwards.
+        match style.style {
+            Style::Colour(col) => {
+                result
+                    .colour
+                    .maybe_update(important, origin, specificity, col);
+            }
+            Style::BgColour(col) => {
+                result
+                    .bg_colour
+                    .maybe_update(important, origin, specificity, col);
+            }
+            Style::DisplayNone => {
+                // We don't have a "not DisplayNone" - we might need to fix this.
+                result
+                    .display_none
+                    .maybe_update(important, origin, specificity, true);
+            }
+        }
     }
 }
 
@@ -338,8 +603,38 @@ pub(crate) fn dom_to_stylesheet<T: Write>(handle: Handle, err_out: &mut T) -> Re
     if let Some(styles) = styles {
         for css in styles {
             // Ignore CSS parse errors.
-            let _ = result.add_css(&css);
+            let _ = result.add_author_css(&css);
         }
     }
     Ok(result)
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::css::Specificity;
+
+    use super::parser::parse_selector;
+
+    #[test]
+    fn test_specificity() {
+        let sel_id1 = parse_selector("#foo").unwrap().1;
+        assert_eq!(
+            sel_id1.specificity(),
+            Specificity {
+                id: 1,
+                ..Default::default()
+            }
+        );
+
+        let sel_cl3 = parse_selector(".foo .bar .baz").unwrap().1;
+        assert_eq!(
+            sel_cl3.specificity(),
+            Specificity {
+                class: 3,
+                ..Default::default()
+            }
+        );
+
+        assert!(sel_id1.specificity() > sel_cl3.specificity());
+    }
 }

@@ -2,7 +2,7 @@ use crate::config::Config;
 use crate::render::text_renderer::PlainDecorator;
 use crate::{config, Error};
 
-use super::render::text_renderer::{RichAnnotation, TaggedLine, TrivialDecorator};
+use super::render::text_renderer::{RichAnnotation, RichDecorator, TaggedLine, TrivialDecorator};
 use super::{from_read, from_read_with_decorator, parse, TextDecorator};
 
 /// Like assert_eq!(), but prints out the results normally as well
@@ -124,12 +124,19 @@ fn test_colour_map(annotations: &[RichAnnotation], s: &str) -> String {
 
 #[cfg(feature = "css")]
 #[track_caller]
-fn test_html_coloured(input: &[u8], expected: &str, width: usize) {
-    let result = config::rich()
-        .use_doc_css()
+fn test_html_coloured_conf<F>(input: &[u8], expected: &str, width: usize, conf: F)
+where
+    F: Fn(Config<RichDecorator>) -> Config<RichDecorator>,
+{
+    let result = conf(config::rich().use_doc_css())
         .coloured(input, width, test_colour_map)
         .unwrap();
     assert_eq_str!(result, expected);
+}
+#[cfg(feature = "css")]
+#[track_caller]
+fn test_html_coloured(input: &[u8], expected: &str, width: usize) {
+    test_html_coloured_conf(input, expected, width, |c| c)
 }
 #[track_caller]
 fn test_html_err_conf<F>(input: &[u8], expected: Error, width: usize, conf: F)
@@ -2065,7 +2072,7 @@ foo
 
 #[cfg(feature = "css")]
 mod css_tests {
-    use super::{test_html_coloured, test_html_css, test_html_style};
+    use super::{test_html_coloured, test_html_coloured_conf, test_html_css, test_html_style};
 
     #[test]
     fn test_disp_none() {
@@ -2468,12 +2475,78 @@ Baz
             r#"───┬─────
 Row│One  
 ───┼─────
-<R>Row</R>│<R>Two</R>  
-───┼─────
+<R>Row│Two  </R>
+<R>───┼─────</R>
 Row│Three
 ───┴─────
 "#,
             20,
+        );
+    }
+
+    #[test]
+    fn test_css_levels() {
+        test_html_coloured_conf(
+            br#"
+        <head><style>
+            .doc_red { color: #f00; }
+            .doc_red_imp { color: #f00 !important; }
+        </style></head>
+        <body>
+            <p class="doc_red">Doc red</p>
+            <p class="agent_green">Agent green</p>
+            <p class="user_blue">User blue</p>
+            <p class="doc_red agent_green">Doc vs agent</p>
+            <p class="agent_green user_blue">Agent vs user</p>
+            <p class="user_blue doc_red">User vs doc</p>
+            <p class="doc_red agent_green_imp">Doc vs agent!</p>
+            <p class="agent_green_imp user_blue">Agent! vs user</p>
+            <p class="user_blue_imp doc_red">User! vs doc</p>
+            <p class="doc_red_imp agent_green_imp">Doc! vs agent!</p>
+            <p class="agent_green_imp user_blue_imp">Agent! vs user!</p>
+            <p class="user_blue_imp doc_red_imp">User! vs doc!</p>
+        </body>"#,
+            r#"<R>Doc red</R>
+
+<G>Agent green</G>
+
+<B>User blue</B>
+
+<R>Doc vs agent</R>
+
+<B>Agent vs user</B>
+
+<R>User vs doc</R>
+
+<G>Doc vs agent!</G>
+
+<G>Agent! vs user</G>
+
+<B>User! vs doc</B>
+
+<G>Doc! vs agent!</G>
+
+<G>Agent! vs user!</G>
+
+<B>User! vs doc!</B>
+"#,
+            80,
+            |conf| {
+                conf.add_agent_css(
+                    r#"
+                .agent_green { color: #0f0; }
+                .agent_green_imp { color: #0f0 !important; }
+                "#,
+                )
+                .unwrap()
+                .add_css(
+                    r#"
+                .user_blue { color: #00f; }
+                .user_blue_imp { color: #00f !important; }
+                "#,
+                )
+                .unwrap()
+            },
         );
     }
 }
