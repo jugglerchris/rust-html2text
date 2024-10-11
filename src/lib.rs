@@ -1206,7 +1206,7 @@ fn process_dom_node<'a, T: Write>(
                     context
                         .style_data
                         .computed_style(&parent_style, &handle, context.use_doc_css);
-                if let Some(true) = computed.display_none {
+                if let Some(true) = computed.display_none.val() {
                     return Ok(Nothing);
                 }
                 computed
@@ -1487,11 +1487,11 @@ struct PushedStyleInfo {
 impl PushedStyleInfo {
     fn apply<D: TextDecorator>(render: &mut TextRenderer<D>, style: &css::ComputedStyle) -> Self {
         let mut result: PushedStyleInfo = Default::default();
-        if let Some(col) = style.colour {
+        if let Some(col) = style.colour.val() {
             render.push_colour(col);
             result.colour = true;
         }
-        if let Some(col) = style.bg_colour {
+        if let Some(col) = style.bg_colour.val() {
             render.push_bgcolour(col);
             result.bgcolour = true;
         }

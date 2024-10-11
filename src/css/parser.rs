@@ -733,7 +733,7 @@ fn parse_selector_without_element(text: &str) -> IResult<&str, Vec<SelectorCompo
     many1(parse_simple_selector_component)(text)
 }
 
-fn parse_selector(text: &str) -> IResult<&str, Selector> {
+pub(crate) fn parse_selector(text: &str) -> IResult<&str, Selector> {
     let (rest, mut components) = alt((
         parse_selector_with_element,
         parse_selector_without_element,
