@@ -222,8 +222,7 @@ impl<T: Copy + Clone> WithSpec<T> {
                         // They're the same so continue the comparison
                     }
                     (mine, theirs) => {
-                        if (important && theirs > mine) ||
-                           (!important && mine > theirs) {
+                        if (important && theirs > mine) || (!important && mine > theirs) {
                             return;
                         }
                     }
