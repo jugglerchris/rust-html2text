@@ -222,9 +222,8 @@ impl<T: Copy + Clone> WithSpec<T> {
                         // They're the same so continue the comparison
                     }
                     (mine, theirs) => {
-                        if important && theirs > mine {
-                            return;
-                        } else if !important && mine > theirs {
+                        if (important && theirs > mine) ||
+                           (!important && mine > theirs) {
                             return;
                         }
                     }
@@ -242,7 +241,7 @@ impl<T: Copy + Clone> WithSpec<T> {
     }
 
     pub fn val(&self) -> Option<T> {
-        self.val.clone()
+        self.val
     }
 }
 

@@ -68,7 +68,8 @@ pub mod render;
 use css::ComputedStyle;
 
 #[cfg(not(feature = "css"))]
-type ComputedStyle = ();
+#[derive(Copy, Clone, Debug, Default)]
+struct ComputedStyle;
 
 use render::text_renderer::{
     RenderLine, RenderOptions, RichAnnotation, SubRenderer, TaggedLine, TextRenderer,
@@ -259,7 +260,7 @@ impl RenderTableRow {
             // Skip any zero-width columns
             if col_width > 0 {
                 cell.col_width = Some(col_width + cell.colspan - 1);
-                let style = cell.style.clone();
+                let style = cell.style;
                 result.push(RenderNode::new_styled(
                     RenderNodeInfo::TableCell(cell),
                     style,
@@ -347,7 +348,7 @@ impl RenderTable {
             .into_iter()
             .map(|mut tr| {
                 tr.col_sizes = Some(col_sizes.clone());
-                let style = tr.style.clone();
+                let style = tr.style;
                 RenderNode::new_styled(RenderNodeInfo::TableRow(tr, vert), style)
             })
             .collect()
@@ -855,7 +856,7 @@ fn tr_to_render_tree<'a, T: Write>(
                 RenderTableRow {
                     cells,
                     col_sizes: None,
-                    style: computed.clone(),
+                    style: computed,
                 },
                 false,
             ),
@@ -1211,14 +1212,14 @@ fn process_dom_node<'a, T: Write>(
                 let computed =
                     context
                         .style_data
-                        .computed_style(&parent_style, &handle, context.use_doc_css);
+                        .computed_style(parent_style, handle, context.use_doc_css);
                 if let Some(true) = computed.display_none.val() {
                     return Ok(Nothing);
                 }
                 computed
             };
             #[cfg(not(feature = "css"))]
-            let computed = (**parent_style).clone();
+            let computed = **parent_style;
 
             let result = match name.expanded() {
                 expanded_name!(html "html") | expanded_name!(html "body") => {
@@ -1494,6 +1495,7 @@ struct PushedStyleInfo {
 
 impl PushedStyleInfo {
     fn apply<D: TextDecorator>(render: &mut TextRenderer<D>, style: &ComputedStyle) -> Self {
+        #[allow(unused_mut)]
         let mut result: PushedStyleInfo = Default::default();
         #[cfg(feature = "css")]
         {
@@ -1510,7 +1512,6 @@ impl PushedStyleInfo {
         {
             let _ = render;
             let _ = style;
-            result = result;
         }
         result
     }
@@ -1887,7 +1888,7 @@ fn render_table_tree<T: Write, D: TextDecorator>(
                         (
                             width.saturating_sub(col_sizes[colno].min_width),
                             width,
-                            usize::max_value() - colno,
+                            usize::MAX - colno,
                         )
                     })
                     .unwrap();
