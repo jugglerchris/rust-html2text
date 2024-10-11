@@ -107,7 +107,6 @@ pub enum Error {
     /// The output width was too narrow to render to.
     #[error("Output width not wide enough.")]
     TooNarrow,
-    #[cfg(feature = "css")]
     /// CSS parse error
     #[error("Invalid CSS")]
     CssParseError,
@@ -1185,7 +1184,7 @@ fn process_dom_node<'a, T: Write>(
                 computed
             };
             #[cfg(not(feature = "css"))]
-            let computed = parent_style;
+            let computed = (**parent_style).clone();
 
             let result = match name.expanded() {
                 expanded_name!(html "html") | expanded_name!(html "body") => {
