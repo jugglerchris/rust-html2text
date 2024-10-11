@@ -424,7 +424,6 @@ impl TreeSink for RcDom {
             panic!("not an element!")
         }
     }
-
 }
 
 impl Default for RcDom {
