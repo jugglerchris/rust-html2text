@@ -291,7 +291,12 @@ impl StyleData {
         self.author_rules.extend(other.author_rules);
     }
 
-    pub(crate) fn computed_style(&self, parent_style: &ComputedStyle, handle: &Handle, use_doc_css: bool) -> ComputedStyle {
+    pub(crate) fn computed_style(
+        &self,
+        parent_style: &ComputedStyle,
+        handle: &Handle,
+        use_doc_css: bool,
+    ) -> ComputedStyle {
         let mut result = *parent_style;
         let mut importance = ComputedImportance::default();
 
@@ -317,17 +322,25 @@ impl StyleData {
                         }
                     } else if &*attr.name.local == "color" {
                         if let Ok(colour) = parser::parse_color_attribute(&attr.value) {
-                            Self::merge_computed_style(&mut result, &mut importance, &StyleDecl {
-                                style: Style::Colour(colour.into()),
-                                importance: Importance::Default,
-                            });
+                            Self::merge_computed_style(
+                                &mut result,
+                                &mut importance,
+                                &StyleDecl {
+                                    style: Style::Colour(colour.into()),
+                                    importance: Importance::Default,
+                                },
+                            );
                         }
                     } else if &*attr.name.local == "bgcolor" {
                         if let Ok(colour) = parser::parse_color_attribute(&attr.value) {
-                            Self::merge_computed_style(&mut result, &mut importance, &StyleDecl {
-                                style: Style::BgColour(colour.into()),
-                                importance: Importance::Default,
-                            });
+                            Self::merge_computed_style(
+                                &mut result,
+                                &mut importance,
+                                &StyleDecl {
+                                    style: Style::BgColour(colour.into()),
+                                    importance: Importance::Default,
+                                },
+                            );
                         }
                     }
                 }
@@ -337,7 +350,11 @@ impl StyleData {
         result
     }
 
-    fn merge_computed_style(result: &mut ComputedStyle, importance: &mut ComputedImportance, style: &StyleDecl) {
+    fn merge_computed_style(
+        result: &mut ComputedStyle,
+        importance: &mut ComputedImportance,
+        style: &StyleDecl,
+    ) {
         // The increasing priority is:
         // * agent
         // * user
