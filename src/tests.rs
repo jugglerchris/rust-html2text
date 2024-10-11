@@ -2486,7 +2486,8 @@ Row│Three
 
     #[test]
     fn test_css_levels() {
-        test_html_coloured_conf(br#"
+        test_html_coloured_conf(
+            br#"
         <head><style>
             .doc_red { color: #f00; }
             .doc_red_imp { color: #f00 !important; }
@@ -2505,7 +2506,7 @@ Row│Three
             <p class="agent_green_imp user_blue_imp">Agent! vs user!</p>
             <p class="user_blue_imp doc_red_imp">User! vs doc!</p>
         </body>"#,
-        r#"<R>Doc red</R>
+            r#"<R>Doc red</R>
 
 <G>Agent green</G>
 
@@ -2529,16 +2530,23 @@ Row│Three
 
 <B>User! vs doc!</B>
 "#,
-        80,
-        |conf| {
-            conf.add_agent_css(r#"
+            80,
+            |conf| {
+                conf.add_agent_css(
+                    r#"
                 .agent_green { color: #0f0; }
                 .agent_green_imp { color: #0f0 !important; }
-                "#).unwrap()
-            .add_css(r#"
+                "#,
+                )
+                .unwrap()
+                .add_css(
+                    r#"
                 .user_blue { color: #00f; }
                 .user_blue_imp { color: #00f !important; }
-                "#).unwrap()
-        });
+                "#,
+                )
+                .unwrap()
+            },
+        );
     }
 }

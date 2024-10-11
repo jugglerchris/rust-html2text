@@ -39,7 +39,7 @@ impl Specificity {
             inline: true,
             id: 0,
             class: 0,
-            typ: 0
+            typ: 0,
         }
     }
 }
@@ -185,23 +185,29 @@ pub(crate) struct StyleDecl {
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Default, PartialOrd)]
-pub (crate) enum StyleOrigin {
+pub(crate) enum StyleOrigin {
     #[default]
     None,
     Agent,
     User,
-    Author
+    Author,
 }
 
 #[derive(Clone, Copy, Debug)]
-pub (crate) struct WithSpec<T:Copy+Clone> {
+pub(crate) struct WithSpec<T: Copy + Clone> {
     val: Option<T>,
     origin: StyleOrigin,
     specificity: Specificity,
     important: bool,
 }
-impl<T:Copy+Clone> WithSpec<T> {
-    fn maybe_update(&mut self, important: bool, origin: StyleOrigin, specificity: Specificity, val: T) {
+impl<T: Copy + Clone> WithSpec<T> {
+    fn maybe_update(
+        &mut self,
+        important: bool,
+        origin: StyleOrigin,
+        specificity: Specificity,
+        val: T,
+    ) {
         if self.val.is_some() {
             // We already have a value, so need to check.
             if self.important && !important {
@@ -422,12 +428,18 @@ impl StyleData {
         for (origin, ruleset) in [
             (StyleOrigin::Agent, &self.agent_rules),
             (StyleOrigin::User, &self.user_rules),
-            (StyleOrigin::Author, &self.author_rules)] {
+            (StyleOrigin::Author, &self.author_rules),
+        ] {
             for rule in ruleset {
                 if rule.selector.matches(handle) {
                     for style in rule.styles.iter() {
                         Self::merge_computed_style(
-                            &mut result, style.importance == Importance::Important, origin, rule.selector.specificity(), style);
+                            &mut result,
+                            style.importance == Importance::Important,
+                            origin,
+                            rule.selector.specificity(),
+                            style,
+                        );
                     }
                 }
             }
@@ -442,7 +454,12 @@ impl StyleData {
                         let rules = parse_style_attribute(&attr.value).unwrap_or_default();
                         for style in rules {
                             Self::merge_computed_style(
-                                &mut result, false, StyleOrigin::Author, Specificity::inline(), &style);
+                                &mut result,
+                                false,
+                                StyleOrigin::Author,
+                                Specificity::inline(),
+                                &style,
+                            );
                         }
                     } else if &*attr.name.local == "color" {
                         if let Ok(colour) = parser::parse_color_attribute(&attr.value) {
@@ -497,14 +514,20 @@ impl StyleData {
         // never afterwards.
         match style.style {
             Style::Colour(col) => {
-                result.colour.maybe_update(important, origin, specificity, col);
+                result
+                    .colour
+                    .maybe_update(important, origin, specificity, col);
             }
             Style::BgColour(col) => {
-                result.bg_colour.maybe_update(important, origin, specificity, col);
+                result
+                    .bg_colour
+                    .maybe_update(important, origin, specificity, col);
             }
             Style::DisplayNone => {
                 // We don't have a "not DisplayNone" - we might need to fix this.
-                result.display_none.maybe_update(important, origin, specificity, true);
+                result
+                    .display_none
+                    .maybe_update(important, origin, specificity, true);
             }
         }
     }
@@ -595,10 +618,22 @@ mod tests {
     #[test]
     fn test_specificity() {
         let sel_id1 = parse_selector("#foo").unwrap().1;
-        assert_eq!(sel_id1.specificity(), Specificity { id: 1, ..Default::default() });
+        assert_eq!(
+            sel_id1.specificity(),
+            Specificity {
+                id: 1,
+                ..Default::default()
+            }
+        );
 
         let sel_cl3 = parse_selector(".foo .bar .baz").unwrap().1;
-        assert_eq!(sel_cl3.specificity(), Specificity { class: 3, ..Default::default() });
+        assert_eq!(
+            sel_cl3.specificity(),
+            Specificity {
+                class: 3,
+                ..Default::default()
+            }
+        );
 
         assert!(sel_id1.specificity() > sel_cl3.specificity());
     }
