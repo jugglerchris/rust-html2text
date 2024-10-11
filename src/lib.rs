@@ -1362,6 +1362,8 @@ fn process_dom_node<'a, T: Write>(
                     }
 
                     pending_noempty(input, move |_, cs| {
+                        // There can be extra nodes which aren't ListItem (like whitespace text
+                        // nodes).  We need to filter those out to avoid messing up the rendering.
                         let cs = cs
                             .into_iter()
                             .filter(|n| matches!(n.info, RenderNodeInfo::ListItem(..)))
