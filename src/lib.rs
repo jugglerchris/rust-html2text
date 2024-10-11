@@ -2085,6 +2085,14 @@ pub mod config {
         }
 
         #[cfg(feature = "css")]
+        /// Add some agent CSS rules which will be used (if supported) with any
+        /// HTML processed.
+        pub fn add_agent_css(mut self, css: &str) -> Result<Self> {
+            self.style.add_agent_css(css)?;
+            Ok(self)
+        }
+
+        #[cfg(feature = "css")]
         /// Parse CSS from any \<style\> elements and use supported rules.
         pub fn use_doc_css(mut self) -> Self {
             self.use_doc_css = true;
