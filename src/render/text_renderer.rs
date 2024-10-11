@@ -1555,12 +1555,14 @@ impl<D: TextDecorator> Renderer for SubRenderer<D> {
             .add_element(FragmentStart(fragname.to_string()));
     }
 
+    #[allow(unused)]
     fn push_colour(&mut self, colour: Colour) {
         if let Some(ann) = self.decorator.push_colour(colour) {
             self.ann_stack.push(ann);
         }
     }
 
+    #[allow(unused)]
     fn pop_colour(&mut self) {
         if self.decorator.pop_colour() {
             self.ann_stack.pop();

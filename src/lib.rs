@@ -60,10 +60,16 @@ extern crate html5ever;
 #[macro_use]
 mod macros;
 
+#[cfg(feature = "css")]
 pub mod css;
 pub mod render;
 
+#[cfg(feature = "css")]
 use css::ComputedStyle;
+
+#[cfg(not(feature = "css"))]
+type ComputedStyle = ();
+
 use render::text_renderer::{
     RenderLine, RenderOptions, RichAnnotation, SubRenderer, TaggedLine, TextRenderer,
 };
@@ -451,7 +457,7 @@ enum RenderNodeInfo {
 struct RenderNode {
     size_estimate: Cell<Option<SizeEstimate>>,
     info: RenderNodeInfo,
-    style: css::ComputedStyle,
+    style: ComputedStyle,
 }
 
 impl RenderNode {
@@ -465,7 +471,7 @@ impl RenderNode {
     }
 
     /// Create a node from the RenderNodeInfo.
-    fn new_styled(info: RenderNodeInfo, style: css::ComputedStyle) -> RenderNode {
+    fn new_styled(info: RenderNodeInfo, style: ComputedStyle) -> RenderNode {
         RenderNode {
             size_estimate: Cell::new(None),
             info,
@@ -750,7 +756,7 @@ fn desc_list_children_to_render_nodes<T: Write>(
 /// Convert a table into a RenderNode
 fn table_to_render_tree<'a, T: Write>(
     input: RenderInput,
-    computed: css::ComputedStyle,
+    computed: ComputedStyle,
     _err_out: &mut T,
 ) -> TreeMapResult<'a, HtmlContext, RenderInput, RenderNode> {
     pending(input, move |_, rowset| {
@@ -776,7 +782,7 @@ fn table_to_render_tree<'a, T: Write>(
 /// Add rows from a thead or tbody.
 fn tbody_to_render_tree<'a, T: Write>(
     input: RenderInput,
-    computed: css::ComputedStyle,
+    computed: ComputedStyle,
     _err_out: &mut T,
 ) -> TreeMapResult<'a, HtmlContext, RenderInput, RenderNode> {
     pending_noempty(input, move |_, rowchildren| {
@@ -829,7 +835,7 @@ fn tbody_to_render_tree<'a, T: Write>(
 /// Convert a table row to a RenderTableRow
 fn tr_to_render_tree<'a, T: Write>(
     input: RenderInput,
-    computed: css::ComputedStyle,
+    computed: ComputedStyle,
     _err_out: &mut T,
 ) -> TreeMapResult<'a, HtmlContext, RenderInput, RenderNode> {
     pending(input, move |_, cellnodes| {
@@ -861,7 +867,7 @@ fn tr_to_render_tree<'a, T: Write>(
 /// Convert a single table cell to a render node.
 fn td_to_render_tree<'a, T: Write>(
     input: RenderInput,
-    computed: css::ComputedStyle,
+    computed: ComputedStyle,
     _err_out: &mut T,
 ) -> TreeMapResult<'a, HtmlContext, RenderInput, RenderNode> {
     let mut colspan = 1;
@@ -1485,15 +1491,24 @@ struct PushedStyleInfo {
 }
 
 impl PushedStyleInfo {
-    fn apply<D: TextDecorator>(render: &mut TextRenderer<D>, style: &css::ComputedStyle) -> Self {
+    fn apply<D: TextDecorator>(render: &mut TextRenderer<D>, style: &ComputedStyle) -> Self {
         let mut result: PushedStyleInfo = Default::default();
-        if let Some(col) = style.colour.val() {
-            render.push_colour(col);
-            result.colour = true;
+        #[cfg(feature = "css")]
+        {
+            if let Some(col) = style.colour.val() {
+                render.push_colour(col);
+                result.colour = true;
+            }
+            if let Some(col) = style.bg_colour.val() {
+                render.push_bgcolour(col);
+                result.bgcolour = true;
+            }
         }
-        if let Some(col) = style.bg_colour.val() {
-            render.push_bgcolour(col);
-            result.bgcolour = true;
+        #[cfg(not(feature = "css"))]
+        {
+            let _ = render;
+            let _ = style;
+            result = result;
         }
         result
     }
