@@ -133,15 +133,19 @@ pub(crate) trait Renderer {
     /// Record the start of a named HTML fragment
     fn record_frag_start(&mut self, fragname: &str);
 
+    #[allow(unused)]
     /// Push a new foreground colour
     fn push_colour(&mut self, colour: Colour);
 
+    #[allow(unused)]
     /// Pop the last foreground colour
     fn pop_colour(&mut self);
 
+    #[allow(unused)]
     /// Push a new background colour
     fn push_bgcolour(&mut self, colour: Colour);
 
+    #[allow(unused)]
     /// Pop the last background colour
     fn pop_bgcolour(&mut self);
 

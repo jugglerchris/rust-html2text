@@ -218,6 +218,8 @@ pub struct RcDom {
 
 impl TreeSink for RcDom {
     type Output = Self;
+
+    type ElemName<'a> = ExpandedName<'a>;
     fn finish(self) -> Self {
         self
     }

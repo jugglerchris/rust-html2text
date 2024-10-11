@@ -14,10 +14,10 @@ keywords = ["html", "text"]
 license = "MIT"
 
 [dependencies]
-html5ever = "0.28.0"
-markup5ever = "0.13.0"
+html5ever = "0.29.0"
+markup5ever = "0.14.0"
 tendril = "0.4"
-unicode-width = "0.1.5"
+unicode-width = "0.2"
 backtrace = { version = "0.3", optional=true }
 thiserror = "1.0.50"
 log = { version = "0.4.20", optional = true }

@@ -2,7 +2,9 @@ use crate::config::Config;
 use crate::render::text_renderer::PlainDecorator;
 use crate::{config, Error};
 
-use super::render::text_renderer::{RichAnnotation, RichDecorator, TaggedLine, TrivialDecorator};
+#[cfg(feature = "css")]
+use super::render::text_renderer::RichDecorator;
+use super::render::text_renderer::{RichAnnotation, TaggedLine, TrivialDecorator};
 use super::{from_read, from_read_with_decorator, parse, TextDecorator};
 
 /// Like assert_eq!(), but prints out the results normally as well

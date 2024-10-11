@@ -60,10 +60,17 @@ extern crate html5ever;
 #[macro_use]
 mod macros;
 
+#[cfg(feature = "css")]
 pub mod css;
 pub mod render;
 
+#[cfg(feature = "css")]
 use css::ComputedStyle;
+
+#[cfg(not(feature = "css"))]
+#[derive(Copy, Clone, Debug, Default)]
+struct ComputedStyle;
+
 use render::text_renderer::{
     RenderLine, RenderOptions, RichAnnotation, SubRenderer, TaggedLine, TextRenderer,
 };
@@ -253,7 +260,7 @@ impl RenderTableRow {
             // Skip any zero-width columns
             if col_width > 0 {
                 cell.col_width = Some(col_width + cell.colspan - 1);
-                let style = cell.style.clone();
+                let style = cell.style;
                 result.push(RenderNode::new_styled(
                     RenderNodeInfo::TableCell(cell),
                     style,
@@ -341,7 +348,7 @@ impl RenderTable {
             .into_iter()
             .map(|mut tr| {
                 tr.col_sizes = Some(col_sizes.clone());
-                let style = tr.style.clone();
+                let style = tr.style;
                 RenderNode::new_styled(RenderNodeInfo::TableRow(tr, vert), style)
             })
             .collect()
@@ -451,7 +458,7 @@ enum RenderNodeInfo {
 struct RenderNode {
     size_estimate: Cell<Option<SizeEstimate>>,
     info: RenderNodeInfo,
-    style: css::ComputedStyle,
+    style: ComputedStyle,
 }
 
 impl RenderNode {
@@ -465,7 +472,7 @@ impl RenderNode {
     }
 
     /// Create a node from the RenderNodeInfo.
-    fn new_styled(info: RenderNodeInfo, style: css::ComputedStyle) -> RenderNode {
+    fn new_styled(info: RenderNodeInfo, style: ComputedStyle) -> RenderNode {
         RenderNode {
             size_estimate: Cell::new(None),
             info,
@@ -750,7 +757,7 @@ fn desc_list_children_to_render_nodes<T: Write>(
 /// Convert a table into a RenderNode
 fn table_to_render_tree<'a, T: Write>(
     input: RenderInput,
-    computed: css::ComputedStyle,
+    computed: ComputedStyle,
     _err_out: &mut T,
 ) -> TreeMapResult<'a, HtmlContext, RenderInput, RenderNode> {
     pending(input, move |_, rowset| {
@@ -776,7 +783,7 @@ fn table_to_render_tree<'a, T: Write>(
 /// Add rows from a thead or tbody.
 fn tbody_to_render_tree<'a, T: Write>(
     input: RenderInput,
-    computed: css::ComputedStyle,
+    computed: ComputedStyle,
     _err_out: &mut T,
 ) -> TreeMapResult<'a, HtmlContext, RenderInput, RenderNode> {
     pending_noempty(input, move |_, rowchildren| {
@@ -829,7 +836,7 @@ fn tbody_to_render_tree<'a, T: Write>(
 /// Convert a table row to a RenderTableRow
 fn tr_to_render_tree<'a, T: Write>(
     input: RenderInput,
-    computed: css::ComputedStyle,
+    computed: ComputedStyle,
     _err_out: &mut T,
 ) -> TreeMapResult<'a, HtmlContext, RenderInput, RenderNode> {
     pending(input, move |_, cellnodes| {
@@ -849,7 +856,7 @@ fn tr_to_render_tree<'a, T: Write>(
                 RenderTableRow {
                     cells,
                     col_sizes: None,
-                    style: computed.clone(),
+                    style: computed,
                 },
                 false,
             ),
@@ -861,7 +868,7 @@ fn tr_to_render_tree<'a, T: Write>(
 /// Convert a single table cell to a render node.
 fn td_to_render_tree<'a, T: Write>(
     input: RenderInput,
-    computed: css::ComputedStyle,
+    computed: ComputedStyle,
     _err_out: &mut T,
 ) -> TreeMapResult<'a, HtmlContext, RenderInput, RenderNode> {
     let mut colspan = 1;
@@ -1205,14 +1212,14 @@ fn process_dom_node<'a, T: Write>(
                 let computed =
                     context
                         .style_data
-                        .computed_style(&parent_style, &handle, context.use_doc_css);
+                        .computed_style(parent_style, handle, context.use_doc_css);
                 if let Some(true) = computed.display_none.val() {
                     return Ok(Nothing);
                 }
                 computed
             };
             #[cfg(not(feature = "css"))]
-            let computed = (**parent_style).clone();
+            let computed = **parent_style;
 
             let result = match name.expanded() {
                 expanded_name!(html "html") | expanded_name!(html "body") => {
@@ -1356,6 +1363,8 @@ fn process_dom_node<'a, T: Write>(
                     }
 
                     pending_noempty(input, move |_, cs| {
+                        // There can be extra nodes which aren't ListItem (like whitespace text
+                        // nodes).  We need to filter those out to avoid messing up the rendering.
                         let cs = cs
                             .into_iter()
                             .filter(|n| matches!(n.info, RenderNodeInfo::ListItem(..)))
@@ -1485,15 +1494,24 @@ struct PushedStyleInfo {
 }
 
 impl PushedStyleInfo {
-    fn apply<D: TextDecorator>(render: &mut TextRenderer<D>, style: &css::ComputedStyle) -> Self {
+    fn apply<D: TextDecorator>(render: &mut TextRenderer<D>, style: &ComputedStyle) -> Self {
+        #[allow(unused_mut)]
         let mut result: PushedStyleInfo = Default::default();
-        if let Some(col) = style.colour.val() {
-            render.push_colour(col);
-            result.colour = true;
+        #[cfg(feature = "css")]
+        {
+            if let Some(col) = style.colour.val() {
+                render.push_colour(col);
+                result.colour = true;
+            }
+            if let Some(col) = style.bg_colour.val() {
+                render.push_bgcolour(col);
+                result.bgcolour = true;
+            }
         }
-        if let Some(col) = style.bg_colour.val() {
-            render.push_bgcolour(col);
-            result.bgcolour = true;
+        #[cfg(not(feature = "css"))]
+        {
+            let _ = render;
+            let _ = style;
         }
         result
     }
@@ -1870,7 +1888,7 @@ fn render_table_tree<T: Write, D: TextDecorator>(
                         (
                             width.saturating_sub(col_sizes[colno].min_width),
                             width,
-                            usize::max_value() - colno,
+                            usize::MAX - colno,
                         )
                     })
                     .unwrap();
