@@ -2576,5 +2576,31 @@ c  d  e
                     .unwrap()
             },
         );
+
+        test_html_conf(
+            br#"<p class="prewrap">Test wrapping of some normal text in pre-wrap mode</p>"#,
+            r#"Test wrapping of
+some normal text
+in pre-wrap mode
+"#,
+            17,
+            |conf| {
+                conf.add_css(r#".prewrap { white-space: pre-wrap; }"#)
+                    .unwrap()
+            },
+        );
+
+        test_html_conf(
+            br#"<p class="prewrap">This  para  has  double  spacing  which  should  survive  except  at  line  breaks</p>"#,
+            r#"This  para  has  double  spacing
+which  should  survive  except
+at  line  breaks
+"#,
+            33,
+            |conf| {
+                conf.add_css(r#".prewrap { white-space: pre-wrap; }"#)
+                    .unwrap()
+            },
+        );
     }
 }
