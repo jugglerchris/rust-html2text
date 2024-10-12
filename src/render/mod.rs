@@ -3,6 +3,7 @@
 
 use crate::Colour;
 use crate::Error;
+use crate::WhiteSpace;
 
 pub(crate) mod text_renderer;
 
@@ -45,11 +46,11 @@ pub(crate) trait Renderer {
     }
 
     /// Begin a preformatted block.  Until the corresponding end,
-    /// whitespace will used verbatim.  Pre regions can nest.
-    fn start_pre(&mut self);
+    /// whitespace handlinng will be modified.  Can be nested.
+    fn push_ws(&mut self, ws: WhiteSpace);
 
-    /// Finish a preformatted block started with `start_pre`.
-    fn end_pre(&mut self);
+    /// Finish a preformatted block started with `push_ws`.
+    fn pop_ws(&mut self);
 
     /// Add some inline text (which should be wrapped at the
     /// appropriate width) to the current block.

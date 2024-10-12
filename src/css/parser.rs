@@ -64,6 +64,7 @@ pub enum Display {
 }
 
 #[derive(Debug, PartialEq)]
+#[non_exhaustive]
 pub enum Decl {
     Color {
         value: Colour,
@@ -85,6 +86,9 @@ pub enum Decl {
     },
     Display {
         value: Display,
+    },
+    WhiteSpace {
+        value: WhiteSpace,
     },
     Unknown {
         name: PropertyName,
@@ -161,7 +165,7 @@ pub struct Declaration {
     pub important: Importance,
 }
 
-use super::{Selector, SelectorComponent};
+use super::{Selector, SelectorComponent, WhiteSpace};
 
 #[derive(Debug, PartialEq)]
 pub(crate) struct RuleSet {
@@ -427,6 +431,10 @@ pub fn parse_declaration(text: &str) -> IResult<&str, Option<Declaration>> {
             let value = parse_display(&value)?;
             Decl::Display { value }
         }
+        "white-space" => {
+            let value = parse_white_space(&value)?;
+            Decl::WhiteSpace { value }
+        }
         _ => Decl::Unknown {
             name: prop,
             //            value: /*value*/"".into(),
@@ -677,6 +685,22 @@ fn parse_display(value: &RawValue) -> Result<Display, nom::Err<nom::error::Error
         }
     }
     Ok(Display::Other)
+}
+
+fn parse_white_space(
+    value: &RawValue,
+) -> Result<WhiteSpace, nom::Err<nom::error::Error<&'static str>>> {
+    for tok in &value.tokens {
+        if let Token::Ident(word) = tok {
+            match word.deref() {
+                "normal" => return Ok(WhiteSpace::Normal),
+                "pre" => return Ok(WhiteSpace::Pre),
+                "pre-wrap" => return Ok(WhiteSpace::PreWrap),
+                _ => (),
+            }
+        }
+    }
+    Ok(WhiteSpace::Normal)
 }
 
 pub fn parse_rules(text: &str) -> IResult<&str, Vec<Declaration>> {

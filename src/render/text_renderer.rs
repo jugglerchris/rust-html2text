@@ -5,6 +5,7 @@
 
 use crate::Colour;
 use crate::Error;
+use crate::WhiteSpace;
 
 use super::Renderer;
 use std::cell::Cell;
@@ -332,7 +333,7 @@ impl<T: Clone + Eq + Debug + Default> WrappedBlock<T> {
         }
     }
 
-    fn flush_word(&mut self) -> Result<(), Error> {
+    fn flush_word(&mut self, with_space: bool) -> Result<(), Error> {
         use self::TaggedLineElement::Str;
 
         /* Finish the word. */
@@ -343,7 +344,7 @@ impl<T: Clone + Eq + Debug + Default> WrappedBlock<T> {
             let space_needed = self.wordlen + if self.linelen > 0 { 1 } else { 0 }; // space
             if space_needed <= space_in_line {
                 html_trace!("Got enough space");
-                if self.linelen > 0 {
+                if self.linelen > 0 && with_space {
                     self.line.push(Str(TaggedString {
                         s: " ".into(),
                         tag: self.spacetag.clone().unwrap_or_else(|| Default::default()),
@@ -458,7 +459,7 @@ impl<T: Clone + Eq + Debug + Default> WrappedBlock<T> {
     }
 
     fn flush(&mut self) -> Result<(), Error> {
-        self.flush_word()?;
+        self.flush_word(true)?;
         self.flush_line();
         Ok(())
     }
@@ -492,7 +493,7 @@ impl<T: Clone + Eq + Debug + Default> WrappedBlock<T> {
         for c in text.chars() {
             if c.is_whitespace() {
                 /* Whitespace is mostly ignored, except to terminate words. */
-                self.flush_word()?;
+                self.flush_word(true)?;
                 self.spacetag = Some(tag.clone());
             } else if let Some(charwidth) = UnicodeWidthChar::width(c) {
                 /* Not whitespace; add to the current word. */
@@ -518,7 +519,7 @@ impl<T: Clone + Eq + Debug + Default> WrappedBlock<T> {
         );
         // Make sure that any previous word has been sent to the line, as we
         // bypass the word buffer.
-        self.flush_word()?;
+        self.flush_word(true)?;
 
         for c in text.chars() {
             if let Some(charwidth) = UnicodeWidthChar::width(c) {
@@ -565,6 +566,52 @@ impl<T: Clone + Eq + Debug + Default> WrappedBlock<T> {
                 }
             }
             html_trace_quiet!("  Added char {:?}", c);
+        }
+        Ok(())
+    }
+
+    fn add_text_prewrap(&mut self, text: &str, tag: &T) -> Result<(), Error> {
+        html_trace!("WrappedBlock::add_text_prewrap({}), {:?}", text, tag);
+        for c in text.chars() {
+            if c.is_whitespace() {
+                // Wrap if needed
+                self.flush_word(false)?;
+                match c {
+                    '\n' => {
+                        self.force_flush_line();
+                    }
+                    '\t' => {
+                        let tab_stop = 8;
+                        let mut at_least_one_space = false;
+                        while self.linelen % tab_stop != 0 || !at_least_one_space {
+                            if self.linelen >= self.width {
+                                self.flush_line();
+                            } else {
+                                self.line.push_char(' ', tag);
+                                self.linelen += 1;
+                                at_least_one_space = true;
+                            }
+                        }
+                    }
+                    _ => {
+                        if let Some(width) = UnicodeWidthChar::width(c) {
+                            if self.width - self.linelen < width {
+                                self.flush_line();
+                            }
+                            if self.width - self.linelen >= width {
+                                // Check for space again to avoid pathological issues
+                                self.line.push_char(c, tag);
+                                self.linelen += width;
+                            }
+                        }
+                    }
+                }
+            } else if let Some(charwidth) = UnicodeWidthChar::width(c) {
+                /* Not whitespace; add to the current word. */
+                self.word.push_char(c, tag);
+                self.wordlen += charwidth;
+            }
+            html_trace_quiet!("  Added char {:?}, wordlen={}", c, self.wordlen);
         }
         Ok(())
     }
@@ -900,7 +947,7 @@ pub(crate) struct SubRenderer<D: TextDecorator> {
     ann_stack: Vec<D::Annotation>,
     text_filter_stack: Vec<fn(&str) -> Option<String>>,
     /// The depth of `<pre>` block stacking.
-    pre_depth: usize,
+    ws_stack: Vec<WhiteSpace>,
 }
 
 impl<D: TextDecorator> std::fmt::Debug for SubRenderer<D> {
@@ -910,7 +957,7 @@ impl<D: TextDecorator> std::fmt::Debug for SubRenderer<D> {
             .field("lines", &self.lines)
             //.field("decorator", &self.decorator)
             .field("ann_stack", &self.ann_stack)
-            .field("pre_depth", &self.pre_depth)
+            .field("ws_stack", &self.ws_stack)
             .field("wrapping", &self.wrapping)
             .finish()
     }
@@ -993,7 +1040,7 @@ impl<D: TextDecorator> SubRenderer<D> {
             wrapping: None,
             decorator,
             ann_stack: Vec::new(),
-            pre_depth: 0,
+            ws_stack: Vec::new(),
             text_filter_stack: Vec::new(),
         }
     }
@@ -1104,6 +1151,10 @@ impl<D: TextDecorator> SubRenderer<D> {
         }
         Ok(new_width.max(min_width))
     }
+
+    fn ws_mode(&self) -> WhiteSpace {
+        self.ws_stack.last().cloned().unwrap_or(WhiteSpace::Normal)
+    }
 }
 
 fn filter_text_strikeout(s: &str) -> Option<String> {
@@ -1186,16 +1237,12 @@ impl<D: TextDecorator> Renderer for SubRenderer<D> {
         Ok(())
     }
 
-    fn start_pre(&mut self) {
-        self.pre_depth += 1;
+    fn push_ws(&mut self, ws: WhiteSpace) {
+        self.ws_stack.push(ws);
     }
 
-    fn end_pre(&mut self) {
-        if self.pre_depth > 0 {
-            self.pre_depth -= 1;
-        } else {
-            panic!("Attempt to end a preformatted block which wasn't opened.");
-        }
+    fn pop_ws(&mut self) {
+        self.ws_stack.pop();
     }
 
     fn end_block(&mut self) {
@@ -1204,7 +1251,10 @@ impl<D: TextDecorator> Renderer for SubRenderer<D> {
 
     fn add_inline_text(&mut self, text: &str) -> crate::Result<()> {
         html_trace!("add_inline_text({}, {})", self.width, text);
-        if self.pre_depth == 0 && self.at_block_end && text.chars().all(char::is_whitespace) {
+        if !self.ws_mode().preserve_whitespace()
+            && self.at_block_end
+            && text.chars().all(char::is_whitespace)
+        {
             // Ignore whitespace between blocks.
             return Ok(());
         }
@@ -1220,16 +1270,23 @@ impl<D: TextDecorator> Renderer for SubRenderer<D> {
             }
         }
         let filtered_text = s.as_deref().unwrap_or(text);
-        if self.pre_depth == 0 {
-            get_wrapping_or_insert::<D>(&mut self.wrapping, &self.options, self.width)
-                .add_text(filtered_text, &self.ann_stack)?;
-        } else {
-            let mut tag_first = self.ann_stack.clone();
-            let mut tag_cont = self.ann_stack.clone();
-            tag_first.push(self.decorator.decorate_preformat_first());
-            tag_cont.push(self.decorator.decorate_preformat_cont());
-            get_wrapping_or_insert::<D>(&mut self.wrapping, &self.options, self.width)
-                .add_preformatted_text(filtered_text, &tag_first, &tag_cont)?;
+        let ws_mode = self.ws_mode();
+        let wrapping = get_wrapping_or_insert::<D>(&mut self.wrapping, &self.options, self.width);
+        match ws_mode {
+            WhiteSpace::Normal => {
+                wrapping.add_text(filtered_text, &self.ann_stack)?;
+            }
+            WhiteSpace::Pre => {
+                let mut tag_first = self.ann_stack.clone();
+                let mut tag_cont = self.ann_stack.clone();
+                tag_first.push(self.decorator.decorate_preformat_first());
+                tag_cont.push(self.decorator.decorate_preformat_cont());
+                get_wrapping_or_insert::<D>(&mut self.wrapping, &self.options, self.width)
+                    .add_preformatted_text(filtered_text, &tag_first, &tag_cont)?;
+            }
+            WhiteSpace::PreWrap => {
+                wrapping.add_text_prewrap(filtered_text, &self.ann_stack)?;
+            }
         }
         Ok(())
     }

@@ -2074,7 +2074,9 @@ foo
 
 #[cfg(feature = "css")]
 mod css_tests {
-    use super::{test_html_coloured, test_html_coloured_conf, test_html_css, test_html_style};
+    use super::{
+        test_html_coloured, test_html_coloured_conf, test_html_conf, test_html_css, test_html_style,
+    };
 
     #[test]
     fn test_disp_none() {
@@ -2548,6 +2550,30 @@ Row│Three
                 "#,
                 )
                 .unwrap()
+            },
+        );
+    }
+
+    #[test]
+    fn test_pre_wrap() {
+        test_html_conf(
+            br#"<p class="prewrap">Hi
+ a
+  b
+   x  longword
+c  d  e
+</p>"#,
+            r#"Hi
+ a
+  b
+   x  
+longword
+c  d  e
+"#,
+            10,
+            |conf| {
+                conf.add_css(r#".prewrap { white-space: pre-wrap; }"#)
+                    .unwrap()
             },
         );
     }
