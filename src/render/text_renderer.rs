@@ -3,9 +3,9 @@
 //! This module implements helpers and concrete types for rendering from HTML
 //! into different text formats.
 
-use crate::css::WhiteSpace;
 use crate::Colour;
 use crate::Error;
+use crate::WhiteSpace;
 
 use super::Renderer;
 use std::cell::Cell;

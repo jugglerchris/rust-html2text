@@ -1,9 +1,9 @@
 //! Module containing the `Renderer` interface for constructing a
 //! particular text output.
 
-use crate::css::WhiteSpace;
 use crate::Colour;
 use crate::Error;
+use crate::WhiteSpace;
 
 pub(crate) mod text_renderer;
 

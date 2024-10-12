@@ -10,7 +10,8 @@ use crate::{
         Handle,
         NodeData::{self, Comment, Document, Element},
     },
-    tree_map_reduce, Colour, Result, TreeMapResult,
+    tree_map_reduce, Colour, ComputedStyle, Result, Specificity, StyleOrigin, TreeMapResult,
+    WhiteSpace,
 };
 
 use self::parser::Importance;
@@ -23,43 +24,6 @@ pub(crate) enum SelectorComponent {
     Star,
     CombChild,
     CombDescendant,
-}
-
-#[derive(Debug, Copy, Clone, PartialEq, Eq, Default)]
-pub(crate) struct Specificity {
-    inline: bool,
-    id: u16,
-    class: u16,
-    typ: u16,
-}
-
-impl Specificity {
-    fn inline() -> Self {
-        Specificity {
-            inline: true,
-            id: 0,
-            class: 0,
-            typ: 0,
-        }
-    }
-}
-
-impl PartialOrd for Specificity {
-    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        match self.inline.partial_cmp(&other.inline) {
-            Some(core::cmp::Ordering::Equal) => {}
-            ord => return ord,
-        }
-        match self.id.partial_cmp(&other.id) {
-            Some(core::cmp::Ordering::Equal) => {}
-            ord => return ord,
-        }
-        match self.class.partial_cmp(&other.class) {
-            Some(core::cmp::Ordering::Equal) => {}
-            ord => return ord,
-        }
-        self.typ.partial_cmp(&other.typ)
-    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -183,110 +147,6 @@ pub(crate) enum Style {
 pub(crate) struct StyleDecl {
     style: Style,
     importance: Importance,
-}
-
-#[derive(Debug, Copy, Clone, PartialEq, Eq, Default, PartialOrd)]
-pub(crate) enum StyleOrigin {
-    #[default]
-    None,
-    Agent,
-    User,
-    Author,
-}
-
-#[derive(Clone, Copy, Debug)]
-pub(crate) struct WithSpec<T: Copy + Clone> {
-    val: Option<T>,
-    origin: StyleOrigin,
-    specificity: Specificity,
-    important: bool,
-}
-impl<T: Copy + Clone> WithSpec<T> {
-    pub(crate) fn maybe_update(
-        &mut self,
-        important: bool,
-        origin: StyleOrigin,
-        specificity: Specificity,
-        val: T,
-    ) {
-        if self.val.is_some() {
-            // We already have a value, so need to check.
-            if self.important && !important {
-                // important takes priority over not important.
-                return;
-            }
-            // importance is the same.  Next is checking the origin.
-            {
-                use StyleOrigin::*;
-                match (self.origin, origin) {
-                    (Agent, Agent) | (User, User) | (Author, Author) => {
-                        // They're the same so continue the comparison
-                    }
-                    (mine, theirs) => {
-                        if (important && theirs > mine) || (!important && mine > theirs) {
-                            return;
-                        }
-                    }
-                }
-            }
-            // We're now from the same origin an importance
-            if specificity < self.specificity {
-                return;
-            }
-        }
-        self.val = Some(val);
-        self.origin = origin;
-        self.specificity = specificity;
-        self.important = important;
-    }
-
-    pub fn val(&self) -> Option<T> {
-        self.val
-    }
-}
-
-impl<T: Copy + Clone> Default for WithSpec<T> {
-    fn default() -> Self {
-        WithSpec {
-            val: None,
-            origin: StyleOrigin::None,
-            specificity: Default::default(),
-            important: false,
-        }
-    }
-}
-
-#[derive(Debug, Copy, Clone, Default, PartialEq)]
-pub(crate) enum WhiteSpace {
-    #[default]
-    Normal,
-    // NoWrap,
-    Pre,
-    PreWrap,
-    // PreLine,
-    // BreakSpaces,
-}
-
-impl WhiteSpace {
-    pub fn preserve_whitespace(&self) -> bool {
-        match self {
-            WhiteSpace::Normal => false,
-            WhiteSpace::Pre | WhiteSpace::PreWrap => true,
-        }
-    }
-}
-
-#[derive(Debug, Copy, Clone, Default)]
-pub(crate) struct ComputedStyle {
-    /// The computed foreground colour, if any
-    pub(crate) colour: WithSpec<Colour>,
-    /// The specificity for colour
-    /// The computed background colour, if any
-    pub(crate) bg_colour: WithSpec<Colour>,
-    /// If set, indicates whether `display: none` or something equivalent applies
-    pub(crate) display_none: WithSpec<bool>,
-    /// The CSS white-space property
-    pub(crate) white_space: WithSpec<WhiteSpace>,
 }
 
 #[derive(Debug, Clone)]
@@ -643,7 +503,7 @@ pub(crate) fn dom_to_stylesheet<T: Write>(handle: Handle, err_out: &mut T) -> Re
 
 #[cfg(test)]
 mod tests {
-    use crate::css::Specificity;
+    use crate::Specificity;
 
     use super::parser::parse_selector;
 
