@@ -420,8 +420,6 @@ enum RenderNodeInfo {
     Header(usize, Vec<RenderNode>),
     /// A Div element with children
     Div(Vec<RenderNode>),
-    /// A preformatted region.
-    Pre(Vec<RenderNode>),
     /// A blockquote
     BlockQuote(Vec<RenderNode>),
     /// An unordered list
@@ -533,7 +531,7 @@ impl RenderNode {
             }
 
             Container(ref v) | Em(ref v) | Strong(ref v) | Strikeout(ref v) | Code(ref v)
-            | Block(ref v) | Div(ref v) | Pre(ref v) | Dl(ref v) | Dt(ref v) | ListItem(ref v)
+            | Block(ref v) | Div(ref v) | Dl(ref v) | Dt(ref v) | ListItem(ref v)
             | Sup(ref v) => v
                 .iter()
                 .map(recurse)
@@ -630,7 +628,6 @@ impl RenderNode {
             | Block(ref v)
             | ListItem(ref v)
             | Div(ref v)
-            | Pre(ref v)
             | BlockQuote(ref v)
             | Dl(ref v)
             | Dt(ref v)
@@ -671,7 +668,6 @@ fn precalc_size_estimate<'a, 'b: 'a, D: TextDecorator>(
         | Block(ref v)
         | ListItem(ref v)
         | Div(ref v)
-        | Pre(ref v)
         | BlockQuote(ref v)
         | Ul(ref v)
         | Ol(_, ref v)
@@ -1139,7 +1135,6 @@ fn prepend_marker(prefix: RenderNode, mut orig: RenderNode) -> RenderNode {
         Block(ref mut children)
         | ListItem(ref mut children)
         | Div(ref mut children)
-        | Pre(ref mut children)
         | BlockQuote(ref mut children)
         | Container(ref mut children)
         | TableCell(RenderTableCell {
@@ -1514,11 +1509,11 @@ impl PushedStyleInfo {
             if let Some(ws) = style.white_space.val() {
                 match ws {
                     WhiteSpace::Normal => {},
-                    WhiteSpace::Pre => {
-                        render.start_pre();
+                    WhiteSpace::Pre |
+                    WhiteSpace::PreWrap => {
+                        render.push_ws(ws);
                         result.white_space = true;
                     }
-                    WhiteSpace::PreWrap => todo!(),
                 }
             }
         }
@@ -1537,7 +1532,7 @@ impl PushedStyleInfo {
             renderer.pop_colour();
         }
         if self.white_space {
-            renderer.end_pre();
+            renderer.pop_ws();
         }
     }
 }
@@ -1641,16 +1636,6 @@ fn do_render_node<T: Write, D: TextDecorator>(
             renderer.new_line()?;
             pending2(children, |renderer: &mut TextRenderer<D>, _| {
                 renderer.new_line()?;
-                pushed_style.unwind(renderer);
-                Ok(Some(None))
-            })
-        }
-        Pre(children) => {
-            renderer.new_line()?;
-            renderer.start_pre();
-            pending2(children, |renderer: &mut TextRenderer<D>, _| {
-                renderer.new_line()?;
-                renderer.end_pre();
                 pushed_style.unwind(renderer);
                 Ok(Some(None))
             })

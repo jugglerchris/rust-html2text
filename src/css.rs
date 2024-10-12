@@ -267,6 +267,16 @@ pub (crate) enum WhiteSpace {
     // BreakSpaces,
 }
 
+impl WhiteSpace {
+    pub fn preserve_whitespace(&self) -> bool {
+        match self {
+            WhiteSpace::Normal => false,
+            WhiteSpace::Pre |
+            WhiteSpace::PreWrap => true,
+        }
+    }
+}
+
 #[derive(Debug, Copy, Clone, Default)]
 pub(crate) struct ComputedStyle {
     /// The computed foreground colour, if any
@@ -407,7 +417,7 @@ impl StyleData {
                         styles: styles.clone(),
                     };
                     html_trace_quiet!("Adding ruleset {ruleset:?}");
-                    rules.push(ruleset);
+                    rules.push(dbg!(ruleset));
                 }
             }
         }
