@@ -531,8 +531,7 @@ impl RenderNode {
             }
 
             Container(ref v) | Em(ref v) | Strong(ref v) | Strikeout(ref v) | Code(ref v)
-            | Block(ref v) | Div(ref v) | Dl(ref v) | Dt(ref v) | ListItem(ref v)
-            | Sup(ref v) => v
+            | Block(ref v) | Div(ref v) | Dl(ref v) | Dt(ref v) | ListItem(ref v) | Sup(ref v) => v
                 .iter()
                 .map(recurse)
                 .fold(Default::default(), SizeEstimate::add),
@@ -1332,7 +1331,12 @@ fn process_dom_node<'a, T: Write>(
                 }),
                 expanded_name!(html "pre") => pending(input, move |_, cs| {
                     let mut computed = computed;
-                    computed.white_space.maybe_update(false, css::StyleOrigin::Agent, Default::default(), WhiteSpace::Pre);
+                    computed.white_space.maybe_update(
+                        false,
+                        css::StyleOrigin::Agent,
+                        Default::default(),
+                        WhiteSpace::Pre,
+                    );
                     Ok(Some(RenderNode::new_styled(Block(cs), computed)))
                 }),
                 expanded_name!(html "br") => Finished(RenderNode::new_styled(Break, computed)),
@@ -1508,9 +1512,8 @@ impl PushedStyleInfo {
             }
             if let Some(ws) = style.white_space.val() {
                 match ws {
-                    WhiteSpace::Normal => {},
-                    WhiteSpace::Pre |
-                    WhiteSpace::PreWrap => {
+                    WhiteSpace::Normal => {}
+                    WhiteSpace::Pre | WhiteSpace::PreWrap => {
                         render.push_ws(ws);
                         result.white_space = true;
                     }

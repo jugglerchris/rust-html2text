@@ -687,7 +687,9 @@ fn parse_display(value: &RawValue) -> Result<Display, nom::Err<nom::error::Error
     Ok(Display::Other)
 }
 
-fn parse_white_space(value: &RawValue) -> Result<WhiteSpace, nom::Err<nom::error::Error<&'static str>>> {
+fn parse_white_space(
+    value: &RawValue,
+) -> Result<WhiteSpace, nom::Err<nom::error::Error<&'static str>>> {
     for tok in &value.tokens {
         if let Token::Ident(word) = tok {
             match word.deref() {

@@ -570,11 +570,7 @@ impl<T: Clone + Eq + Debug + Default> WrappedBlock<T> {
         Ok(())
     }
 
-    fn add_text_prewrap(
-        &mut self,
-        text: &str,
-        tag: &T,
-    ) -> Result<(), Error> {
+    fn add_text_prewrap(&mut self, text: &str, tag: &T) -> Result<(), Error> {
         html_trace!("WrappedBlock::add_text_prewrap({}), {:?}", text, tag);
         for c in text.chars() {
             if c.is_whitespace() {
@@ -591,10 +587,7 @@ impl<T: Clone + Eq + Debug + Default> WrappedBlock<T> {
                             if self.linelen >= self.width {
                                 self.flush_line();
                             } else {
-                                self.line.push_char(
-                                    ' ',
-                                    tag
-                                );
+                                self.line.push_char(' ', tag);
                                 self.linelen += 1;
                                 at_least_one_space = true;
                             }
@@ -1258,7 +1251,10 @@ impl<D: TextDecorator> Renderer for SubRenderer<D> {
 
     fn add_inline_text(&mut self, text: &str) -> crate::Result<()> {
         html_trace!("add_inline_text({}, {})", self.width, text);
-        if !self.ws_mode().preserve_whitespace() && self.at_block_end && text.chars().all(char::is_whitespace) {
+        if !self.ws_mode().preserve_whitespace()
+            && self.at_block_end
+            && text.chars().all(char::is_whitespace)
+        {
             // Ignore whitespace between blocks.
             return Ok(());
         }

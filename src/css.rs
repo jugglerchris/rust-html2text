@@ -257,7 +257,7 @@ impl<T: Copy + Clone> Default for WithSpec<T> {
 }
 
 #[derive(Debug, Copy, Clone, Default, PartialEq)]
-pub (crate) enum WhiteSpace {
+pub(crate) enum WhiteSpace {
     #[default]
     Normal,
     // NoWrap,
@@ -271,8 +271,7 @@ impl WhiteSpace {
     pub fn preserve_whitespace(&self) -> bool {
         match self {
             WhiteSpace::Normal => false,
-            WhiteSpace::Pre |
-            WhiteSpace::PreWrap => true,
+            WhiteSpace::Pre | WhiteSpace::PreWrap => true,
         }
     }
 }
@@ -384,8 +383,7 @@ fn styles_from_properties(decls: &[parser::Declaration]) -> Vec<StyleDecl> {
                     style: Style::WhiteSpace(*value),
                     importance: decl.important,
                 });
-            }
-            /*
+            } /*
               _ => {
                   html_trace_quiet!("CSS: Unhandled property {:?}", decl);
               }
