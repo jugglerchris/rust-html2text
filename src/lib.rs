@@ -71,6 +71,7 @@ use css::ComputedStyle;
 #[derive(Copy, Clone, Debug, Default)]
 struct ComputedStyle;
 
+use css::WhiteSpace;
 use render::text_renderer::{
     RenderLine, RenderOptions, RichAnnotation, SubRenderer, TaggedLine, TextRenderer,
 };
@@ -1335,7 +1336,9 @@ fn process_dom_node<'a, T: Write>(
                     Ok(Some(RenderNode::new_styled(Div(cs), computed)))
                 }),
                 expanded_name!(html "pre") => pending(input, move |_, cs| {
-                    Ok(Some(RenderNode::new_styled(Pre(cs), computed)))
+                    let mut computed = computed;
+                    computed.white_space.maybe_update(false, css::StyleOrigin::Agent, Default::default(), WhiteSpace::Pre);
+                    Ok(Some(RenderNode::new_styled(Block(cs), computed)))
                 }),
                 expanded_name!(html "br") => Finished(RenderNode::new_styled(Break, computed)),
                 expanded_name!(html "table") => table_to_render_tree(input, computed, err_out),
@@ -1491,6 +1494,7 @@ fn pending2<
 struct PushedStyleInfo {
     colour: bool,
     bgcolour: bool,
+    white_space: bool,
 }
 
 impl PushedStyleInfo {
@@ -1507,6 +1511,16 @@ impl PushedStyleInfo {
                 render.push_bgcolour(col);
                 result.bgcolour = true;
             }
+            if let Some(ws) = style.white_space.val() {
+                match ws {
+                    WhiteSpace::Normal => {},
+                    WhiteSpace::Pre => {
+                        render.start_pre();
+                        result.white_space = true;
+                    }
+                    WhiteSpace::PreWrap => todo!(),
+                }
+            }
         }
         #[cfg(not(feature = "css"))]
         {
@@ -1521,6 +1535,9 @@ impl PushedStyleInfo {
         }
         if self.colour {
             renderer.pop_colour();
+        }
+        if self.white_space {
+            renderer.end_pre();
         }
     }
 }

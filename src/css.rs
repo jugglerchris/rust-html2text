@@ -176,6 +176,7 @@ pub(crate) enum Style {
     Colour(Colour),
     BgColour(Colour),
     DisplayNone,
+    WhiteSpace(WhiteSpace),
 }
 
 #[derive(Debug, Clone)]
@@ -201,7 +202,7 @@ pub(crate) struct WithSpec<T: Copy + Clone> {
     important: bool,
 }
 impl<T: Copy + Clone> WithSpec<T> {
-    fn maybe_update(
+    pub(crate) fn maybe_update(
         &mut self,
         important: bool,
         origin: StyleOrigin,
@@ -255,6 +256,17 @@ impl<T: Copy + Clone> Default for WithSpec<T> {
     }
 }
 
+#[derive(Debug, Copy, Clone, Default, PartialEq)]
+pub (crate) enum WhiteSpace {
+    #[default]
+    Normal,
+    // NoWrap,
+    Pre,
+    PreWrap,
+    // PreLine,
+    // BreakSpaces,
+}
+
 #[derive(Debug, Copy, Clone, Default)]
 pub(crate) struct ComputedStyle {
     /// The computed foreground colour, if any
@@ -264,6 +276,8 @@ pub(crate) struct ComputedStyle {
     pub(crate) bg_colour: WithSpec<Colour>,
     /// If set, indicates whether `display: none` or something equivalent applies
     pub(crate) display_none: WithSpec<bool>,
+    /// The CSS white-space property
+    pub(crate) white_space: WithSpec<WhiteSpace>,
 }
 
 #[derive(Debug, Clone)]
@@ -354,7 +368,14 @@ fn styles_from_properties(decls: &[parser::Declaration]) -> Vec<StyleDecl> {
                         importance: decl.important,
                     });
                 }
-            } /*
+            }
+            parser::Decl::WhiteSpace { value } => {
+                styles.push(StyleDecl {
+                    style: Style::WhiteSpace(*value),
+                    importance: decl.important,
+                });
+            }
+            /*
               _ => {
                   html_trace_quiet!("CSS: Unhandled property {:?}", decl);
               }
@@ -526,6 +547,11 @@ impl StyleData {
                 result
                     .display_none
                     .maybe_update(important, origin, specificity, true);
+            }
+            Style::WhiteSpace(ws) => {
+                result
+                    .white_space
+                    .maybe_update(important, origin, specificity, ws);
             }
         }
     }
