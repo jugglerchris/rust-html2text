@@ -1431,7 +1431,10 @@ fn test_pre_rich() {
     // tags.
     assert_eq!(
         config::rich()
-            .render_to_lines(crate::parse(r#"<p style="white-space: pre">testlong</p>"#.as_bytes()).unwrap(), 4)
+            .render_to_lines(
+                crate::parse(r#"<p style="white-space: pre">testlong</p>"#.as_bytes()).unwrap(),
+                4
+            )
             .unwrap(),
         [
             TaggedLine::from_string("test".into(), &vec![]),
