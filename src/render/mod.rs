@@ -45,12 +45,20 @@ pub(crate) trait Renderer {
         self.add_horizontal_border()
     }
 
-    /// Begin a preformatted block.  Until the corresponding end,
-    /// whitespace handlinng will be modified.  Can be nested.
+    /// Begin a preformatted block.  This indicates we are inside a <pre> element.
+    /// The whitespace/wrapping behaviour is treated separately with `push_ws`.
+    fn push_preformat(&mut self);
+
+    /// End a preformatted block.
+    fn pop_preformat(&mut self);
+
+    /// Update the white-space CSS setting.
     fn push_ws(&mut self, ws: WhiteSpace);
 
-    /// Finish a preformatted block started with `push_ws`.
+    /// End the current white-space setting.
     fn pop_ws(&mut self);
+
+    //
 
     /// Add some inline text (which should be wrapped at the
     /// appropriate width) to the current block.

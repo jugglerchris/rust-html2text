@@ -537,7 +537,7 @@ impl<T: Clone + Eq + Debug + Default> WrappedBlock<T> {
         Ok(self.text)
     }
 
-    fn add_text_new(
+    fn add_text(
         &mut self,
         text: &str,
         ws_mode: WhiteSpace,
@@ -974,6 +974,8 @@ pub(crate) struct SubRenderer<D: TextDecorator> {
     ann_stack: Vec<D::Annotation>,
     text_filter_stack: Vec<fn(&str) -> Option<String>>,
     /// The depth of `<pre>` block stacking.
+    pre_depth: usize,
+    /// The current stack of whitespace wrapping setting
     ws_stack: Vec<WhiteSpace>,
 }
 
@@ -1068,6 +1070,7 @@ impl<D: TextDecorator> SubRenderer<D> {
             decorator,
             ann_stack: Vec::new(),
             ws_stack: Vec::new(),
+            pre_depth: 0,
             text_filter_stack: Vec::new(),
         }
     }
@@ -1273,6 +1276,15 @@ impl<D: TextDecorator> Renderer for SubRenderer<D> {
         self.ws_stack.pop();
     }
 
+    fn push_preformat(&mut self) {
+        self.pre_depth += 1;
+    }
+
+    fn pop_preformat(&mut self) {
+        debug_assert!(self.pre_depth > 0);
+        self.pre_depth -= 1;
+    }
+
     fn end_block(&mut self) {
         self.at_block_end = true;
     }
@@ -1300,22 +1312,23 @@ impl<D: TextDecorator> Renderer for SubRenderer<D> {
         let filtered_text = s.as_deref().unwrap_or(text);
         let ws_mode = self.ws_mode();
         let wrapping = get_wrapping_or_insert::<D>(&mut self.wrapping, &self.options, self.width);
-        match ws_mode {
-            WhiteSpace::Normal => {
-                wrapping.add_text_new(filtered_text, ws_mode, &self.ann_stack, &self.ann_stack)?;
-            }
-            WhiteSpace::Pre | WhiteSpace::PreWrap => {
-                let mut tag_first = self.ann_stack.clone();
-                let mut tag_cont = self.ann_stack.clone();
-                tag_first.push(self.decorator.decorate_preformat_first());
-                tag_cont.push(self.decorator.decorate_preformat_cont());
-                wrapping.add_text_new(filtered_text, ws_mode, &tag_first, &tag_cont)?;
-            } /*
-              WhiteSpace::PreWrap => {
-                  wrapping.add_text_prewrap(filtered_text, &self.ann_stack)?;
-              }
-              */
+        let mut pre_tag_start;
+        let mut pre_tag_cont;
+
+        let main_tag;
+        let cont_tag;
+        if self.pre_depth > 0 {
+            pre_tag_start = self.ann_stack.clone();
+            pre_tag_cont = self.ann_stack.clone();
+            pre_tag_start.push(self.decorator.decorate_preformat_first());
+            pre_tag_cont.push(self.decorator.decorate_preformat_cont());
+            main_tag = &pre_tag_start;
+            cont_tag = &pre_tag_cont;
+        } else {
+            main_tag = &self.ann_stack;
+            cont_tag = &self.ann_stack;
         }
+        wrapping.add_text(filtered_text, ws_mode, main_tag, cont_tag)?;
         Ok(())
     }
 
