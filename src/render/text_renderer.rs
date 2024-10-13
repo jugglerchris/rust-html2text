@@ -131,6 +131,7 @@ impl<T> TaggedLineElement<T> {
 #[derive(Debug, Clone, PartialEq)]
 pub struct TaggedLine<T> {
     v: Vec<TaggedLineElement<T>>,
+    len: usize,
 }
 
 impl<T: Debug + Eq + PartialEq + Clone + Default> Default for TaggedLine<T> {
@@ -142,16 +143,21 @@ impl<T: Debug + Eq + PartialEq + Clone + Default> Default for TaggedLine<T> {
 impl<T: Debug + Eq + PartialEq + Clone + Default> TaggedLine<T> {
     /// Create an empty `TaggedLine`.
     pub fn new() -> TaggedLine<T> {
-        TaggedLine { v: Vec::new() }
+        TaggedLine {
+            v: Vec::new(),
+            len: 0,
+        }
     }
 
     /// Create a new TaggedLine from a string and tag.
     pub fn from_string(s: String, tag: &T) -> TaggedLine<T> {
+        let len = UnicodeWidthStr::width(s.as_str());
         TaggedLine {
             v: vec![TaggedLineElement::Str(TaggedString {
                 s,
                 tag: tag.clone(),
             })],
+            len,
         }
     }
 
@@ -180,13 +186,16 @@ impl<T: Debug + Eq + PartialEq + Clone + Default> TaggedLine<T> {
     fn push_str(&mut self, ts: TaggedString<T>) {
         use self::TaggedLineElement::Str;
 
-        if let Some(Str(ts_prev)) = self.v.last_mut() {
-            if ts_prev.tag == ts.tag {
-                ts_prev.s.push_str(&ts.s);
-                return;
+        if !ts.s.is_empty() {
+            self.len += UnicodeWidthStr::width(ts.s.as_str());
+            if let Some(Str(ts_prev)) = self.v.last_mut() {
+                if ts_prev.tag == ts.tag {
+                    ts_prev.s.push_str(&ts.s);
+                    return;
+                }
             }
+            self.v.push(Str(ts));
         }
-        self.v.push(Str(ts));
     }
 
     /// Add a new general TaggedLineElement to the line
@@ -200,10 +209,21 @@ impl<T: Debug + Eq + PartialEq + Clone + Default> TaggedLine<T> {
         }
     }
 
+    /// Push some whitespace
+    fn push_ws(&mut self, len: usize, tag: &T) {
+        use self::TaggedLineElement::Str;
+        self.push(Str(TaggedString {
+            s: " ".repeat(len),
+            tag: tag.clone(),
+        }));
+        self.len += len;
+    }
+
     /// Add a new fragment to the start of the line
     fn insert_front(&mut self, ts: TaggedString<T>) {
         use self::TaggedLineElement::Str;
 
+        self.len += UnicodeWidthStr::width(ts.s.as_str());
         self.v.insert(0, Str(ts));
     }
 
@@ -211,6 +231,7 @@ impl<T: Debug + Eq + PartialEq + Clone + Default> TaggedLine<T> {
     fn push_char(&mut self, c: char, tag: &T) {
         use self::TaggedLineElement::Str;
 
+        self.len += UnicodeWidthChar::width(c).unwrap_or(0);
         if let Some(Str(ts_prev)) = self.v.last_mut() {
             if ts_prev.tag == *tag {
                 ts_prev.s.push(c);
@@ -232,9 +253,10 @@ impl<T: Debug + Eq + PartialEq + Clone + Default> TaggedLine<T> {
         }
     }
 
-    /// Drain the contained items
-    fn drain_all(&mut self) -> vec::Drain<TaggedLineElement<T>> {
-        self.v.drain(..)
+    /// Remove the contained items
+    fn remove_items(&mut self) -> impl Iterator<Item = TaggedLineElement<T>> {
+        self.len = 0;
+        std::mem::take(&mut self.v).into_iter()
     }
 
     /// Iterator over the chars in this line.
@@ -281,20 +303,17 @@ impl<T: Debug + Eq + PartialEq + Clone + Default> TaggedLine<T> {
 
     /// Return the width of the line in cells
     fn width(&self) -> usize {
-        self.tagged_strings().map(TaggedString::width).sum()
+        let result = self.tagged_strings().map(TaggedString::width).sum();
+        debug_assert_eq!(self.len, result);
+        result
     }
 
     /// Pad this line to width with spaces (or if already at least this wide, do
     /// nothing).
     fn pad_to(&mut self, width: usize, tag: &T) {
-        use self::TaggedLineElement::Str;
-
         let my_width = self.width();
         if width > my_width {
-            self.v.push(Str(TaggedString {
-                s: format!("{: <width$}", "", width = width - my_width),
-                tag: tag.clone(),
-            }));
+            self.push_ws(width - my_width, tag);
         }
     }
 }
@@ -307,10 +326,10 @@ struct WrappedBlock<T> {
     text: Vec<TaggedLine<T>>,
     textlen: usize,
     line: TaggedLine<T>,
-    linelen: usize,
     spacetag: Option<T>, // Tag for the whitespace before the current word
     word: TaggedLine<T>, // The current word (with no whitespace).
     wordlen: usize,
+    wslen: usize,
     pre_wrapped: bool, // If true, we've been forced to wrap a <pre> line.
     pad_blocks: bool,
     allow_overflow: bool,
@@ -323,115 +342,144 @@ impl<T: Clone + Eq + Debug + Default> WrappedBlock<T> {
             text: Vec::new(),
             textlen: 0,
             line: TaggedLine::new(),
-            linelen: 0,
             spacetag: None,
             word: TaggedLine::new(),
             wordlen: 0,
+            wslen: 0,
             pre_wrapped: false,
             pad_blocks,
             allow_overflow,
         }
     }
 
-    fn flush_word(&mut self, with_space: bool) -> Result<(), Error> {
+    fn flush_word(&mut self, ws_mode: WhiteSpace, main_tag: &T, wrap_tag: &T) -> Result<(), Error> {
         use self::TaggedLineElement::Str;
 
         /* Finish the word. */
-        html_trace_quiet!("flush_word: word={:?}, linelen={}", self.word, self.linelen);
+        html_trace_quiet!(
+            "flush_word: word={:?}, linelen={}",
+            self.word,
+            self.line.len
+        );
+
+        let mut tag = if self.pre_wrapped { wrap_tag } else { main_tag };
         if !self.word.is_empty() {
             self.pre_wrapped = false;
-            let space_in_line = self.width - self.linelen;
-            let space_needed = self.wordlen + if self.linelen > 0 { 1 } else { 0 }; // space
+            let space_in_line = self.width - self.line.len;
+            let space_needed = self.wslen + self.wordlen;
             if space_needed <= space_in_line {
                 html_trace!("Got enough space");
-                if self.linelen > 0 && with_space {
-                    self.line.push(Str(TaggedString {
-                        s: " ".into(),
-                        tag: self.spacetag.clone().unwrap_or_else(|| Default::default()),
-                    }));
-                    self.linelen += 1;
-                    html_trace!("linelen incremented to {}", self.linelen);
-                }
+                self.line.push(Str(TaggedString {
+                    s: " ".repeat(self.wslen),
+                    tag: tag.clone(),
+                }));
+                self.wslen = 0;
+
                 self.line.consume(&mut self.word);
-                self.linelen += self.wordlen;
-                html_trace!("linelen increased by wordlen to {}", self.linelen);
+                html_trace!("linelen increased by wordlen to {}", self.line.len);
             } else {
                 html_trace!("Not enough space");
+                // The column position inside (whitespace + word)
+                if !ws_mode.do_wrap() {
+                    // We're not word-wrapping, so output any portion that still
+                    // fits.
+                    if self.wslen >= space_in_line {
+                        // Skip the whitespace
+                        self.wslen -= space_in_line;
+                    } else {
+                        self.line.push_ws(self.wslen, tag);
+                        self.wslen = 0;
+                    }
+                } else {
+                    // We're word-wrapping, so discard any whitespace.
+                    self.wslen = 0;
+                }
                 /* Start a new line */
                 self.flush_line();
-                if self.wordlen <= self.width {
-                    html_trace!("wordlen <= width");
-                    let mut new_word = TaggedLine::new();
-                    mem::swap(&mut new_word, &mut self.word);
-                    mem::swap(&mut self.line, &mut new_word);
-                    self.linelen = self.wordlen;
-                    html_trace!("linelen set to wordlen {}", self.linelen);
-                } else {
-                    html_trace!("Splitting the word");
-                    /* We need to split the word. */
-                    let mut word = TaggedLine::new();
-                    mem::swap(&mut word, &mut self.word);
-                    let mut wordbits = word.drain_all();
-                    /* Note: there's always at least one piece */
-                    let mut opt_elt = wordbits.next();
-                    let mut lineleft = self.width;
-                    while let Some(elt) = opt_elt.take() {
-                        html_trace!("Take element {:?}", elt);
-                        if let Str(piece) = elt {
-                            let w = piece.width();
-                            if w <= lineleft {
-                                self.line.push(Str(piece));
-                                lineleft -= w;
-                                self.linelen += w;
-                                html_trace!("linelen had w={} added to {}", w, self.linelen);
-                                opt_elt = wordbits.next();
-                            } else {
-                                /* Split into two */
-                                let mut split_idx = 0;
-                                for (idx, c) in piece.s.char_indices() {
-                                    let c_w = UnicodeWidthChar::width(c).unwrap();
-                                    if c_w <= lineleft {
-                                        lineleft -= c_w;
-                                    } else {
-                                        // Check if we've made no progress, for example
-                                        // if the first character is 2 cells wide and we
-                                        // only have a width of 1.
-                                        if idx == 0 && self.line.width() == 0 {
-                                            if self.allow_overflow {
-                                                split_idx = c.len_utf8();
-                                                break;
-                                            } else {
-                                                return Err(Error::TooNarrow);
-                                            }
-                                        }
-                                        split_idx = idx;
-                                        break;
-                                    }
-                                }
-                                self.line.push(Str(TaggedString {
-                                    s: piece.s[..split_idx].into(),
-                                    tag: piece.tag.clone(),
-                                }));
-                                self.force_flush_line();
-                                lineleft = self.width;
-                                if split_idx == piece.s.len() {
-                                    opt_elt = None;
-                                } else {
-                                    opt_elt = Some(Str(TaggedString {
-                                        s: piece.s[split_idx..].into(),
-                                        tag: piece.tag,
-                                    }));
-                                }
-                            }
-                        } else {
-                            self.line.push(elt);
-                            opt_elt = wordbits.next();
-                        }
-                    }
+
+                if ws_mode == WhiteSpace::Pre {
+                    self.pre_wrapped = true;
+                    tag = wrap_tag;
                 }
+
+                // Write any remaining whitespace
+                while self.wslen > 0 {
+                    let to_copy = self.wslen.min(self.width);
+                    self.line.push_ws(to_copy, tag);
+                    if to_copy == self.width {
+                        self.flush_line();
+                    }
+                    self.wslen -= to_copy;
+                }
+
+                // At this point, either:
+                // We're word-wrapping, and at the start of the line or
+                // We're preformatted, and may have some whitespace at the start of the
+                // line.  In either case we just keep outputing the word directly, hard
+                // wrapping if needed.
+                self.flush_word_hard_wrap()?;
             }
         }
         self.wordlen = 0;
+        Ok(())
+    }
+
+    // Write the current word out, hard-wrapped.  (This may originally be pre-formatted,
+    // or be a word which just doesn't fit on the line.)
+    fn flush_word_hard_wrap(&mut self) -> Result<(), Error> {
+        use self::TaggedLineElement::Str;
+
+        let mut lineleft = self.width - self.line.len;
+        for element in self.word.remove_items() {
+            if let Str(piece) = element {
+                let w = piece.width();
+                let mut wpos = 0; // Width of already-copied pieces
+                let mut bpos = 0; // Byte position of already-copied pieces
+                                  //
+                while w - wpos > lineleft {
+                    let mut split_idx = 0;
+                    for (idx, c) in piece.s[bpos..].char_indices() {
+                        let c_w = UnicodeWidthChar::width(c).unwrap();
+                        if c_w <= lineleft {
+                            lineleft -= c_w;
+                            wpos += c_w;
+                        } else {
+                            // Check if we've made no progress, for example
+                            // if the first character is 2 cells wide and we
+                            // only have a width of 1.
+                            if idx == 0 && self.line.width() == 0 {
+                                if self.allow_overflow {
+                                    split_idx = c.len_utf8();
+                                    wpos += c_w;
+                                    break;
+                                } else {
+                                    return Err(Error::TooNarrow);
+                                }
+                            }
+                            split_idx = idx;
+                            break;
+                        }
+                    }
+                    self.line.push(Str(TaggedString {
+                        s: piece.s[bpos..bpos + split_idx].into(),
+                        tag: piece.tag.clone(),
+                    }));
+                    bpos += split_idx;
+                    self.force_flush_line();
+                    lineleft = self.width;
+                }
+                if bpos == 0 {
+                    self.line.push(Str(piece));
+                    lineleft -= w;
+                } else if bpos < piece.s.len() {
+                    self.line.push(Str(TaggedString {
+                        s: piece.s[bpos..].into(),
+                        tag: piece.tag,
+                    }));
+                    lineleft -= w.saturating_sub(wpos);
+                }
+            }
+        }
         Ok(())
     }
 
@@ -455,11 +503,12 @@ impl<T: Clone + Eq + Debug + Default> WrappedBlock<T> {
             tmp_line.pad_to(self.width, tag);
         }
         self.text.push(tmp_line);
-        self.linelen = 0;
     }
 
     fn flush(&mut self) -> Result<(), Error> {
-        self.flush_word(true)?;
+        let tag = self.spacetag.clone().unwrap_or_default();
+
+        self.flush_word(WhiteSpace::Normal, &tag, &tag)?;
         self.flush_line();
         Ok(())
     }
@@ -488,130 +537,108 @@ impl<T: Clone + Eq + Debug + Default> WrappedBlock<T> {
         Ok(self.text)
     }
 
-    fn add_text(&mut self, text: &str, tag: &T) -> Result<(), Error> {
-        html_trace!("WrappedBlock::add_text({}), {:?}", text, tag);
-        for c in text.chars() {
-            if c.is_whitespace() {
-                /* Whitespace is mostly ignored, except to terminate words. */
-                self.flush_word(true)?;
-                self.spacetag = Some(tag.clone());
-            } else if let Some(charwidth) = UnicodeWidthChar::width(c) {
-                /* Not whitespace; add to the current word. */
-                self.word.push_char(c, tag);
-                self.wordlen += charwidth;
-            }
-            html_trace_quiet!("  Added char {:?}, wordlen={}", c, self.wordlen);
-        }
-        Ok(())
-    }
-
-    fn add_preformatted_text(
+    fn add_text_new(
         &mut self,
         text: &str,
-        tag_main: &T,
-        tag_wrapped: &T,
+        ws_mode: WhiteSpace,
+        main_tag: &T,
+        wrap_tag: &T,
     ) -> Result<(), Error> {
-        html_trace!(
-            "WrappedBlock::add_preformatted_text({}), {:?}/{:?}",
-            text,
-            tag_main,
-            tag_wrapped
-        );
-        // Make sure that any previous word has been sent to the line, as we
-        // bypass the word buffer.
-        self.flush_word(true)?;
-
+        html_trace!("WrappedBlock::add_text({}), {:?}", text, main_tag);
+        // We walk character by character.
+        // 1. First, build up whitespace columns in self.wslen
+        //    - In normal mode self.wslen will always be 0 or 1
+        // 2. Next build up a word (non-whitespace).
+        // 2a. If the word gets too long for the line
+        // 2b. If we get to more whitespace, output the first whitespace and the word
+        //     and continue.
+        let mut tag = if self.pre_wrapped { wrap_tag } else { main_tag };
         for c in text.chars() {
-            if let Some(charwidth) = UnicodeWidthChar::width(c) {
-                if self.linelen + charwidth > self.width {
-                    self.flush_line();
-                    self.pre_wrapped = true;
-                }
-                self.line.push_char(
-                    c,
-                    if self.pre_wrapped {
-                        tag_wrapped
-                    } else {
-                        tag_main
-                    },
-                );
-                self.linelen += charwidth;
-            } else {
-                match c {
-                    '\n' => {
-                        self.force_flush_line();
-                        self.pre_wrapped = false;
-                    }
-                    '\t' => {
-                        let tab_stop = 8;
-                        let mut at_least_one_space = false;
-                        while self.linelen % tab_stop != 0 || !at_least_one_space {
-                            if self.linelen >= self.width {
-                                self.flush_line();
-                            } else {
-                                self.line.push_char(
-                                    ' ',
-                                    if self.pre_wrapped {
-                                        tag_wrapped
-                                    } else {
-                                        tag_main
-                                    },
-                                );
-                                self.linelen += 1;
-                                at_least_one_space = true;
-                            }
-                        }
-                    }
-                    _ => {}
-                }
+            html_trace!(
+                "c = {:?} word={:?} linelen={} wslen={} line={:?}",
+                c,
+                self.word,
+                self.line.len,
+                self.wslen,
+                self.line
+            );
+            if c.is_whitespace() && self.wordlen > 0 {
+                self.flush_word(ws_mode, main_tag, wrap_tag)?;
             }
-            html_trace_quiet!("  Added char {:?}", c);
-        }
-        Ok(())
-    }
 
-    fn add_text_prewrap(&mut self, text: &str, tag: &T) -> Result<(), Error> {
-        html_trace!("WrappedBlock::add_text_prewrap({}), {:?}", text, tag);
-        for c in text.chars() {
             if c.is_whitespace() {
-                // Wrap if needed
-                self.flush_word(false)?;
-                match c {
-                    '\n' => {
-                        self.force_flush_line();
-                    }
-                    '\t' => {
-                        let tab_stop = 8;
-                        let mut at_least_one_space = false;
-                        while self.linelen % tab_stop != 0 || !at_least_one_space {
-                            if self.linelen >= self.width {
-                                self.flush_line();
-                            } else {
-                                self.line.push_char(' ', tag);
-                                self.linelen += 1;
-                                at_least_one_space = true;
+                // We're just building up whitespace.
+                if ws_mode.preserve_whitespace() {
+                    match c {
+                        '\n' => {
+                            // End of line.  We have no words here, so just finish
+                            // the line.
+                            self.force_flush_line();
+                            self.wslen = 0;
+                            self.pre_wrapped = false;
+                            // Hard new line, so back to main tag.
+                            tag = main_tag;
+                        }
+                        '\t' => {
+                            let tab_stop = 8;
+                            let mut pos = self.line.len + self.wslen;
+                            let mut at_least_one_space = false;
+                            while pos % tab_stop != 0 || !at_least_one_space {
+                                if pos >= self.width {
+                                    self.flush_line();
+                                } else {
+                                    self.line.push_char(' ', tag);
+                                    pos += 1;
+                                    at_least_one_space = true;
+                                }
+                            }
+                        }
+                        _ => {
+                            if let Some(cwidth) = UnicodeWidthChar::width(c) {
+                                if (self.line.len + self.wslen + cwidth) > self.width {
+                                    // In any case we can discard whitespace we've
+                                    // built up, as it will be at the end of the line.
+                                    self.wslen = 0;
+
+                                    self.flush_line();
+                                    if ws_mode.do_wrap() {
+                                        // We're handling wrapping, so collapse
+                                        self.pre_wrapped = false;
+                                    } else {
+                                        // Manual wrapping, keep the space.
+                                        self.wslen += cwidth;
+                                        self.pre_wrapped = true;
+                                    }
+                                } else {
+                                    self.spacetag = Some(tag.clone());
+                                    self.wslen += cwidth;
+                                }
                             }
                         }
                     }
-                    _ => {
-                        if let Some(width) = UnicodeWidthChar::width(c) {
-                            if self.width - self.linelen < width {
-                                self.flush_line();
-                            }
-                            if self.width - self.linelen >= width {
-                                // Check for space again to avoid pathological issues
-                                self.line.push_char(c, tag);
-                                self.linelen += width;
-                            }
-                        }
+                } else {
+                    // If not preserving whitespace, everything is collapsed,
+                    // and the line won't start with whitespace.
+                    if self.line.len > 0 {
+                        self.spacetag = Some(tag.clone());
+                        self.wslen = 1;
                     }
                 }
-            } else if let Some(charwidth) = UnicodeWidthChar::width(c) {
-                /* Not whitespace; add to the current word. */
-                self.word.push_char(c, tag);
-                self.wordlen += charwidth;
+            } else {
+                // Non-whitespace character: add to the current word.
+                if let Some(cwidth) = UnicodeWidthChar::width(c) {
+                    self.wordlen += cwidth;
+                    // Special case: detect wrapping preformatted line to switch
+                    // the tag.
+                    if ws_mode == WhiteSpace::Pre
+                        && (self.line.len + self.wslen + self.wordlen > self.width)
+                    {
+                        self.pre_wrapped = true;
+                        tag = wrap_tag;
+                    }
+                    self.word.push_char(c, tag);
+                }
             }
-            html_trace_quiet!("  Added char {:?}, wordlen={}", c, self.wordlen);
         }
         Ok(())
     }
@@ -621,7 +648,7 @@ impl<T: Clone + Eq + Debug + Default> WrappedBlock<T> {
     }
 
     fn text_len(&self) -> usize {
-        self.textlen + self.linelen + self.wordlen
+        self.textlen + self.line.len + self.wordlen
     }
 
     fn is_empty(&self) -> bool {
@@ -1208,14 +1235,15 @@ impl<D: TextDecorator> Renderer for SubRenderer<D> {
     }
 
     fn new_line_hard(&mut self) -> Result<(), Error> {
-        match self.wrapping {
+        match &self.wrapping {
             None => self.add_empty_line(),
-            Some(WrappedBlock {
-                linelen: 0,
-                wordlen: 0,
-                ..
-            }) => self.add_empty_line(),
-            Some(_) => self.flush_all(),
+            Some(wrapping) => {
+                if wrapping.wordlen == 0 && wrapping.line.len == 0 {
+                    self.add_empty_line()
+                } else {
+                    self.flush_all()
+                }
+            }
         }
     }
 
@@ -1274,19 +1302,19 @@ impl<D: TextDecorator> Renderer for SubRenderer<D> {
         let wrapping = get_wrapping_or_insert::<D>(&mut self.wrapping, &self.options, self.width);
         match ws_mode {
             WhiteSpace::Normal => {
-                wrapping.add_text(filtered_text, &self.ann_stack)?;
+                wrapping.add_text_new(filtered_text, ws_mode, &self.ann_stack, &self.ann_stack)?;
             }
-            WhiteSpace::Pre => {
+            WhiteSpace::Pre | WhiteSpace::PreWrap => {
                 let mut tag_first = self.ann_stack.clone();
                 let mut tag_cont = self.ann_stack.clone();
                 tag_first.push(self.decorator.decorate_preformat_first());
                 tag_cont.push(self.decorator.decorate_preformat_cont());
-                get_wrapping_or_insert::<D>(&mut self.wrapping, &self.options, self.width)
-                    .add_preformatted_text(filtered_text, &tag_first, &tag_cont)?;
-            }
-            WhiteSpace::PreWrap => {
-                wrapping.add_text_prewrap(filtered_text, &self.ann_stack)?;
-            }
+                wrapping.add_text_new(filtered_text, ws_mode, &tag_first, &tag_cont)?;
+            } /*
+              WhiteSpace::PreWrap => {
+                  wrapping.add_text_prewrap(filtered_text, &self.ann_stack)?;
+              }
+              */
         }
         Ok(())
     }

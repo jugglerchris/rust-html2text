@@ -275,7 +275,7 @@ impl StyleData {
                         styles: styles.clone(),
                     };
                     html_trace_quiet!("Adding ruleset {ruleset:?}");
-                    rules.push(dbg!(ruleset));
+                    rules.push(ruleset);
                 }
             }
         }

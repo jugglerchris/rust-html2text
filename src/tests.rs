@@ -1323,7 +1323,7 @@ Bar
 
 #[test]
 fn test_pre_emptyline() {
-    test_html(br#"<pre>X<span id="i"> </span></pre>"#, "X \n", 10);
+    test_html(br#"<pre>X<span id="i"> </span></pre>"#, "X\n", 10);
 }
 
 #[test]
@@ -1525,7 +1525,7 @@ fn test_finalise() {
         vec![
             TaggedLine::from_string("test".to_owned(), &Vec::new()),
             TaggedLine::new(),
-            TaggedLine::from_string("".to_owned(), &vec![true]),
+            TaggedLine::new(),
         ]
     );
 }
@@ -2369,9 +2369,11 @@ text
         test_html_coloured(html, "Hello\n*<W>there</W>\n* boo\n", 6);
         test_html_coloured(html, "Hello\n*<W>ther</W>\n<W>e</W>*\nboo\n", 5);
         test_html_coloured(html, "Hell\no\n*<W>the</W>\n<W>re</W>*\nboo\n", 4);
-        test_html_coloured(html,
-                  "H\ne\nl\nl\no\n*<W></W>\n<W>t</W>\n<W>h</W>\n<W>e</W>\n<W>r</W>\n<W>e</W>\n*\nb\no\no\n",
-                  1);
+        test_html_coloured(
+            html,
+            "H\ne\nl\nl\no\n*\n<W>t</W>\n<W>h</W>\n<W>e</W>\n<W>r</W>\n<W>e</W>\n*\nb\no\no\n",
+            1,
+        );
     }
 
     #[test]
@@ -2566,11 +2568,37 @@ c  d  e
             r#"Hi
  a
   b
-   x  
+   x
 longword
 c  d  e
 "#,
             10,
+            |conf| {
+                conf.add_css(r#".prewrap { white-space: pre-wrap; }"#)
+                    .unwrap()
+            },
+        );
+
+        test_html_conf(
+            br#"<p class="prewrap">Test wrapping of some normal text in pre-wrap mode</p>"#,
+            r#"Test wrapping of
+some normal text
+in pre-wrap mode
+"#,
+            17,
+            |conf| {
+                conf.add_css(r#".prewrap { white-space: pre-wrap; }"#)
+                    .unwrap()
+            },
+        );
+
+        test_html_conf(
+            br#"<p class="prewrap">This  para  has  double  spacing  which  should  survive  except  at  line  breaks</p>"#,
+            r#"This  para  has  double  spacing
+which  should  survive  except
+at  line  breaks
+"#,
+            33,
             |conf| {
                 conf.add_css(r#".prewrap { white-space: pre-wrap; }"#)
                     .unwrap()
