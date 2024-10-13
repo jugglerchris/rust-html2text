@@ -108,6 +108,12 @@ impl WhiteSpace {
             WhiteSpace::Pre | WhiteSpace::PreWrap => true,
         }
     }
+    pub fn do_wrap(&self) -> bool {
+        match self {
+            WhiteSpace::Normal | WhiteSpace::PreWrap => true,
+            WhiteSpace::Pre => false,
+        }
+    }
 }
 
 /// An RGB colour value
