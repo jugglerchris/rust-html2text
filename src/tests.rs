@@ -1426,6 +1426,18 @@ fn test_pre_rich() {
             TaggedLine::from_string("long".into(), &vec![Preformat(true)])
         ]
     );
+
+    // The similar html with <p> and white-space: pre should not have the Preformat
+    // tags.
+    assert_eq!(
+        config::rich()
+            .render_to_lines(crate::parse(r#"<p style="white-space: pre">testlong</p>"#.as_bytes()).unwrap(), 4)
+            .unwrap(),
+        [
+            TaggedLine::from_string("test".into(), &vec![]),
+            TaggedLine::from_string("long".into(), &vec![])
+        ]
+    );
 }
 
 #[test]

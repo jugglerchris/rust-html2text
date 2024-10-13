@@ -251,6 +251,9 @@ pub(crate) struct ComputedStyle {
     pub(crate) display_none: WithSpec<bool>,
     /// The CSS white-space property
     pub(crate) white_space: WithSpec<WhiteSpace>,
+
+    /// A non-CSS flag indicating we're inside a <pre>.
+    pub(crate) internal_pre: bool,
 }
 
 /// Errors from reading or rendering HTML
@@ -1482,6 +1485,7 @@ fn process_dom_node<'a, T: Write>(
                         Default::default(),
                         WhiteSpace::Pre,
                     );
+                    computed.internal_pre = true;
                     Ok(Some(RenderNode::new_styled(Block(cs), computed)))
                 }),
                 expanded_name!(html "br") => Finished(RenderNode::new_styled(Break, computed)),
@@ -1639,6 +1643,7 @@ struct PushedStyleInfo {
     colour: bool,
     bgcolour: bool,
     white_space: bool,
+    preformat: bool,
 }
 
 impl PushedStyleInfo {
@@ -1665,6 +1670,10 @@ impl PushedStyleInfo {
                     }
                 }
             }
+            if style.internal_pre {
+                render.push_preformat();
+                result.preformat = true;
+            }
         }
         #[cfg(not(feature = "css"))]
         {
@@ -1682,6 +1691,9 @@ impl PushedStyleInfo {
         }
         if self.white_space {
             renderer.pop_ws();
+        }
+        if self.preformat {
+            renderer.pop_preformat();
         }
     }
 }
