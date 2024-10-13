@@ -555,7 +555,8 @@ impl<T: Clone + Eq + Debug + Default> WrappedBlock<T> {
         let mut tag = if self.pre_wrapped { wrap_tag } else { main_tag };
         for c in text.chars() {
             html_trace!(
-                "c = {c:?} word={:?} linelen={} wslen={} line={:?}",
+                "c = {:?} word={:?} linelen={} wslen={} line={:?}",
+                c,
                 self.word,
                 self.line.len,
                 self.wslen,
