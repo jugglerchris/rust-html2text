@@ -537,7 +537,7 @@ impl<T: Clone + Eq + Debug + Default> WrappedBlock<T> {
         Ok(self.text)
     }
 
-    fn add_text_new(
+    fn add_text(
         &mut self,
         text: &str,
         ws_mode: WhiteSpace,
@@ -1302,14 +1302,14 @@ impl<D: TextDecorator> Renderer for SubRenderer<D> {
         let wrapping = get_wrapping_or_insert::<D>(&mut self.wrapping, &self.options, self.width);
         match ws_mode {
             WhiteSpace::Normal => {
-                wrapping.add_text_new(filtered_text, ws_mode, &self.ann_stack, &self.ann_stack)?;
+                wrapping.add_text(filtered_text, ws_mode, &self.ann_stack, &self.ann_stack)?;
             }
             WhiteSpace::Pre | WhiteSpace::PreWrap => {
                 let mut tag_first = self.ann_stack.clone();
                 let mut tag_cont = self.ann_stack.clone();
                 tag_first.push(self.decorator.decorate_preformat_first());
                 tag_cont.push(self.decorator.decorate_preformat_cont());
-                wrapping.add_text_new(filtered_text, ws_mode, &tag_first, &tag_cont)?;
+                wrapping.add_text(filtered_text, ws_mode, &tag_first, &tag_cont)?;
             } /*
               WhiteSpace::PreWrap => {
                   wrapping.add_text_prewrap(filtered_text, &self.ann_stack)?;
