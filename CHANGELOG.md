@@ -11,6 +11,10 @@ Possible log types:
 
 ### Latest
 
+### 0.13.0
+
+- [added] Support CSS white-space: pre-wrap (and normal, pre).
+
 ### 0.13.0-alpha.2
 
 - [changed] Updated html5ever and markup5ever crate versions.  This has meant
