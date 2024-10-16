@@ -11,6 +11,12 @@ Possible log types:
 
 ### Latest
 
+### 0.13.1
+
+- [added] html2text now has --show-dom
+- [fixed] Support background CSS property (for colour)
+- [fixed] Some edge cases with CSS styles on whitespace
+
 ### 0.13.0
 
 - [added] Support CSS white-space: pre-wrap (and normal, pre).
