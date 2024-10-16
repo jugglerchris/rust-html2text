@@ -216,6 +216,45 @@ pub struct RcDom {
     pub quirks_mode: Cell<QuirksMode>,
 }
 
+impl RcDom {
+    fn add_node_to_string(s: &mut String, node: &Handle, indent: usize) {
+        use std::fmt::Write as _;
+        match &node.data {
+            NodeData::Document => {
+                for child in &*node.children.borrow() {
+                    Self::add_node_to_string(s, child, indent);
+                }
+            }
+            NodeData::Doctype { name, public_id, system_id } => {
+                writeln!(s, "{0:indent$}<doctype>", "", indent=indent).unwrap();
+            }
+            NodeData::Text { contents } => {
+                let borrowed = contents.borrow();
+                let text = borrowed.to_string();
+                if !text.trim().is_empty() {
+                    writeln!(s, "{0:indent$}Text:{1}", "", text, indent=indent).unwrap();
+                }
+            }
+            NodeData::Comment { .. } => (),
+            NodeData::Element { name, .. } => {
+                writeln!(s, "{0:indent$}<{1}>", "", name.local, indent=indent).unwrap();
+                for child in &*node.children.borrow() {
+                    Self::add_node_to_string(s, child, indent+1);
+                }
+                writeln!(s, "{0:indent$}</{1}>", "", name.local, indent=indent).unwrap();
+            }
+            NodeData::ProcessingInstruction { .. } => {}
+        }
+    }
+
+    /// A low-quality debug DOM rendering.
+    pub fn as_dom_string(&self) -> String {
+        let mut s = String::new();
+        Self::add_node_to_string(&mut s, &self.document, 0);
+        s
+    }
+}
+
 impl TreeSink for RcDom {
     type Output = Self;
 
