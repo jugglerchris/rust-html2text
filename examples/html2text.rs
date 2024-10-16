@@ -126,7 +126,14 @@ where
                 .unwrap();
         }
     }
-    if literal {
+    if flags.show_dom {
+        let conf = config::plain();
+        let conf = update_config(conf, &flags);
+        let dom = conf.parse_html(input).unwrap();
+        dom.as_dom_string()
+    } else if flags.show_render {
+        todo!()
+    } else if literal {
         let conf = config::with_decorator(TrivialDecorator::new());
         let conf = update_config(conf, &flags);
         conf.string_from_read(input, flags.width).unwrap()
@@ -148,6 +155,8 @@ struct Flags {
     ignore_css_colours: bool,
     #[cfg(feature = "css")]
     use_only_css: bool,
+    show_dom: bool,
+    show_render: bool,
 }
 
 fn main() {
@@ -166,6 +175,8 @@ fn main() {
         ignore_css_colours: false,
         #[cfg(feature = "css")]
         use_only_css: false,
+        show_dom: false,
+        show_render: false,
     };
     let mut literal: bool = false;
 
@@ -213,6 +224,16 @@ fn main() {
             &["--only-css"],
             StoreTrue,
             "Don't use default non-CSS colours",
+        );
+        ap.refer(&mut flags.show_dom).add_option(
+            &["--show-dom"],
+            StoreTrue,
+            "Show the parsed HTML DOM instead of rendered output",
+        );
+        ap.refer(&mut flags.show_render).add_option(
+            &["--show-render"],
+            StoreTrue,
+            "Show the computed render tree instead of the rendered output",
         );
         ap.parse_args_or_exit();
     }

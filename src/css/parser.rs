@@ -385,7 +385,7 @@ pub(crate) fn parse_color_attribute(
     text: &str,
 ) -> Result<Colour, nom::Err<nom::error::Error<&'static str>>> {
     let (_rest, value) = parse_value(text).map_err(|_| empty_fail())?;
-    parse_color(&value)
+    parse_color(&value.tokens)
 }
 
 #[derive(Copy, Clone, PartialEq, Eq, Debug)]
@@ -404,11 +404,15 @@ pub fn parse_declaration(text: &str) -> IResult<&str, Option<Declaration>> {
     ))(text)?;
     let decl = match prop.0.as_str() {
         "background-color" => {
-            let value = parse_color(&value)?;
+            let value = parse_color(&value.tokens)?;
             Decl::BackgroundColor { value }
         }
+        "background" => match parse_background_color(&value)? {
+            Some(value) => Decl::BackgroundColor { value },
+            _ => Decl::Unknown { name: prop },
+        },
         "color" => {
-            let value = parse_color(&value)?;
+            let value = parse_color(&value.tokens)?;
             Decl::Color { value }
         }
         "height" => {
@@ -457,12 +461,12 @@ fn empty_fail() -> nom::Err<nom::error::Error<&'static str>> {
     nom::Err::Error(nom::error::Error::new("", ErrorKind::Fail))
 }
 
-fn parse_color(value: &RawValue) -> Result<Colour, nom::Err<nom::error::Error<&'static str>>> {
+fn parse_color(tokens: &[Token]) -> Result<Colour, nom::Err<nom::error::Error<&'static str>>> {
     let fail_error = empty_fail();
-    if value.tokens.is_empty() {
+    if tokens.is_empty() {
         return Err(fail_error);
     }
-    match &value.tokens[..] {
+    match tokens {
         [Token::Ident(c)] => {
             let colour = match c.deref() {
                 "aqua" => Colour::Rgb(0, 0xff, 0xff),
@@ -492,7 +496,7 @@ fn parse_color(value: &RawValue) -> Result<Colour, nom::Err<nom::error::Error<&'
             use Token::*;
             match name.deref() {
                 "rgb" => {
-                    let rgb_args = &value.tokens[1..value.tokens.len() - 1];
+                    let rgb_args = &tokens[1..tokens.len() - 1];
                     match rgb_args {
                         [Number(r), Comma, Number(g), Comma, Number(b)] => {
                             let r = r.parse().map_err(|_e| empty_fail())?;
@@ -524,6 +528,22 @@ fn parse_color(value: &RawValue) -> Result<Colour, nom::Err<nom::error::Error<&'
             }
         }
         _ => Err(fail_error),
+    }
+}
+
+// Parse background: value, extracting only the colour (if present).
+fn parse_background_color(
+    value: &RawValue,
+) -> Result<Option<Colour>, nom::Err<nom::error::Error<&'static str>>> {
+    let tokens = if let Some(last) = value.tokens.rsplit(|tok| *tok == Token::Comma).next() {
+        last
+    } else {
+        return Err(empty_fail());
+    };
+
+    match parse_color(tokens) {
+        Ok(col) => Ok(Some(col)),
+        Err(_) => Ok(None),
     }
 }
 
@@ -994,6 +1014,46 @@ mod test {
                 Some(Declaration {
                     data: Decl::Color {
                         value: Colour::Rgb(1, 2, 3)
+                    },
+                    important: Importance::Default,
+                })
+            ))
+        );
+    }
+
+    #[test]
+    fn test_background() {
+        assert_eq!(
+            super::parse_declaration("background: white"),
+            Ok((
+                "",
+                Some(Declaration {
+                    data: Decl::BackgroundColor {
+                        value: Colour::Rgb(0xff, 0xff, 0xff)
+                    },
+                    important: Importance::Default,
+                })
+            ))
+        );
+        assert_eq!(
+            super::parse_declaration("background: url('blah'), white"),
+            Ok((
+                "",
+                Some(Declaration {
+                    data: Decl::BackgroundColor {
+                        value: Colour::Rgb(0xff, 0xff, 0xff)
+                    },
+                    important: Importance::Default,
+                })
+            ))
+        );
+        assert_eq!(
+            super::parse_declaration("background: url('blah'), foo"),
+            Ok((
+                "",
+                Some(Declaration {
+                    data: Decl::Unknown {
+                        name: PropertyName("background".into()),
                     },
                     important: Importance::Default,
                 })
