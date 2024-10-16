@@ -388,7 +388,8 @@ impl<T: Clone + Eq + Debug + Default> WrappedBlock<T> {
                         // Skip the whitespace
                         self.wslen -= space_in_line;
                     } else if self.wslen > 0 {
-                        self.line.push_ws(self.wslen, &self.spacetag.take().unwrap());
+                        self.line
+                            .push_ws(self.wslen, &self.spacetag.take().unwrap());
                         self.wslen = 0;
                     }
                 } else {

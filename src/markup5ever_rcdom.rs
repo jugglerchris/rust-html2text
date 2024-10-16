@@ -226,22 +226,22 @@ impl RcDom {
                 }
             }
             NodeData::Doctype { .. } => {
-                writeln!(s, "{0:indent$}<doctype>", "", indent=indent).unwrap();
+                writeln!(s, "{0:indent$}<doctype>", "", indent = indent).unwrap();
             }
             NodeData::Text { contents } => {
                 let borrowed = contents.borrow();
                 let text = borrowed.to_string();
                 if !text.trim().is_empty() {
-                    writeln!(s, "{0:indent$}Text:{1}", "", text, indent=indent).unwrap();
+                    writeln!(s, "{0:indent$}Text:{1}", "", text, indent = indent).unwrap();
                 }
             }
             NodeData::Comment { .. } => (),
             NodeData::Element { name, .. } => {
-                writeln!(s, "{0:indent$}<{1}>", "", name.local, indent=indent).unwrap();
+                writeln!(s, "{0:indent$}<{1}>", "", name.local, indent = indent).unwrap();
                 for child in &*node.children.borrow() {
-                    Self::add_node_to_string(s, child, indent+1);
+                    Self::add_node_to_string(s, child, indent + 1);
                 }
-                writeln!(s, "{0:indent$}</{1}>", "", name.local, indent=indent).unwrap();
+                writeln!(s, "{0:indent$}</{1}>", "", name.local, indent = indent).unwrap();
             }
             NodeData::ProcessingInstruction { .. } => {}
         }
