@@ -369,11 +369,13 @@ impl<T: Clone + Eq + Debug + Default> WrappedBlock<T> {
             let space_needed = self.wslen + self.wordlen;
             if space_needed <= space_in_line {
                 html_trace!("Got enough space");
-                self.line.push(Str(TaggedString {
-                    s: " ".repeat(self.wslen),
-                    tag: tag.clone(),
-                }));
-                self.wslen = 0;
+                if self.wslen > 0 {
+                    self.line.push(Str(TaggedString {
+                        s: " ".repeat(self.wslen),
+                        tag: self.spacetag.take().unwrap(),
+                    }));
+                    self.wslen = 0;
+                }
 
                 self.line.consume(&mut self.word);
                 html_trace!("linelen increased by wordlen to {}", self.line.len);
@@ -386,12 +388,13 @@ impl<T: Clone + Eq + Debug + Default> WrappedBlock<T> {
                     if self.wslen >= space_in_line {
                         // Skip the whitespace
                         self.wslen -= space_in_line;
-                    } else {
-                        self.line.push_ws(self.wslen, tag);
+                    } else if self.wslen > 0 {
+                        self.line.push_ws(self.wslen, &self.spacetag.take().unwrap());
                         self.wslen = 0;
                     }
                 } else {
                     // We're word-wrapping, so discard any whitespace.
+                    self.spacetag = None;
                     self.wslen = 0;
                 }
                 /* Start a new line */
@@ -405,12 +408,13 @@ impl<T: Clone + Eq + Debug + Default> WrappedBlock<T> {
                 // Write any remaining whitespace
                 while self.wslen > 0 {
                     let to_copy = self.wslen.min(self.width);
-                    self.line.push_ws(to_copy, tag);
+                    self.line.push_ws(to_copy, self.spacetag.as_ref().unwrap());
                     if to_copy == self.width {
                         self.flush_line();
                     }
                     self.wslen -= to_copy;
                 }
+                self.spacetag = None;
 
                 // At this point, either:
                 // We're word-wrapping, and at the start of the line or
@@ -548,6 +552,7 @@ impl<T: Clone + Eq + Debug + Default> WrappedBlock<T> {
         // We walk character by character.
         // 1. First, build up whitespace columns in self.wslen
         //    - In normal mode self.wslen will always be 0 or 1
+        //    - If wslen > 0, then self.spacetag will always be set.
         // 2. Next build up a word (non-whitespace).
         // 2a. If the word gets too long for the line
         // 2b. If we get to more whitespace, output the first whitespace and the word
@@ -575,6 +580,7 @@ impl<T: Clone + Eq + Debug + Default> WrappedBlock<T> {
                             // the line.
                             self.force_flush_line();
                             self.wslen = 0;
+                            self.spacetag = None;
                             self.pre_wrapped = false;
                             // Hard new line, so back to main tag.
                             tag = main_tag;
@@ -607,6 +613,7 @@ impl<T: Clone + Eq + Debug + Default> WrappedBlock<T> {
                                     } else {
                                         // Manual wrapping, keep the space.
                                         self.wslen += cwidth;
+                                        self.spacetag = Some(tag.clone());
                                         self.pre_wrapped = true;
                                     }
                                 } else {
@@ -619,7 +626,7 @@ impl<T: Clone + Eq + Debug + Default> WrappedBlock<T> {
                 } else {
                     // If not preserving whitespace, everything is collapsed,
                     // and the line won't start with whitespace.
-                    if self.line.len > 0 {
+                    if self.line.len > 0 && self.wslen == 0 {
                         self.spacetag = Some(tag.clone());
                         self.wslen = 1;
                     }

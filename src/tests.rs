@@ -2230,6 +2230,23 @@ There
     }
 
     #[test]
+    fn test_bgcoloured3() {
+        test_html_coloured(
+            br##"
+          <style>
+              .but {
+                  background-color:#00FF00;
+              }
+          </style>
+        <p>Test <span class="but">Two words</span> bg</p>
+        "##,
+            r#"Test <g>Two words</g> bg
+"#,
+            20,
+        );
+    }
+
+    #[test]
     fn test_coloured_element() {
         test_html_coloured(
             br##"
