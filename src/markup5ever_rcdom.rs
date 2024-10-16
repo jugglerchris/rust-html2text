@@ -225,7 +225,7 @@ impl RcDom {
                     Self::add_node_to_string(s, child, indent);
                 }
             }
-            NodeData::Doctype { name, public_id, system_id } => {
+            NodeData::Doctype { .. } => {
                 writeln!(s, "{0:indent$}<doctype>", "", indent=indent).unwrap();
             }
             NodeData::Text { contents } => {

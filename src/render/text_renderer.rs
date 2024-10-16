@@ -352,7 +352,7 @@ impl<T: Clone + Eq + Debug + Default> WrappedBlock<T> {
         }
     }
 
-    fn flush_word(&mut self, ws_mode: WhiteSpace, main_tag: &T, wrap_tag: &T) -> Result<(), Error> {
+    fn flush_word(&mut self, ws_mode: WhiteSpace) -> Result<(), Error> {
         use self::TaggedLineElement::Str;
 
         /* Finish the word. */
@@ -362,7 +362,6 @@ impl<T: Clone + Eq + Debug + Default> WrappedBlock<T> {
             self.line.len
         );
 
-        let mut tag = if self.pre_wrapped { wrap_tag } else { main_tag };
         if !self.word.is_empty() {
             self.pre_wrapped = false;
             let space_in_line = self.width - self.line.len;
@@ -402,7 +401,6 @@ impl<T: Clone + Eq + Debug + Default> WrappedBlock<T> {
 
                 if ws_mode == WhiteSpace::Pre {
                     self.pre_wrapped = true;
-                    tag = wrap_tag;
                 }
 
                 // Write any remaining whitespace
@@ -510,9 +508,7 @@ impl<T: Clone + Eq + Debug + Default> WrappedBlock<T> {
     }
 
     fn flush(&mut self) -> Result<(), Error> {
-        let tag = self.spacetag.clone().unwrap_or_default();
-
-        self.flush_word(WhiteSpace::Normal, &tag, &tag)?;
+        self.flush_word(WhiteSpace::Normal)?;
         self.flush_line();
         Ok(())
     }
@@ -568,7 +564,7 @@ impl<T: Clone + Eq + Debug + Default> WrappedBlock<T> {
                 self.line
             );
             if c.is_whitespace() && self.wordlen > 0 {
-                self.flush_word(ws_mode, main_tag, wrap_tag)?;
+                self.flush_word(ws_mode)?;
             }
 
             if c.is_whitespace() {
