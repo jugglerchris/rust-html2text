@@ -1136,13 +1136,13 @@ where
                         parent.children.push(node);
                     }
                     last = parent;
+                    continue;
+                }
+                // Finished the whole stack!
+                if let Some(node) = (last.construct)(context, last.children)? {
+                    break Ok(Some(node));
                 } else {
-                    // Finished the whole stack!
-                    if let Some(node) = (last.construct)(context, last.children)? {
-                        break Ok(Some(node));
-                    } else {
-                        break Ok(None);
-                    }
+                    break Ok(None);
                 }
     }
 }
