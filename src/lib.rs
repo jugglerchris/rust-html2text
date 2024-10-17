@@ -1632,35 +1632,25 @@ impl PushedStyleInfo {
     fn apply<D: TextDecorator>(render: &mut TextRenderer<D>, style: &ComputedStyle) -> Self {
         #[allow(unused_mut)]
         let mut result: PushedStyleInfo = Default::default();
-        {
-            #[cfg(feature = "css")]
-            if let Some(col) = style.colour.val() {
-                render.push_colour(col);
-                result.colour = true;
-            }
-            #[cfg(feature = "css")]
-            if let Some(col) = style.bg_colour.val() {
-                render.push_bgcolour(col);
-                result.bgcolour = true;
-            }
-            if let Some(ws) = style.white_space.val() {
-                match ws {
-                    WhiteSpace::Normal => {}
-                    WhiteSpace::Pre | WhiteSpace::PreWrap => {
-                        render.push_ws(ws);
-                        result.white_space = true;
-                    }
-                }
-            }
-            if style.internal_pre {
-                render.push_preformat();
-                result.preformat = true;
+        #[cfg(feature = "css")]
+        if let Some(col) = style.colour.val() {
+            render.push_colour(col);
+            result.colour = true;
+        }
+        #[cfg(feature = "css")]
+        if let Some(col) = style.bg_colour.val() {
+            render.push_bgcolour(col);
+            result.bgcolour = true;
+        }
+        if let Some(ws) = style.white_space.val() {
+            if let WhiteSpace::Pre | WhiteSpace::PreWrap = ws {
+                render.push_ws(ws);
+                result.white_space = true;
             }
         }
-        #[cfg(not(feature = "css"))]
-        {
-            let _ = render;
-            let _ = style;
+        if style.internal_pre {
+            render.push_preformat();
+            result.preformat = true;
         }
         result
     }
