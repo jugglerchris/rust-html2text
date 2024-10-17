@@ -1355,7 +1355,7 @@ fn process_dom_node<'a, T: Write>(
                 let computed =
                     context
                         .style_data
-                        .computed_style(parent_style, handle, context.use_doc_css);
+                        .computed_style(**parent_style, handle, context.use_doc_css);
                 if let Some(true) = computed.display_none.val() {
                     return Ok(Nothing);
                 }

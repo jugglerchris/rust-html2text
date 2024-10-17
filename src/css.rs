@@ -306,11 +306,11 @@ impl StyleData {
 
     pub(crate) fn computed_style(
         &self,
-        parent_style: &ComputedStyle,
+        parent_style: ComputedStyle,
         handle: &Handle,
         use_doc_css: bool,
     ) -> ComputedStyle {
-        let mut result = *parent_style;
+        let mut result = parent_style;
 
         for (origin, ruleset) in [
             (StyleOrigin::Agent, &self.agent_rules),
@@ -467,7 +467,7 @@ fn extract_style_nodes<'a, T: Write>(
                     // Assume just a flat text node
                     for child in handle.children.borrow().iter() {
                         if let NodeData::Text { ref contents } = child.data {
-                            result += &String::from(contents.borrow().deref());
+                            result += &contents.borrow();
                         }
                     }
                     Finished(vec![result])

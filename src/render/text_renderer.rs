@@ -1077,20 +1077,20 @@ impl<D: TextDecorator> SubRenderer<D> {
     }
 
     /// Consumes this renderer and return a multiline `String` with the result.
-    pub fn into_string(self) -> Result<String, Error> {
+    pub fn into_string(mut self) -> Result<String, Error> {
         let mut result = String::new();
-        #[cfg(feature = "html_trace")]
-        let width: usize = self.width;
-        for line in self.into_lines()? {
+        self.flush_wrapping()?;
+        for line in &self.lines {
             result.push_str(&line.to_string());
             result.push('\n');
         }
-        html_trace!("into_string({}, {:?})", width, result);
+        html_trace!("into_string({}, {:?})", self.width, result);
         Ok(result)
     }
 
     #[cfg(feature = "html_trace")]
     /// Returns a string of the current builder contents (for testing).
+    #[allow(clippy::inherent_to_string)]
     fn to_string(&self) -> String {
         let mut result = String::new();
         for line in &self.lines {
