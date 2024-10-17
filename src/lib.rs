@@ -1130,10 +1130,8 @@ where
             };
         }
             // No more children, so finally construct the parent.
-            let reduced = (last.construct)(context, last.children)?;
-            let parent = pending_stack.pop();
-            if let Some(node) = reduced {
-                if let Some(mut parent) = parent {
+            if let Some(node) = (last.construct)(context, last.children)? {
+                if let Some(mut parent) = pending_stack.pop() {
                     parent.postfn.as_ref().map(|ref f| f(context, &node));
                     parent.children.push(node);
                     last = parent;
@@ -1143,7 +1141,7 @@ where
                 }
             } else {
                 /* Finished the stack, and have nothing */
-                match parent {
+                match pending_stack.pop() {
                     Some(parent) => last = parent,
                     None => break Ok(None),
                 }
