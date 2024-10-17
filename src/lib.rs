@@ -914,12 +914,12 @@ fn table_to_render_tree<'a, T: Write>(
             }
         }
         if rows.is_empty() {
-            Ok(None)
+            None
         } else {
-            Ok(Some(RenderNode::new_styled(
+            Some(RenderNode::new_styled(
                 RenderNodeInfo::Table(RenderTable::new(rows)),
                 computed,
-            )))
+            ))
         }
     })
 }
@@ -970,10 +970,10 @@ fn tbody_to_render_tree<'a, T: Write>(
             }
         }
 
-        Ok(Some(RenderNode::new_styled(
+        Some(RenderNode::new_styled(
             RenderNodeInfo::TableBody(rows),
             computed,
-        )))
+        ))
     })
 }
 
@@ -995,7 +995,7 @@ fn tr_to_render_tree<'a, T: Write>(
                 }
             })
             .collect();
-        Ok(Some(RenderNode::new_styled(
+        Some(RenderNode::new_styled(
             RenderNodeInfo::TableRow(
                 RenderTableRow {
                     cells,
@@ -1005,7 +1005,7 @@ fn tr_to_render_tree<'a, T: Write>(
                 false,
             ),
             computed,
-        )))
+        ))
     })
 }
 
@@ -1025,7 +1025,7 @@ fn td_to_render_tree<'a, T: Write>(
         }
     }
     pending(input, move |_, children| {
-        Ok(Some(RenderNode::new_styled(
+        Some(RenderNode::new_styled(
             RenderNodeInfo::TableCell(RenderTableCell {
                 colspan,
                 content: children,
@@ -1034,7 +1034,7 @@ fn td_to_render_tree<'a, T: Write>(
                 style: computed,
             }),
             computed,
-        )))
+        ))
     })
 }
 
@@ -1221,11 +1221,11 @@ fn pending<F>(
     f: F,
 ) -> TreeMapResult<'static, HtmlContext, RenderInput, RenderNode>
 where
-    F: Fn(&mut HtmlContext, Vec<RenderNode>) -> Result<Option<RenderNode>> + 'static,
+    F: Fn(&mut HtmlContext, Vec<RenderNode>) -> Option<RenderNode> + 'static,
 {
     TreeMapResult::PendingChildren {
         children: input.children(),
-        cons: Box::new(f),
+        cons: Box::new(move |ctx, children| Ok(f(ctx, children))),
         prefn: None,
         postfn: None,
     }
@@ -1236,7 +1236,7 @@ fn pending_noempty<F>(
     f: F,
 ) -> TreeMapResult<'static, HtmlContext, RenderInput, RenderNode>
 where
-    F: Fn(&mut HtmlContext, Vec<RenderNode>) -> Result<Option<RenderNode>> + 'static,
+    F: Fn(&mut HtmlContext, Vec<RenderNode>) -> Option<RenderNode> + 'static,
 {
     let handle = &input.handle;
     let style = &input.parent_style;
@@ -1254,7 +1254,7 @@ where
             if children.is_empty() {
                 Ok(None)
             } else {
-                f(ctx, children)
+                Ok(f(ctx, children))
             }
         }),
         prefn: None,
@@ -1332,9 +1332,7 @@ fn process_dom_node<T: Write>(
     use TreeMapResult::*;
 
     Ok(match input.handle.clone().data {
-        Document => pending(input, |_context, cs| {
-            Ok(Some(RenderNode::new(Container(cs))))
-        }),
+        Document => pending(input, |_context, cs| Some(RenderNode::new(Container(cs)))),
         Comment { .. } => Nothing,
         Element {
             ref name,
@@ -1366,7 +1364,7 @@ fn process_dom_node<T: Write>(
                 expanded_name!(html "html") | expanded_name!(html "body") => {
                     /* process children, but don't add anything */
                     pending(input, move |_, cs| {
-                        Ok(Some(RenderNode::new_styled(Container(cs), computed)))
+                        Some(RenderNode::new_styled(Container(cs), computed))
                     })
                 }
                 expanded_name!(html "link")
@@ -1381,7 +1379,7 @@ fn process_dom_node<T: Write>(
                 expanded_name!(html "span") => {
                     /* process children, but don't add anything */
                     pending_noempty(input, move |_, cs| {
-                        Ok(Some(RenderNode::new_styled(Container(cs), computed)))
+                        Some(RenderNode::new_styled(Container(cs), computed))
                     })
                 }
                 expanded_name!(html "a") => {
@@ -1417,18 +1415,18 @@ fn process_dom_node<T: Write>(
                 expanded_name!(html "em")
                 | expanded_name!(html "i")
                 | expanded_name!(html "ins") => pending(input, move |_, cs| {
-                    Ok(Some(RenderNode::new_styled(Em(cs), computed)))
+                    Some(RenderNode::new_styled(Em(cs), computed))
                 }),
                 expanded_name!(html "strong") => pending(input, move |_, cs| {
-                    Ok(Some(RenderNode::new_styled(Strong(cs), computed)))
+                    Some(RenderNode::new_styled(Strong(cs), computed))
                 }),
                 expanded_name!(html "s") | expanded_name!(html "del") => {
                     pending(input, move |_, cs| {
-                        Ok(Some(RenderNode::new_styled(Strikeout(cs), computed)))
+                        Some(RenderNode::new_styled(Strikeout(cs), computed))
                     })
                 }
                 expanded_name!(html "code") => pending(input, move |_, cs| {
-                    Ok(Some(RenderNode::new_styled(Code(cs), computed)))
+                    Some(RenderNode::new_styled(Code(cs), computed))
                 }),
                 expanded_name!(html "img") => {
                     let borrowed = attrs.borrow();
@@ -1460,20 +1458,20 @@ fn process_dom_node<T: Write>(
                 | expanded_name!(html "h4") => {
                     let level: usize = name.local[1..].parse().unwrap();
                     pending(input, move |_, cs| {
-                        Ok(Some(RenderNode::new_styled(Header(level, cs), computed)))
+                        Some(RenderNode::new_styled(Header(level, cs), computed))
                     })
                 }
                 expanded_name!(html "p") => pending_noempty(input, move |_, cs| {
-                    Ok(Some(RenderNode::new_styled(Block(cs), computed)))
+                    Some(RenderNode::new_styled(Block(cs), computed))
                 }),
                 expanded_name!(html "li") => pending(input, move |_, cs| {
-                    Ok(Some(RenderNode::new_styled(ListItem(cs), computed)))
+                    Some(RenderNode::new_styled(ListItem(cs), computed))
                 }),
                 expanded_name!(html "sup") => pending(input, move |_, cs| {
-                    Ok(Some(RenderNode::new_styled(Sup(cs), computed)))
+                    Some(RenderNode::new_styled(Sup(cs), computed))
                 }),
                 expanded_name!(html "div") => pending_noempty(input, move |_, cs| {
-                    Ok(Some(RenderNode::new_styled(Div(cs), computed)))
+                    Some(RenderNode::new_styled(Div(cs), computed))
                 }),
                 expanded_name!(html "pre") => pending(input, move |_, cs| {
                     let mut computed = computed;
@@ -1484,7 +1482,7 @@ fn process_dom_node<T: Write>(
                         WhiteSpace::Pre,
                     );
                     computed.internal_pre = true;
-                    Ok(Some(RenderNode::new_styled(Block(cs), computed)))
+                    Some(RenderNode::new_styled(Block(cs), computed))
                 }),
                 expanded_name!(html "br") => Finished(RenderNode::new_styled(Break, computed)),
                 expanded_name!(html "table") => table_to_render_tree(input, computed, err_out),
@@ -1496,10 +1494,10 @@ fn process_dom_node<T: Write>(
                     td_to_render_tree(input, computed, err_out)
                 }
                 expanded_name!(html "blockquote") => pending_noempty(input, move |_, cs| {
-                    Ok(Some(RenderNode::new_styled(BlockQuote(cs), computed)))
+                    Some(RenderNode::new_styled(BlockQuote(cs), computed))
                 }),
                 expanded_name!(html "ul") => pending_noempty(input, move |_, cs| {
-                    Ok(Some(RenderNode::new_styled(Ul(cs), computed)))
+                    Some(RenderNode::new_styled(Ul(cs), computed))
                 }),
                 expanded_name!(html "ol") => {
                     let borrowed = attrs.borrow();
@@ -1518,7 +1516,7 @@ fn process_dom_node<T: Write>(
                             .into_iter()
                             .filter(|n| matches!(n.info, RenderNodeInfo::ListItem(..)))
                             .collect();
-                        Ok(Some(RenderNode::new_styled(Ol(start, cs), computed)))
+                        Some(RenderNode::new_styled(Ol(start, cs), computed))
                     })
                 }
                 expanded_name!(html "dl") => Finished(RenderNode::new_styled(
@@ -1532,9 +1530,8 @@ fn process_dom_node<T: Write>(
                 _ => {
                     html_trace!("Unhandled element: {:?}\n", name.local);
                     pending_noempty(input, move |_, cs| {
-                        Ok(Some(RenderNode::new_styled(Container(cs), computed)))
+                        Some(RenderNode::new_styled(Container(cs), computed))
                     })
-                    //None
                 }
             };
 
