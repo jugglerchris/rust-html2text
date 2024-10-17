@@ -358,15 +358,16 @@ struct RenderTableCell {
 impl RenderTableCell {
     /// Calculate or return the estimate size of the cell
     fn get_size_estimate(&self) -> SizeEstimate {
-        if self.size_estimate.get().is_none() {
+        let Some(size) = self.size_estimate.get() else {
             let size = self
                 .content
                 .iter()
                 .map(|node| node.get_size_estimate())
                 .fold(Default::default(), SizeEstimate::add);
             self.size_estimate.set(Some(size));
-        }
-        self.size_estimate.get().unwrap()
+            return size;
+        };
+        size
     }
 }
 
@@ -1916,10 +1917,10 @@ fn do_render_node<T: Write, D: TextDecorator>(
             // Special case for digit-only superscripts - use superscript
             // characters.
             fn sup_digits(children: &[RenderNode]) -> Option<String> {
-                if children.len() != 1 {
+                let [node] = children else {
                     return None;
-                }
-                if let Text(s) = &children[0].info {
+                };
+                if let Text(s) = &node.info {
                     if s.chars().all(|d| d.is_ascii_digit()) {
                         // It's just a string of digits - replace by superscript characters.
                         const SUPERSCRIPTS: [char; 10] =

@@ -371,12 +371,12 @@ fn parse_token_not_semicolon(text: &str) -> IResult<&str, Token> {
 fn parse_value(text: &str) -> IResult<&str, RawValue> {
     let (rest, mut tokens) = many0(parse_token_not_semicolon)(text)?;
     let mut important = false;
-    if tokens.len() >= 2
-        && tokens[tokens.len() - 2..] == [Token::Delim('!'), Token::Ident("important".into())]
-    {
-        tokens.pop();
-        tokens.pop();
-        important = true;
+    if let [.., Token::Delim('!'), Token::Ident(x)] = &tokens[..] {
+        if x == "important" {
+            tokens.pop();
+            tokens.pop();
+            important = true;
+        }
     }
     Ok((rest, RawValue { tokens, important }))
 }
@@ -492,21 +492,18 @@ fn parse_color(tokens: &[Token]) -> Result<Colour, nom::Err<nom::error::Error<&'
             };
             Ok(colour)
         }
-        [Token::Function(name), .., Token::CloseRound] => {
+        [Token::Function(name), rgb_args @ .., Token::CloseRound] => {
             use Token::*;
             match name.deref() {
-                "rgb" => {
-                    let rgb_args = &tokens[1..tokens.len() - 1];
-                    match rgb_args {
-                        [Number(r), Comma, Number(g), Comma, Number(b)] => {
-                            let r = r.parse().map_err(|_e| empty_fail())?;
-                            let g = g.parse().map_err(|_e| empty_fail())?;
-                            let b = b.parse().map_err(|_e| empty_fail())?;
-                            Ok(Colour::Rgb(r, g, b))
-                        }
-                        _ => Err(empty_fail()),
+                "rgb" => match rgb_args {
+                    [Number(r), Comma, Number(g), Comma, Number(b)] => {
+                        let r = r.parse().map_err(|_e| empty_fail())?;
+                        let g = g.parse().map_err(|_e| empty_fail())?;
+                        let b = b.parse().map_err(|_e| empty_fail())?;
+                        Ok(Colour::Rgb(r, g, b))
                     }
-                }
+                    _ => Err(empty_fail()),
+                },
                 _ => Err(empty_fail()),
             }
         }
