@@ -1101,7 +1101,7 @@ where
     let mut pending_stack = Vec::new();
     loop {
         // Get the next child node to process
-        if let Some(h) = last.to_process.next() {
+        while let Some(h) = last.to_process.next() {
             last.prefn
                 .as_ref()
                 .map(|ref f| f(context, &h))
@@ -1128,7 +1128,7 @@ where
                 }
                 TreeMapResult::Nothing => {}
             };
-        } else {
+        }
             // No more children, so finally construct the parent.
             let reduced = (last.construct)(context, last.children)?;
             let parent = pending_stack.pop();
@@ -1148,7 +1148,6 @@ where
                     None => break Ok(None),
                 }
             }
-        }
     }
 }
 
