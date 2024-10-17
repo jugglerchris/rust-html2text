@@ -1549,35 +1549,32 @@ fn process_dom_node<'a, T: Write>(
                 }
             }
 
-            let result = if let Some(fragname) = fragment {
-                match result {
-                    Finished(node) => {
-                        Finished(prepend_marker(RenderNode::new(FragStart(fragname)), node))
-                    }
-                    Nothing => Finished(RenderNode::new(FragStart(fragname))),
-                    PendingChildren {
-                        children,
-                        cons,
-                        prefn,
-                        postfn,
-                    } => PendingChildren {
-                        children,
-                        prefn,
-                        postfn,
-                        cons: Box::new(move |ctx, ch| {
-                            let fragnode = RenderNode::new(FragStart(fragname));
-                            match cons(ctx, ch)? {
-                                None => Ok(Some(fragnode)),
-                                Some(node) => Ok(Some(prepend_marker(fragnode, node))),
-                            }
-                        }),
-                    },
-                }
-            } else {
-                result
+            let Some(fragname) = fragment else {
+                return Ok(result);
             };
-
-            result
+            match result {
+                Finished(node) => {
+                    Finished(prepend_marker(RenderNode::new(FragStart(fragname)), node))
+                }
+                Nothing => Finished(RenderNode::new(FragStart(fragname))),
+                PendingChildren {
+                    children,
+                    cons,
+                    prefn,
+                    postfn,
+                } => PendingChildren {
+                    children,
+                    prefn,
+                    postfn,
+                    cons: Box::new(move |ctx, ch| {
+                        let fragnode = RenderNode::new(FragStart(fragname));
+                        match cons(ctx, ch)? {
+                            None => Ok(Some(fragnode)),
+                            Some(node) => Ok(Some(prepend_marker(fragnode, node))),
+                        }
+                    }),
+                },
+            }
         }
         markup5ever_rcdom::NodeData::Text { contents: ref tstr } => {
             Finished(RenderNode::new(Text((&*tstr.borrow()).into())))

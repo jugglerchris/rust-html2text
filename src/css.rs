@@ -69,12 +69,8 @@ impl Selector {
                     false
                 }
                 SelectorComponent::Element(name) => match &node.data {
-                    Element { name: eltname, .. } => {
-                        if name == eltname.expanded().local.deref() {
-                            Self::do_matches(&comps[1..], node)
-                        } else {
-                            false
-                        }
+                    Element { name: eltname, .. } if name == eltname.expanded().local.deref() => {
+                        Self::do_matches(&comps[1..], node)
                     }
                     _ => false,
                 },

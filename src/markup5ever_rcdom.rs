@@ -168,23 +168,20 @@ fn append(new_parent: &Handle, child: Handle) {
 
 /// If the node has a parent, get it and this node's position in its children
 fn get_parent_and_index(target: &Handle) -> Option<(Handle, usize)> {
-    if let Some(weak) = target.parent.take() {
-        let parent = weak.upgrade().expect("dangling weak pointer");
-        target.parent.set(Some(weak));
-        let i = match parent
-            .children
-            .borrow()
-            .iter()
-            .enumerate()
-            .find(|&(_, child)| Rc::ptr_eq(child, target))
-        {
-            Some((i, _)) => i,
-            None => panic!("have parent but couldn't find in parent's children!"),
-        };
-        Some((parent, i))
-    } else {
-        None
-    }
+    let weak = target.parent.take()?;
+    let parent = weak.upgrade().expect("dangling weak pointer");
+    target.parent.set(Some(weak));
+    let i = match parent
+        .children
+        .borrow()
+        .iter()
+        .enumerate()
+        .find(|&(_, child)| Rc::ptr_eq(child, target))
+    {
+        Some((i, _)) => i,
+        None => panic!("have parent but couldn't find in parent's children!"),
+    };
+    Some((parent, i))
 }
 
 fn append_to_existing_text(prev: &Handle, text: &str) -> bool {
