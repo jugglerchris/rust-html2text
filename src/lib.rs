@@ -791,10 +791,10 @@ impl RenderNode {
     }
 }
 
-fn precalc_size_estimate<'a, 'b: 'a, D: TextDecorator>(
+fn precalc_size_estimate<'a, D: TextDecorator>(
     node: &'a RenderNode,
     context: &mut HtmlContext,
-    decorator: &'b D,
+    decorator: &'a D,
 ) -> Result<TreeMapResult<'a, HtmlContext, &'a RenderNode, ()>> {
     use RenderNodeInfo::*;
     if node.size_estimate.get().is_some() {
@@ -1073,7 +1073,7 @@ fn tree_map_reduce<'a, C, N, R, M>(
     mut process_node: M,
 ) -> Result<Option<R>>
 where
-    M: for<'c> FnMut(&'c mut C, N) -> Result<TreeMapResult<'a, C, N, R>>,
+    M: FnMut(&mut C, N) -> Result<TreeMapResult<'a, C, N, R>>,
 {
     /// A node partially decoded, waiting for its children to
     /// be processed.
@@ -1216,13 +1216,12 @@ fn dom_to_render_tree_with_context<T: Write>(
     result
 }
 
-fn pending<'a, F>(
+fn pending<F>(
     input: RenderInput,
     f: F,
-) -> TreeMapResult<'a, HtmlContext, RenderInput, RenderNode>
+) -> TreeMapResult<'static, HtmlContext, RenderInput, RenderNode>
 where
-    for<'r> F:
-        Fn(&'r mut HtmlContext, std::vec::Vec<RenderNode>) -> Result<Option<RenderNode>> + 'static,
+    F: Fn(&mut HtmlContext, Vec<RenderNode>) -> Result<Option<RenderNode>> + 'static,
 {
     TreeMapResult::PendingChildren {
         children: input.children(),
@@ -1232,13 +1231,12 @@ where
     }
 }
 
-fn pending_noempty<'a, F>(
+fn pending_noempty<F>(
     input: RenderInput,
     f: F,
-) -> TreeMapResult<'a, HtmlContext, RenderInput, RenderNode>
+) -> TreeMapResult<'static, HtmlContext, RenderInput, RenderNode>
 where
-    for<'r> F:
-        Fn(&'r mut HtmlContext, std::vec::Vec<RenderNode>) -> Result<Option<RenderNode>> + 'static,
+    F: Fn(&mut HtmlContext, Vec<RenderNode>) -> Result<Option<RenderNode>> + 'static,
 {
     let handle = &input.handle;
     let style = &input.parent_style;
@@ -1324,12 +1322,12 @@ fn prepend_marker(prefix: RenderNode, mut orig: RenderNode) -> RenderNode {
     orig
 }
 
-fn process_dom_node<'a, T: Write>(
+fn process_dom_node<T: Write>(
     input: RenderInput,
     err_out: &mut T,
     #[allow(unused)] // Used with css feature
     context: &mut HtmlContext,
-) -> Result<TreeMapResult<'a, HtmlContext, RenderInput, RenderNode>> {
+) -> Result<TreeMapResult<'static, HtmlContext, RenderInput, RenderNode>> {
     use RenderNodeInfo::*;
     use TreeMapResult::*;
 
@@ -1614,7 +1612,6 @@ fn render_tree_to_string<T: Write, D: TextDecorator>(
 }
 
 fn pending2<
-    'a,
     D: TextDecorator,
     F: FnOnce(
             &mut TextRenderer<D>,
@@ -1624,7 +1621,7 @@ fn pending2<
 >(
     children: Vec<RenderNode>,
     f: F,
-) -> TreeMapResult<'a, TextRenderer<D>, RenderNode, Option<SubRenderer<D>>> {
+) -> TreeMapResult<'static, TextRenderer<D>, RenderNode, Option<SubRenderer<D>>> {
     TreeMapResult::PendingChildren {
         children,
         cons: Box::new(f),

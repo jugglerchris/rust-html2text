@@ -421,9 +421,9 @@ impl StyleData {
     }
 }
 
-fn pending<'a, F>(handle: Handle, f: F) -> TreeMapResult<'a, (), Handle, Vec<String>>
+fn pending<F>(handle: Handle, f: F) -> TreeMapResult<'static, (), Handle, Vec<String>>
 where
-    for<'r> F: Fn(&'r mut (), Vec<Vec<String>>) -> Result<Option<Vec<String>>> + 'static,
+    F: Fn(&mut (), Vec<Vec<String>>) -> Result<Option<Vec<String>>> + 'static,
 {
     TreeMapResult::PendingChildren {
         children: handle.children.borrow().clone(),
@@ -447,10 +447,10 @@ fn combine_vecs(vecs: Vec<Vec<String>>) -> Vec<String> {
     }
 }
 
-fn extract_style_nodes<'a, T: Write>(
+fn extract_style_nodes<T: Write>(
     handle: Handle,
     _err_out: &mut T,
-) -> TreeMapResult<'a, (), Handle, Vec<String>> {
+) -> TreeMapResult<'static, (), Handle, Vec<String>> {
     use TreeMapResult::*;
 
     match handle.clone().data {
