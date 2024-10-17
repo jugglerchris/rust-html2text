@@ -1129,17 +1129,17 @@ where
                 TreeMapResult::Nothing => {}
             };
         }
-                // No more children, so finally construct the parent.
-                if let Some(mut parent) = pending_stack.pop() {
-                    if let Some(node) = (last.construct)(context, last.children)? {
-                        parent.postfn.as_ref().map(|ref f| f(context, &node));
-                        parent.children.push(node);
-                    }
-                    last = parent;
-                    continue;
-                }
-                // Finished the whole stack!
-                break Ok((last.construct)(context, last.children)?);
+        // No more children, so finally construct the parent.
+        if let Some(mut parent) = pending_stack.pop() {
+            if let Some(node) = (last.construct)(context, last.children)? {
+                parent.postfn.as_ref().map(|ref f| f(context, &node));
+                parent.children.push(node);
+            }
+            last = parent;
+            continue;
+        }
+        // Finished the whole stack!
+        break Ok((last.construct)(context, last.children)?);
     }
 }
 
