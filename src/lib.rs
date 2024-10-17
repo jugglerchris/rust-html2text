@@ -1139,11 +1139,7 @@ where
                     continue;
                 }
                 // Finished the whole stack!
-                if let Some(node) = (last.construct)(context, last.children)? {
-                    break Ok(Some(node));
-                } else {
-                    break Ok(None);
-                }
+                break Ok((last.construct)(context, last.children)?);
     }
 }
 
