@@ -11,6 +11,10 @@ Possible log types:
 
 ### Latest
 
+### 0.13.2
+
+- [fixed] Fixed errors when building with Rust 1.72.
+
 ### 0.13.1
 
 - [added] html2text now has --show-dom

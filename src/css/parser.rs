@@ -14,7 +14,7 @@ use nom::{
 };
 
 #[derive(Debug, PartialEq)]
-pub enum Colour {
+pub(crate) enum Colour {
     Rgb(u8, u8, u8),
 }
 
@@ -27,7 +27,7 @@ impl From<Colour> for crate::Colour {
 }
 
 #[derive(Debug, PartialEq)]
-pub enum LengthUnit {
+pub(crate) enum LengthUnit {
     // Absolute units
     In,
     Cm,
@@ -41,7 +41,7 @@ pub enum LengthUnit {
 }
 
 #[derive(Debug, PartialEq)]
-pub enum Height {
+pub(crate) enum Height {
     #[allow(unused)]
     Auto,
     // If the length is 0, the unit will be Px
@@ -49,7 +49,7 @@ pub enum Height {
 }
 
 #[derive(Debug, PartialEq)]
-pub enum Overflow {
+pub(crate) enum Overflow {
     Visible,
     Hidden,
     Scroll,
@@ -58,14 +58,14 @@ pub enum Overflow {
 
 #[non_exhaustive]
 #[derive(Debug, PartialEq)]
-pub enum Display {
+pub(crate) enum Display {
     None,
     Other,
 }
 
 #[derive(Debug, PartialEq)]
 #[non_exhaustive]
-pub enum Decl {
+pub(crate) enum Decl {
     Color {
         value: Colour,
     },
@@ -160,7 +160,7 @@ struct RawValue<'s> {
 }
 
 #[derive(Debug, PartialEq)]
-pub struct Declaration {
+pub(crate) struct Declaration {
     pub data: Decl,
     pub important: Importance,
 }
@@ -174,7 +174,7 @@ pub(crate) struct RuleSet {
 }
 
 #[derive(Debug, PartialEq)]
-pub struct PropertyName(String);
+pub(crate) struct PropertyName(String);
 
 fn match_comment(text: &str) -> IResult<&str, ()> {
     let (rest, _) = tag("/*")(text)?;
@@ -389,12 +389,12 @@ pub(crate) fn parse_color_attribute(
 }
 
 #[derive(Copy, Clone, PartialEq, Eq, Debug)]
-pub enum Importance {
+pub(crate) enum Importance {
     Default,
     Important,
 }
 
-pub fn parse_declaration(text: &str) -> IResult<&str, Option<Declaration>> {
+pub(crate) fn parse_declaration(text: &str) -> IResult<&str, Option<Declaration>> {
     let (rest, (prop, _ws1, _colon, _ws2, value)) = tuple((
         parse_property_name,
         skip_optional_whitespace,
@@ -723,7 +723,7 @@ fn parse_white_space(
     Ok(WhiteSpace::Normal)
 }
 
-pub fn parse_rules(text: &str) -> IResult<&str, Vec<Declaration>> {
+pub(crate) fn parse_rules(text: &str) -> IResult<&str, Vec<Declaration>> {
     separated_list0(
         tuple((tag(";"), skip_optional_whitespace)),
         parse_declaration,
