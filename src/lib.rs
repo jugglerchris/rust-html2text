@@ -1092,13 +1092,14 @@ where
     loop {
         // Get the next child node to process
         while let Some(h) = last.to_process.next() {
-            last.prefn
-                .as_ref()
-                .map(|ref f| f(context, &h))
-                .transpose()?;
+            if let Some(f) = &last.prefn {
+                f(context, &h)?;
+            }
             match process_node(context, h)? {
                 TreeMapResult::Finished(result) => {
-                    last.postfn.as_ref().map(|ref f| f(context, &result));
+                    if let Some(f) = &last.postfn {
+                        f(context, &result)?;
+                    }
                     last.children.push(result);
                 }
                 TreeMapResult::PendingChildren {
@@ -1122,7 +1123,9 @@ where
         // No more children, so finally construct the parent.
         if let Some(mut parent) = pending_stack.pop() {
             if let Some(node) = (last.construct)(context, last.children)? {
-                parent.postfn.as_ref().map(|ref f| f(context, &node));
+                if let Some(f) = &parent.postfn {
+                    f(context, &node)?;
+                }
                 parent.children.push(node);
             }
             last = parent;
