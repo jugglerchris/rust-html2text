@@ -271,7 +271,7 @@ pub enum Error {
     Fail,
     /// An I/O error
     #[error("I/O error")]
-    IoError(#[from] std::io::Error),
+    IoError(#[from] io::Error),
 }
 
 impl PartialEq for Error {
@@ -290,17 +290,6 @@ impl PartialEq for Error {
 impl Eq for Error {}
 
 type Result<T> = std::result::Result<T, Error>;
-
-/// A dummy writer which does nothing
-struct Discard {}
-impl Write for Discard {
-    fn write(&mut self, bytes: &[u8]) -> std::result::Result<usize, io::Error> {
-        Ok(bytes.len())
-    }
-    fn flush(&mut self) -> std::result::Result<(), io::Error> {
-        Ok(())
-    }
-}
 
 const MIN_WIDTH: usize = 3;
 
@@ -2131,8 +2120,9 @@ fn render_table_cell<T: Write, D: TextDecorator>(
 pub mod config {
     //! Configure the HTML to text translation using the `Config` type, which can be
     //! constructed using one of the functions in this module.
+    use std::io;
 
-    use super::{Discard, Error};
+    use super::Error;
     #[cfg(feature = "css")]
     use crate::css::StyleData;
     use crate::{
@@ -2181,7 +2171,7 @@ pub mod config {
             }
         }
         /// Parse with context.
-        fn do_parse<R: std::io::Read>(
+        fn do_parse<R: io::Read>(
             &mut self,
             context: &mut HtmlContext,
             input: R,
@@ -2190,7 +2180,7 @@ pub mod config {
         }
 
         /// Parse the HTML into a DOM structure.
-        pub fn parse_html<R: std::io::Read>(&self, mut input: R) -> Result<super::RcDom> {
+        pub fn parse_html<R: io::Read>(&self, mut input: R) -> Result<super::RcDom> {
             use html5ever::tendril::TendrilSink;
             let opts = super::ParseOpts {
                 tree_builder: super::TreeBuilderOpts {
@@ -2209,7 +2199,7 @@ pub mod config {
             Ok(RenderTree(
                 super::dom_to_render_tree_with_context(
                     dom.document.clone(),
-                    &mut Discard {},
+                    &mut io::sink(),
                     &mut self.make_context(),
                 )?
                 .ok_or(Error::Fail)?,
@@ -2490,7 +2480,7 @@ impl RenderTree {
         let test_decorator = decorator.make_subblock_decorator();
         let builder = SubRenderer::new(width, render_options, decorator);
         let builder =
-            render_tree_to_string(context, builder, &test_decorator, self.0, &mut Discard {})?;
+            render_tree_to_string(context, builder, &test_decorator, self.0, &mut io::sink())?;
         Ok(RenderedText(builder))
     }
 
@@ -2533,7 +2523,7 @@ fn parse_with_context(mut input: impl io::Read, context: &mut HtmlContext) -> Re
         .from_utf8()
         .read_from(&mut input)?;
     let render_tree =
-        dom_to_render_tree_with_context(dom.document.clone(), &mut Discard {}, context)?
+        dom_to_render_tree_with_context(dom.document.clone(), &mut io::sink(), context)?
             .ok_or(Error::Fail)?;
     Ok(RenderTree(render_tree))
 }
