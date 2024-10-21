@@ -2045,8 +2045,8 @@ fn render_table_tree<T: Write, D: TextDecorator>(
     Ok(TreeMapResult::PendingChildren {
         children: table.into_rows(col_widths, vert_row),
         cons: Box::new(|_, _| Ok(Some(None))),
-        prefn: Some(Box::new(|_, _| Ok(()))),
-        postfn: Some(Box::new(|_, _| Ok(()))),
+        prefn: None,
+        postfn: None,
     })
 }
 
