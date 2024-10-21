@@ -177,7 +177,7 @@ impl PartialOrd for Specificity {
 }
 
 #[derive(Clone, Copy, Debug)]
-pub(crate) struct WithSpec<T: Copy + Clone> {
+pub(crate) struct WithSpec<T> {
     val: Option<T>,
     origin: StyleOrigin,
     specificity: Specificity,
@@ -626,7 +626,7 @@ impl RenderNode {
     fn calc_size_estimate<D: TextDecorator>(
         &self,
         context: &HtmlContext,
-        decorator: &'_ D,
+        decorator: &D,
     ) -> SizeEstimate {
         // If it's already calculated, then just return the answer.
         if let Some(s) = self.size_estimate.get() {
@@ -785,12 +785,12 @@ fn precalc_size_estimate<'a, D: TextDecorator>(
     node: &'a RenderNode,
     context: &mut HtmlContext,
     decorator: &'a D,
-) -> Result<TreeMapResult<'a, HtmlContext, &'a RenderNode, ()>> {
+) -> TreeMapResult<'a, HtmlContext, &'a RenderNode, ()> {
     use RenderNodeInfo::*;
     if node.size_estimate.get().is_some() {
-        return Ok(TreeMapResult::Nothing);
+        return TreeMapResult::Nothing;
     }
-    Ok(match node.info {
+    match node.info {
         Text(_) | Img(_, _) | Break | FragStart(_) => {
             let _ = node.calc_size_estimate(context, decorator);
             TreeMapResult::Nothing
@@ -840,7 +840,7 @@ fn precalc_size_estimate<'a, D: TextDecorator>(
             }
         }
         TableRow(..) | TableBody(_) | TableCell(_) => unimplemented!(),
-    })
+    }
 }
 
 /// Make a Vec of RenderNodes from the children of a node.
@@ -1575,7 +1575,7 @@ fn render_tree_to_string<T: Write, D: TextDecorator>(
 ) -> Result<SubRenderer<D>> {
     /* Phase 1: get size estimates. */
     tree_map_reduce(context, &tree, |context, node| {
-        precalc_size_estimate(node, context, decorator)
+        Ok(precalc_size_estimate(node, context, decorator))
     })?;
     /* Phase 2: actually render. */
     let mut renderer = TextRenderer::new(renderer);
