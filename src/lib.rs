@@ -1574,6 +1574,7 @@ fn render_tree_to_string<T: Write, D: TextDecorator>(
     err_out: &mut T,
 ) -> Result<SubRenderer<D>> {
     /* Phase 1: get size estimates. */
+    // can't actually error, but Ok-wrap to satisfy tree_map_reduce signature
     tree_map_reduce(context, &tree, |context, node| {
         Ok(precalc_size_estimate(node, context, decorator))
     })?;
