@@ -1580,7 +1580,7 @@ fn render_tree_to_string<T: Write, D: TextDecorator>(
     /* Phase 2: actually render. */
     let mut renderer = TextRenderer::new(renderer);
     tree_map_reduce(&mut renderer, tree, |renderer, node| {
-        do_render_node(renderer, node, err_out)
+        Ok(do_render_node(renderer, node, err_out)?)
     })?;
     let (mut renderer, links) = renderer.into_inner();
     let lines = renderer.finalise(links);
@@ -1667,7 +1667,7 @@ fn do_render_node<T: Write, D: TextDecorator>(
     renderer: &mut TextRenderer<D>,
     tree: RenderNode,
     err_out: &mut T,
-) -> Result<TreeMapResult<'static, TextRenderer<D>, RenderNode, Option<SubRenderer<D>>>> {
+) -> render::Result<TreeMapResult<'static, TextRenderer<D>, RenderNode, Option<SubRenderer<D>>>> {
     html_trace!("do_render_node({:?}", tree);
     use RenderNodeInfo::*;
     use TreeMapResult::*;
@@ -1946,7 +1946,7 @@ fn render_table_tree<T: Write, D: TextDecorator>(
     renderer: &mut TextRenderer<D>,
     table: RenderTable,
     _err_out: &mut T,
-) -> Result<TreeMapResult<'static, TextRenderer<D>, RenderNode, Option<SubRenderer<D>>>> {
+) -> render::Result<TreeMapResult<'static, TextRenderer<D>, RenderNode, Option<SubRenderer<D>>>> {
     /* Now lay out the table. */
     let num_columns = table.num_columns;
 
@@ -2211,13 +2211,14 @@ pub mod config {
 
         /// Render an existing RenderTree into a string.
         pub fn render_to_string(&self, render_tree: RenderTree, width: usize) -> Result<String> {
-            render_tree
+            let s = render_tree
                 .render_with_context(
                     &mut self.make_context(),
                     width,
                     self.decorator.make_subblock_decorator(),
                 )?
-                .into_string()
+                .into_string()?;
+            Ok(s)
         }
 
         /// Take an existing RenderTree, and returns text wrapped to `width` columns.
@@ -2246,9 +2247,11 @@ pub mod config {
             width: usize,
         ) -> Result<String> {
             let mut context = self.make_context();
-            self.do_parse(&mut context, input)?
+            let s = self
+                .do_parse(&mut context, input)?
                 .render_with_context(&mut context, width, self.decorator)?
-                .into_string()
+                .into_string()?;
+            Ok(s)
         }
 
         /// Reads HTML from `input`, and returns text wrapped to `width` columns.
@@ -2498,7 +2501,7 @@ struct RenderedText<D: TextDecorator>(SubRenderer<D>);
 
 impl<D: TextDecorator> RenderedText<D> {
     /// Convert the rendered HTML document to a string.
-    fn into_string(self) -> Result<String> {
+    fn into_string(self) -> render::Result<String> {
         self.0.into_string()
     }
 

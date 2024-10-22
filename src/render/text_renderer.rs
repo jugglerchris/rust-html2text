@@ -4,10 +4,11 @@
 //! into different text formats.
 
 use crate::Colour;
-use crate::Error;
 use crate::WhiteSpace;
 
 use super::Renderer;
+use super::Result;
+use super::TooNarrow;
 use std::cell::Cell;
 use std::mem;
 use std::ops::Deref;
@@ -52,7 +53,7 @@ impl<D: TextDecorator> TextRenderer<D> {
     // hack overloads start_link method otherwise coming from the Renderer trait
     // impl on SubRenderer
     /// Add link to global link collection
-    pub fn start_link(&mut self, target: &str) -> crate::Result<()> {
+    pub fn start_link(&mut self, target: &str) -> Result<()> {
         self.links.push(target.to_string());
         self.subrender.last_mut().unwrap().start_link(target)?;
         Ok(())
@@ -346,7 +347,7 @@ impl<T: Clone + Eq + Debug + Default> WrappedBlock<T> {
         }
     }
 
-    fn flush_word(&mut self, ws_mode: WhiteSpace) -> Result<(), Error> {
+    fn flush_word(&mut self, ws_mode: WhiteSpace) -> Result<()> {
         use self::TaggedLineElement::Str;
 
         /* Finish the word. */
@@ -423,7 +424,7 @@ impl<T: Clone + Eq + Debug + Default> WrappedBlock<T> {
 
     // Write the current word out, hard-wrapped.  (This may originally be pre-formatted,
     // or be a word which just doesn't fit on the line.)
-    fn flush_word_hard_wrap(&mut self) -> Result<(), Error> {
+    fn flush_word_hard_wrap(&mut self) -> Result<()> {
         use self::TaggedLineElement::Str;
 
         let mut lineleft = self.width - self.line.len;
@@ -450,7 +451,7 @@ impl<T: Clone + Eq + Debug + Default> WrappedBlock<T> {
                                     wpos += c_w;
                                     break;
                                 } else {
-                                    return Err(Error::TooNarrow);
+                                    return Err(TooNarrow);
                                 }
                             }
                             split_idx = idx;
@@ -502,7 +503,7 @@ impl<T: Clone + Eq + Debug + Default> WrappedBlock<T> {
         self.text.push(tmp_line);
     }
 
-    fn flush(&mut self) -> Result<(), Error> {
+    fn flush(&mut self) -> Result<()> {
         self.flush_word(WhiteSpace::Normal)?;
         self.flush_line();
         Ok(())
@@ -526,7 +527,7 @@ impl<T: Clone + Eq + Debug + Default> WrappedBlock<T> {
     */
 
     /// Consume self and return vector of lines including annotations.
-    pub fn into_lines(mut self) -> Result<Vec<TaggedLine<T>>, Error> {
+    pub fn into_lines(mut self) -> Result<Vec<TaggedLine<T>>> {
         self.flush()?;
 
         Ok(self.text)
@@ -538,7 +539,7 @@ impl<T: Clone + Eq + Debug + Default> WrappedBlock<T> {
         ws_mode: WhiteSpace,
         main_tag: &T,
         wrap_tag: &T,
-    ) -> Result<(), Error> {
+    ) -> Result<()> {
         html_trace!("WrappedBlock::add_text({}), {:?}", text, main_tag);
         // We walk character by character.
         // 1. First, build up whitespace columns in self.wslen
@@ -1061,7 +1062,7 @@ impl<D: TextDecorator> SubRenderer<D> {
     }
 
     /// Flushes the current wrapped block into the lines.
-    fn flush_wrapping(&mut self) -> Result<(), Error> {
+    fn flush_wrapping(&mut self) -> Result<()> {
         if let Some(w) = self.wrapping.take() {
             self.lines
                 .extend(w.into_lines()?.into_iter().map(RenderLine::Text))
@@ -1071,13 +1072,13 @@ impl<D: TextDecorator> SubRenderer<D> {
 
     /// Flush the wrapping text and border.  Only one should have
     /// anything to do.
-    fn flush_all(&mut self) -> Result<(), Error> {
+    fn flush_all(&mut self) -> Result<()> {
         self.flush_wrapping()?;
         Ok(())
     }
 
     /// Consumes this renderer and return a multiline `String` with the result.
-    pub fn into_string(mut self) -> Result<String, Error> {
+    pub fn into_string(mut self) -> Result<String> {
         let mut result = String::new();
         self.flush_wrapping()?;
         for line in &self.lines {
@@ -1148,21 +1149,21 @@ impl<D: TextDecorator> SubRenderer<D> {
     }
 
     /// Returns a `Vec` of `TaggedLine`s with the rendered text.
-    pub fn into_lines(mut self) -> Result<LinkedList<RenderLine<Vec<D::Annotation>>>, Error> {
+    pub fn into_lines(mut self) -> Result<LinkedList<RenderLine<Vec<D::Annotation>>>> {
         self.flush_wrapping()?;
         Ok(self.lines)
     }
 
-    fn add_horizontal_line(&mut self, line: BorderHoriz<Vec<D::Annotation>>) -> Result<(), Error> {
+    fn add_horizontal_line(&mut self, line: BorderHoriz<Vec<D::Annotation>>) -> Result<()> {
         self.flush_wrapping()?;
         self.lines.push_back(RenderLine::Line(line));
         Ok(())
     }
 
-    pub fn width_minus(&self, prefix_len: usize, min_width: usize) -> crate::Result<usize> {
+    pub fn width_minus(&self, prefix_len: usize, min_width: usize) -> Result<usize> {
         let new_width = self.width.saturating_sub(prefix_len);
         if new_width < min_width && !self.options.allow_width_overflow {
-            return Err(Error::TooNarrow);
+            return Err(TooNarrow);
         }
         Ok(new_width.max(min_width))
     }
@@ -1186,7 +1187,7 @@ fn filter_text_strikeout(s: &str) -> Option<String> {
 }
 
 impl<D: TextDecorator> Renderer for SubRenderer<D> {
-    fn add_empty_line(&mut self) -> crate::Result<()> {
+    fn add_empty_line(&mut self) -> Result<()> {
         html_trace!("add_empty_line()");
         self.flush_all()?;
         self.lines.push_back(RenderLine::Text(TaggedLine::new()));
@@ -1196,7 +1197,7 @@ impl<D: TextDecorator> Renderer for SubRenderer<D> {
         Ok(())
     }
 
-    fn new_sub_renderer(&self, width: usize) -> crate::Result<Self> {
+    fn new_sub_renderer(&self, width: usize) -> Result<Self> {
         let mut result = SubRenderer::new(
             width,
             self.options.clone(),
@@ -1207,7 +1208,7 @@ impl<D: TextDecorator> Renderer for SubRenderer<D> {
         Ok(result)
     }
 
-    fn start_block(&mut self) -> crate::Result<()> {
+    fn start_block(&mut self) -> Result<()> {
         html_trace!("start_block({})", self.width);
         self.flush_all()?;
         if self.lines.iter().any(|l| l.has_content()) {
@@ -1218,11 +1219,11 @@ impl<D: TextDecorator> Renderer for SubRenderer<D> {
         Ok(())
     }
 
-    fn new_line(&mut self) -> crate::Result<()> {
+    fn new_line(&mut self) -> Result<()> {
         self.flush_all()
     }
 
-    fn new_line_hard(&mut self) -> Result<(), Error> {
+    fn new_line_hard(&mut self) -> Result<()> {
         match &self.wrapping {
             None => self.add_empty_line(),
             Some(wrapping) => {
@@ -1235,7 +1236,7 @@ impl<D: TextDecorator> Renderer for SubRenderer<D> {
         }
     }
 
-    fn add_horizontal_border(&mut self) -> Result<(), Error> {
+    fn add_horizontal_border(&mut self) -> Result<()> {
         self.flush_wrapping()?;
         self.lines.push_back(RenderLine::Line(BorderHoriz::new(
             self.width,
@@ -1244,7 +1245,7 @@ impl<D: TextDecorator> Renderer for SubRenderer<D> {
         Ok(())
     }
 
-    fn add_horizontal_border_width(&mut self, width: usize) -> Result<(), Error> {
+    fn add_horizontal_border_width(&mut self, width: usize) -> Result<()> {
         self.flush_wrapping()?;
         self.lines.push_back(RenderLine::Line(BorderHoriz::new(
             width,
@@ -1274,7 +1275,7 @@ impl<D: TextDecorator> Renderer for SubRenderer<D> {
         self.at_block_end = true;
     }
 
-    fn add_inline_text(&mut self, text: &str) -> crate::Result<()> {
+    fn add_inline_text(&mut self, text: &str) -> Result<()> {
         html_trace!("add_inline_text({}, {})", self.width, text);
         if !self.ws_mode().preserve_whitespace()
             && self.at_block_end
@@ -1321,7 +1322,7 @@ impl<D: TextDecorator> Renderer for SubRenderer<D> {
         self.width
     }
 
-    fn append_subrender<'a, I>(&mut self, other: Self, prefixes: I) -> Result<(), Error>
+    fn append_subrender<'a, I>(&mut self, other: Self, prefixes: I) -> Result<()>
     where
         I: Iterator<Item = &'a str>,
     {
@@ -1361,7 +1362,7 @@ impl<D: TextDecorator> Renderer for SubRenderer<D> {
         Ok(())
     }
 
-    fn append_columns_with_borders<I>(&mut self, cols: I, collapse: bool) -> Result<(), Error>
+    fn append_columns_with_borders<I>(&mut self, cols: I, collapse: bool) -> Result<()>
     where
         I: IntoIterator<Item = Self>,
         Self: Sized,
@@ -1399,7 +1400,7 @@ impl<D: TextDecorator> Renderer for SubRenderer<D> {
                         .collect(),
                 ))
             })
-            .collect::<Result<Vec<(usize, Vec<RenderLine<_>>)>, Error>>()?;
+            .collect::<Result<Vec<(usize, Vec<RenderLine<_>>)>>>()?;
 
         tot_width += line_sets.len().saturating_sub(1);
 
@@ -1505,7 +1506,7 @@ impl<D: TextDecorator> Renderer for SubRenderer<D> {
         Ok(())
     }
 
-    fn append_vert_row<I>(&mut self, cols: I) -> Result<(), Error>
+    fn append_vert_row<I>(&mut self, cols: I) -> Result<()>
     where
         I: IntoIterator<Item = Self>,
         Self: Sized,
@@ -1546,47 +1547,47 @@ impl<D: TextDecorator> Renderer for SubRenderer<D> {
             }
     }
 
-    fn start_link(&mut self, target: &str) -> crate::Result<()> {
+    fn start_link(&mut self, target: &str) -> Result<()> {
         let (s, annotation) = self.decorator.decorate_link_start(target);
         self.ann_stack.push(annotation);
         self.add_inline_text(&s)
     }
-    fn end_link(&mut self) -> crate::Result<()> {
+    fn end_link(&mut self) -> Result<()> {
         let s = self.decorator.decorate_link_end();
         self.add_inline_text(&s)?;
         self.ann_stack.pop();
         Ok(())
     }
-    fn start_emphasis(&mut self) -> crate::Result<()> {
+    fn start_emphasis(&mut self) -> Result<()> {
         let (s, annotation) = self.decorator.decorate_em_start();
         self.ann_stack.push(annotation);
         self.add_inline_text(&s)
     }
-    fn end_emphasis(&mut self) -> crate::Result<()> {
+    fn end_emphasis(&mut self) -> Result<()> {
         let s = self.decorator.decorate_em_end();
         self.add_inline_text(&s)?;
         self.ann_stack.pop();
         Ok(())
     }
-    fn start_strong(&mut self) -> crate::Result<()> {
+    fn start_strong(&mut self) -> Result<()> {
         let (s, annotation) = self.decorator.decorate_strong_start();
         self.ann_stack.push(annotation);
         self.add_inline_text(&s)
     }
-    fn end_strong(&mut self) -> crate::Result<()> {
+    fn end_strong(&mut self) -> Result<()> {
         let s = self.decorator.decorate_strong_end();
         self.add_inline_text(&s)?;
         self.ann_stack.pop();
         Ok(())
     }
-    fn start_strikeout(&mut self) -> crate::Result<()> {
+    fn start_strikeout(&mut self) -> Result<()> {
         let (s, annotation) = self.decorator.decorate_strikeout_start();
         self.ann_stack.push(annotation);
         self.add_inline_text(&s)?;
         self.text_filter_stack.push(filter_text_strikeout);
         Ok(())
     }
-    fn end_strikeout(&mut self) -> crate::Result<()> {
+    fn end_strikeout(&mut self) -> Result<()> {
         self.text_filter_stack
             .pop()
             .expect("end_strikeout() called without a corresponding start_strokeout()");
@@ -1595,19 +1596,19 @@ impl<D: TextDecorator> Renderer for SubRenderer<D> {
         self.ann_stack.pop();
         Ok(())
     }
-    fn start_code(&mut self) -> crate::Result<()> {
+    fn start_code(&mut self) -> Result<()> {
         let (s, annotation) = self.decorator.decorate_code_start();
         self.ann_stack.push(annotation);
         self.add_inline_text(&s)?;
         Ok(())
     }
-    fn end_code(&mut self) -> crate::Result<()> {
+    fn end_code(&mut self) -> Result<()> {
         let s = self.decorator.decorate_code_end();
         self.add_inline_text(&s)?;
         self.ann_stack.pop();
         Ok(())
     }
-    fn add_image(&mut self, src: &str, title: &str) -> crate::Result<()> {
+    fn add_image(&mut self, src: &str, title: &str) -> Result<()> {
         let (s, tag) = self.decorator.decorate_image(src, title);
         self.ann_stack.push(tag);
         self.add_inline_text(&s)?;
@@ -1664,13 +1665,13 @@ impl<D: TextDecorator> Renderer for SubRenderer<D> {
         }
     }
 
-    fn start_superscript(&mut self) -> crate::Result<()> {
+    fn start_superscript(&mut self) -> Result<()> {
         let (s, annotation) = self.decorator.decorate_superscript_start();
         self.ann_stack.push(annotation);
         self.add_inline_text(&s)?;
         Ok(())
     }
-    fn end_superscript(&mut self) -> crate::Result<()> {
+    fn end_superscript(&mut self) -> Result<()> {
         let s = self.decorator.decorate_superscript_end();
         self.add_inline_text(&s)?;
         self.ann_stack.pop();
