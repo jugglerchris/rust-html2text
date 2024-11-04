@@ -7,88 +7,84 @@ use log::trace;
 use std::io;
 use std::io::Write;
 
-#[cfg(unix)]
 use html2text::render::RichAnnotation;
-#[cfg(unix)]
 fn default_colour_map(
     annotations: &[RichAnnotation],
     s: &str,
     use_css_colours: bool,
     no_default_colours: bool,
 ) -> String {
-    use termion::color::*;
+    use yansi::{hyperlink::HyperlinkExt, Paint};
     use RichAnnotation::*;
     // Explicit CSS colours override any other colours
     let mut have_explicit_colour = no_default_colours;
-    let mut start = Vec::new();
-    let mut finish = Vec::new();
+    let mut styled = s.to_string();
     trace!("default_colour_map: str={s}, annotations={annotations:?}");
     for annotation in annotations.iter() {
-        match annotation {
-            Default => {}
-            Link(_) => {
-                start.push(format!("{}", termion::style::Underline));
-                finish.push(format!("{}", termion::style::Reset));
-            }
-            Image(_) => {
+        styled = match annotation {
+            Default => styled,
+            Link(url) => styled.link(url).blue().underline().to_string(),
+            Image(img) => {
                 if !have_explicit_colour {
-                    start.push(format!("{}", Fg(Blue)));
-                    finish.push(format!("{}", Fg(Reset)));
+                    format!(
+                        "{} {}",
+                        styled.yellow().italic(),
+                        "img".underline().blue().link(img)
+                    )
+                } else {
+                    styled
                 }
             }
-            Emphasis => {
-                start.push(format!("{}", termion::style::Bold));
-                finish.push(format!("{}", termion::style::Reset));
-            }
+            Emphasis => styled.italic().to_string(),
             Strong => {
                 if !have_explicit_colour {
-                    start.push(format!("{}", Fg(LightYellow)));
-                    finish.push(format!("{}", Fg(Reset)));
+                    styled.bold().to_string()
+                } else {
+                    styled
                 }
             }
             Strikeout => {
                 if !have_explicit_colour {
-                    start.push(format!("{}", Fg(LightBlack)));
-                    finish.push(format!("{}", Fg(Reset)));
+                    styled.strike().to_string()
+                } else {
+                    styled
                 }
             }
             Code => {
                 if !have_explicit_colour {
-                    start.push(format!("{}", Fg(Blue)));
-                    finish.push(format!("{}", Fg(Reset)));
+                    styled.blue().to_string()
+                } else {
+                    styled
                 }
             }
             Preformat(_) => {
                 if !have_explicit_colour {
-                    start.push(format!("{}", Fg(Blue)));
-                    finish.push(format!("{}", Fg(Reset)));
+                    styled.blue().to_string()
+                } else {
+                    styled
                 }
             }
             Colour(c) => {
                 if use_css_colours {
-                    start.push(format!("{}", Fg(Rgb(c.r, c.g, c.b))));
-                    finish.push(format!("{}", Fg(Reset)));
                     have_explicit_colour = true;
+                    styled.rgb(c.r, c.g, c.b).to_string()
+                } else {
+                    styled
                 }
             }
             BgColour(c) => {
                 if use_css_colours {
-                    start.push(format!("{}", Bg(Rgb(c.r, c.g, c.b))));
-                    finish.push(format!("{}", Bg(Reset)));
+                    styled.on_rgb(c.r, c.g, c.b).to_string()
+                } else {
+                    styled
                 }
             }
-            _ => {}
+            _ => styled,
         }
     }
     // Reverse the finish sequences
-    finish.reverse();
-    let mut result = start.join("");
-    result.push_str(s);
-    for s in finish {
-        result.push_str(&s);
-    }
-    trace!("default_colour_map: output={result}");
-    result
+    trace!("default_colour_map: output={styled}");
+    styled
 }
 
 fn update_config<T: TextDecorator>(mut config: Config<T>, flags: &Flags) -> Config<T> {
@@ -106,7 +102,6 @@ fn translate<R>(input: R, flags: Flags, literal: bool) -> String
 where
     R: io::Read,
 {
-    #[cfg(unix)]
     {
         if flags.use_colour {
             let conf = config::rich();
@@ -225,7 +220,6 @@ fn main() {
             StoreTrue,
             "Output only literal text (no decorations)",
         );
-        #[cfg(unix)]
         ap.refer(&mut flags.use_colour).add_option(
             &["--colour"],
             StoreTrue,
