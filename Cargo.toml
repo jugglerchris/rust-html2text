@@ -19,7 +19,7 @@ markup5ever = "0.14.0"
 tendril = "0.4"
 unicode-width = "0.2"
 backtrace = { version = "0.3", optional=true }
-thiserror = "1.0.50"
+thiserror = "2.0.0"
 log = { version = "0.4.20", optional = true }
 nom = "7.1.3"
 
