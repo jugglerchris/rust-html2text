@@ -177,7 +177,7 @@ impl PartialOrd for Specificity {
 }
 
 #[derive(Clone, Copy, Debug)]
-pub(crate) struct WithSpec<T: Copy + Clone> {
+pub(crate) struct WithSpec<T> {
     val: Option<T>,
     origin: StyleOrigin,
     specificity: Specificity,
@@ -271,7 +271,7 @@ pub enum Error {
     Fail,
     /// An I/O error
     #[error("I/O error")]
-    IoError(#[from] std::io::Error),
+    IoError(#[from] io::Error),
 }
 
 impl PartialEq for Error {
@@ -290,17 +290,6 @@ impl PartialEq for Error {
 impl Eq for Error {}
 
 type Result<T> = std::result::Result<T, Error>;
-
-/// A dummy writer which does nothing
-struct Discard {}
-impl Write for Discard {
-    fn write(&mut self, bytes: &[u8]) -> std::result::Result<usize, io::Error> {
-        Ok(bytes.len())
-    }
-    fn flush(&mut self) -> std::result::Result<(), io::Error> {
-        Ok(())
-    }
-}
 
 const MIN_WIDTH: usize = 3;
 
@@ -358,15 +347,16 @@ struct RenderTableCell {
 impl RenderTableCell {
     /// Calculate or return the estimate size of the cell
     fn get_size_estimate(&self) -> SizeEstimate {
-        if self.size_estimate.get().is_none() {
+        let Some(size) = self.size_estimate.get() else {
             let size = self
                 .content
                 .iter()
                 .map(|node| node.get_size_estimate())
                 .fold(Default::default(), SizeEstimate::add);
             self.size_estimate.set(Some(size));
-        }
-        self.size_estimate.get().unwrap()
+            return size;
+        };
+        size
     }
 }
 
@@ -636,7 +626,7 @@ impl RenderNode {
     fn calc_size_estimate<D: TextDecorator>(
         &self,
         context: &HtmlContext,
-        decorator: &'_ D,
+        decorator: &D,
     ) -> SizeEstimate {
         // If it's already calculated, then just return the answer.
         if let Some(s) = self.size_estimate.get() {
@@ -791,16 +781,16 @@ impl RenderNode {
     }
 }
 
-fn precalc_size_estimate<'a, 'b: 'a, D: TextDecorator>(
+fn precalc_size_estimate<'a, D: TextDecorator>(
     node: &'a RenderNode,
     context: &mut HtmlContext,
-    decorator: &'b D,
-) -> Result<TreeMapResult<'a, HtmlContext, &'a RenderNode, ()>> {
+    decorator: &'a D,
+) -> TreeMapResult<'a, HtmlContext, &'a RenderNode, ()> {
     use RenderNodeInfo::*;
     if node.size_estimate.get().is_some() {
-        return Ok(TreeMapResult::Nothing);
+        return TreeMapResult::Nothing;
     }
-    Ok(match node.info {
+    match node.info {
         Text(_) | Img(_, _) | Break | FragStart(_) => {
             let _ = node.calc_size_estimate(context, decorator);
             TreeMapResult::Nothing
@@ -850,7 +840,7 @@ fn precalc_size_estimate<'a, 'b: 'a, D: TextDecorator>(
             }
         }
         TableRow(..) | TableBody(_) | TableCell(_) => unimplemented!(),
-    })
+    }
 }
 
 /// Make a Vec of RenderNodes from the children of a node.
@@ -914,12 +904,12 @@ fn table_to_render_tree<'a, T: Write>(
             }
         }
         if rows.is_empty() {
-            Ok(None)
+            None
         } else {
-            Ok(Some(RenderNode::new_styled(
+            Some(RenderNode::new_styled(
                 RenderNodeInfo::Table(RenderTable::new(rows)),
                 computed,
-            )))
+            ))
         }
     })
 }
@@ -970,10 +960,10 @@ fn tbody_to_render_tree<'a, T: Write>(
             }
         }
 
-        Ok(Some(RenderNode::new_styled(
+        Some(RenderNode::new_styled(
             RenderNodeInfo::TableBody(rows),
             computed,
-        )))
+        ))
     })
 }
 
@@ -995,7 +985,7 @@ fn tr_to_render_tree<'a, T: Write>(
                 }
             })
             .collect();
-        Ok(Some(RenderNode::new_styled(
+        Some(RenderNode::new_styled(
             RenderNodeInfo::TableRow(
                 RenderTableRow {
                     cells,
@@ -1005,7 +995,7 @@ fn tr_to_render_tree<'a, T: Write>(
                 false,
             ),
             computed,
-        )))
+        ))
     })
 }
 
@@ -1025,7 +1015,7 @@ fn td_to_render_tree<'a, T: Write>(
         }
     }
     pending(input, move |_, children| {
-        Ok(Some(RenderNode::new_styled(
+        Some(RenderNode::new_styled(
             RenderNodeInfo::TableCell(RenderTableCell {
                 colspan,
                 content: children,
@@ -1034,7 +1024,7 @@ fn td_to_render_tree<'a, T: Write>(
                 style: computed,
             }),
             computed,
-        )))
+        ))
     })
 }
 
@@ -1073,7 +1063,7 @@ fn tree_map_reduce<'a, C, N, R, M>(
     mut process_node: M,
 ) -> Result<Option<R>>
 where
-    M: for<'c> FnMut(&'c mut C, N) -> Result<TreeMapResult<'a, C, N, R>>,
+    M: FnMut(&mut C, N) -> Result<TreeMapResult<'a, C, N, R>>,
 {
     /// A node partially decoded, waiting for its children to
     /// be processed.
@@ -1101,14 +1091,15 @@ where
     let mut pending_stack = Vec::new();
     loop {
         // Get the next child node to process
-        if let Some(h) = last.to_process.next() {
-            last.prefn
-                .as_ref()
-                .map(|ref f| f(context, &h))
-                .transpose()?;
+        while let Some(h) = last.to_process.next() {
+            if let Some(f) = &last.prefn {
+                f(context, &h)?;
+            }
             match process_node(context, h)? {
                 TreeMapResult::Finished(result) => {
-                    last.postfn.as_ref().map(|ref f| f(context, &result));
+                    if let Some(f) = &last.postfn {
+                        f(context, &result)?;
+                    }
                     last.children.push(result);
                 }
                 TreeMapResult::PendingChildren {
@@ -1128,27 +1119,20 @@ where
                 }
                 TreeMapResult::Nothing => {}
             };
-        } else {
-            // No more children, so finally construct the parent.
-            let reduced = (last.construct)(context, last.children)?;
-            let parent = pending_stack.pop();
-            if let Some(node) = reduced {
-                if let Some(mut parent) = parent {
-                    parent.postfn.as_ref().map(|ref f| f(context, &node));
-                    parent.children.push(node);
-                    last = parent;
-                } else {
-                    // Finished the whole stack!
-                    break Ok(Some(node));
-                }
-            } else {
-                /* Finished the stack, and have nothing */
-                match parent {
-                    Some(parent) => last = parent,
-                    None => break Ok(None),
-                }
-            }
         }
+        // No more children, so finally construct the parent.
+        if let Some(mut parent) = pending_stack.pop() {
+            if let Some(node) = (last.construct)(context, last.children)? {
+                if let Some(f) = &parent.postfn {
+                    f(context, &node)?;
+                }
+                parent.children.push(node);
+            }
+            last = parent;
+            continue;
+        }
+        // Finished the whole stack!
+        break Ok((last.construct)(context, last.children)?);
     }
 }
 
@@ -1216,29 +1200,27 @@ fn dom_to_render_tree_with_context<T: Write>(
     result
 }
 
-fn pending<'a, F>(
+fn pending<F>(
     input: RenderInput,
     f: F,
-) -> TreeMapResult<'a, HtmlContext, RenderInput, RenderNode>
+) -> TreeMapResult<'static, HtmlContext, RenderInput, RenderNode>
 where
-    for<'r> F:
-        Fn(&'r mut HtmlContext, std::vec::Vec<RenderNode>) -> Result<Option<RenderNode>> + 'static,
+    F: Fn(&mut HtmlContext, Vec<RenderNode>) -> Option<RenderNode> + 'static,
 {
     TreeMapResult::PendingChildren {
         children: input.children(),
-        cons: Box::new(f),
+        cons: Box::new(move |ctx, children| Ok(f(ctx, children))),
         prefn: None,
         postfn: None,
     }
 }
 
-fn pending_noempty<'a, F>(
+fn pending_noempty<F>(
     input: RenderInput,
     f: F,
-) -> TreeMapResult<'a, HtmlContext, RenderInput, RenderNode>
+) -> TreeMapResult<'static, HtmlContext, RenderInput, RenderNode>
 where
-    for<'r> F:
-        Fn(&'r mut HtmlContext, std::vec::Vec<RenderNode>) -> Result<Option<RenderNode>> + 'static,
+    F: Fn(&mut HtmlContext, Vec<RenderNode>) -> Option<RenderNode> + 'static,
 {
     let handle = &input.handle;
     let style = &input.parent_style;
@@ -1256,7 +1238,7 @@ where
             if children.is_empty() {
                 Ok(None)
             } else {
-                f(ctx, children)
+                Ok(f(ctx, children))
             }
         }),
         prefn: None,
@@ -1324,19 +1306,17 @@ fn prepend_marker(prefix: RenderNode, mut orig: RenderNode) -> RenderNode {
     orig
 }
 
-fn process_dom_node<'a, T: Write>(
+fn process_dom_node<T: Write>(
     input: RenderInput,
     err_out: &mut T,
     #[allow(unused)] // Used with css feature
     context: &mut HtmlContext,
-) -> Result<TreeMapResult<'a, HtmlContext, RenderInput, RenderNode>> {
+) -> Result<TreeMapResult<'static, HtmlContext, RenderInput, RenderNode>> {
     use RenderNodeInfo::*;
     use TreeMapResult::*;
 
     Ok(match input.handle.clone().data {
-        Document => pending(input, |_context, cs| {
-            Ok(Some(RenderNode::new(Container(cs))))
-        }),
+        Document => pending(input, |_context, cs| Some(RenderNode::new(Container(cs)))),
         Comment { .. } => Nothing,
         Element {
             ref name,
@@ -1355,7 +1335,7 @@ fn process_dom_node<'a, T: Write>(
                 let computed =
                     context
                         .style_data
-                        .computed_style(parent_style, handle, context.use_doc_css);
+                        .computed_style(**parent_style, handle, context.use_doc_css);
                 if let Some(true) = computed.display_none.val() {
                     return Ok(Nothing);
                 }
@@ -1368,7 +1348,7 @@ fn process_dom_node<'a, T: Write>(
                 expanded_name!(html "html") | expanded_name!(html "body") => {
                     /* process children, but don't add anything */
                     pending(input, move |_, cs| {
-                        Ok(Some(RenderNode::new_styled(Container(cs), computed)))
+                        Some(RenderNode::new_styled(Container(cs), computed))
                     })
                 }
                 expanded_name!(html "link")
@@ -1383,7 +1363,7 @@ fn process_dom_node<'a, T: Write>(
                 expanded_name!(html "span") => {
                     /* process children, but don't add anything */
                     pending_noempty(input, move |_, cs| {
-                        Ok(Some(RenderNode::new_styled(Container(cs), computed)))
+                        Some(RenderNode::new_styled(Container(cs), computed))
                     })
                 }
                 expanded_name!(html "a") => {
@@ -1419,18 +1399,18 @@ fn process_dom_node<'a, T: Write>(
                 expanded_name!(html "em")
                 | expanded_name!(html "i")
                 | expanded_name!(html "ins") => pending(input, move |_, cs| {
-                    Ok(Some(RenderNode::new_styled(Em(cs), computed)))
+                    Some(RenderNode::new_styled(Em(cs), computed))
                 }),
                 expanded_name!(html "strong") => pending(input, move |_, cs| {
-                    Ok(Some(RenderNode::new_styled(Strong(cs), computed)))
+                    Some(RenderNode::new_styled(Strong(cs), computed))
                 }),
                 expanded_name!(html "s") | expanded_name!(html "del") => {
                     pending(input, move |_, cs| {
-                        Ok(Some(RenderNode::new_styled(Strikeout(cs), computed)))
+                        Some(RenderNode::new_styled(Strikeout(cs), computed))
                     })
                 }
                 expanded_name!(html "code") => pending(input, move |_, cs| {
-                    Ok(Some(RenderNode::new_styled(Code(cs), computed)))
+                    Some(RenderNode::new_styled(Code(cs), computed))
                 }),
                 expanded_name!(html "img") => {
                     let borrowed = attrs.borrow();
@@ -1462,20 +1442,20 @@ fn process_dom_node<'a, T: Write>(
                 | expanded_name!(html "h4") => {
                     let level: usize = name.local[1..].parse().unwrap();
                     pending(input, move |_, cs| {
-                        Ok(Some(RenderNode::new_styled(Header(level, cs), computed)))
+                        Some(RenderNode::new_styled(Header(level, cs), computed))
                     })
                 }
                 expanded_name!(html "p") => pending_noempty(input, move |_, cs| {
-                    Ok(Some(RenderNode::new_styled(Block(cs), computed)))
+                    Some(RenderNode::new_styled(Block(cs), computed))
                 }),
                 expanded_name!(html "li") => pending(input, move |_, cs| {
-                    Ok(Some(RenderNode::new_styled(ListItem(cs), computed)))
+                    Some(RenderNode::new_styled(ListItem(cs), computed))
                 }),
                 expanded_name!(html "sup") => pending(input, move |_, cs| {
-                    Ok(Some(RenderNode::new_styled(Sup(cs), computed)))
+                    Some(RenderNode::new_styled(Sup(cs), computed))
                 }),
                 expanded_name!(html "div") => pending_noempty(input, move |_, cs| {
-                    Ok(Some(RenderNode::new_styled(Div(cs), computed)))
+                    Some(RenderNode::new_styled(Div(cs), computed))
                 }),
                 expanded_name!(html "pre") => pending(input, move |_, cs| {
                     let mut computed = computed;
@@ -1486,7 +1466,7 @@ fn process_dom_node<'a, T: Write>(
                         WhiteSpace::Pre,
                     );
                     computed.internal_pre = true;
-                    Ok(Some(RenderNode::new_styled(Block(cs), computed)))
+                    Some(RenderNode::new_styled(Block(cs), computed))
                 }),
                 expanded_name!(html "br") => Finished(RenderNode::new_styled(Break, computed)),
                 expanded_name!(html "table") => table_to_render_tree(input, computed, err_out),
@@ -1498,10 +1478,10 @@ fn process_dom_node<'a, T: Write>(
                     td_to_render_tree(input, computed, err_out)
                 }
                 expanded_name!(html "blockquote") => pending_noempty(input, move |_, cs| {
-                    Ok(Some(RenderNode::new_styled(BlockQuote(cs), computed)))
+                    Some(RenderNode::new_styled(BlockQuote(cs), computed))
                 }),
                 expanded_name!(html "ul") => pending_noempty(input, move |_, cs| {
-                    Ok(Some(RenderNode::new_styled(Ul(cs), computed)))
+                    Some(RenderNode::new_styled(Ul(cs), computed))
                 }),
                 expanded_name!(html "ol") => {
                     let borrowed = attrs.borrow();
@@ -1520,7 +1500,7 @@ fn process_dom_node<'a, T: Write>(
                             .into_iter()
                             .filter(|n| matches!(n.info, RenderNodeInfo::ListItem(..)))
                             .collect();
-                        Ok(Some(RenderNode::new_styled(Ol(start, cs), computed)))
+                        Some(RenderNode::new_styled(Ol(start, cs), computed))
                     })
                 }
                 expanded_name!(html "dl") => Finished(RenderNode::new_styled(
@@ -1534,9 +1514,8 @@ fn process_dom_node<'a, T: Write>(
                 _ => {
                     html_trace!("Unhandled element: {:?}\n", name.local);
                     pending_noempty(input, move |_, cs| {
-                        Ok(Some(RenderNode::new_styled(Container(cs), computed)))
+                        Some(RenderNode::new_styled(Container(cs), computed))
                     })
-                    //None
                 }
             };
 
@@ -1549,35 +1528,32 @@ fn process_dom_node<'a, T: Write>(
                 }
             }
 
-            let result = if let Some(fragname) = fragment {
-                match result {
-                    Finished(node) => {
-                        Finished(prepend_marker(RenderNode::new(FragStart(fragname)), node))
-                    }
-                    Nothing => Finished(RenderNode::new(FragStart(fragname))),
-                    PendingChildren {
-                        children,
-                        cons,
-                        prefn,
-                        postfn,
-                    } => PendingChildren {
-                        children,
-                        prefn,
-                        postfn,
-                        cons: Box::new(move |ctx, ch| {
-                            let fragnode = RenderNode::new(FragStart(fragname));
-                            match cons(ctx, ch)? {
-                                None => Ok(Some(fragnode)),
-                                Some(node) => Ok(Some(prepend_marker(fragnode, node))),
-                            }
-                        }),
-                    },
-                }
-            } else {
-                result
+            let Some(fragname) = fragment else {
+                return Ok(result);
             };
-
-            result
+            match result {
+                Finished(node) => {
+                    Finished(prepend_marker(RenderNode::new(FragStart(fragname)), node))
+                }
+                Nothing => Finished(RenderNode::new(FragStart(fragname))),
+                PendingChildren {
+                    children,
+                    cons,
+                    prefn,
+                    postfn,
+                } => PendingChildren {
+                    children,
+                    prefn,
+                    postfn,
+                    cons: Box::new(move |ctx, ch| {
+                        let fragnode = RenderNode::new(FragStart(fragname));
+                        match cons(ctx, ch)? {
+                            None => Ok(Some(fragnode)),
+                            Some(node) => Ok(Some(prepend_marker(fragnode, node))),
+                        }
+                    }),
+                },
+            }
         }
         markup5ever_rcdom::NodeData::Text { contents: ref tstr } => {
             Finished(RenderNode::new(Text((&*tstr.borrow()).into())))
@@ -1598,13 +1574,14 @@ fn render_tree_to_string<T: Write, D: TextDecorator>(
     err_out: &mut T,
 ) -> Result<SubRenderer<D>> {
     /* Phase 1: get size estimates. */
+    // can't actually error, but Ok-wrap to satisfy tree_map_reduce signature
     tree_map_reduce(context, &tree, |context, node| {
-        precalc_size_estimate(node, context, decorator)
+        Ok(precalc_size_estimate(node, context, decorator))
     })?;
     /* Phase 2: actually render. */
     let mut renderer = TextRenderer::new(renderer);
     tree_map_reduce(&mut renderer, tree, |renderer, node| {
-        do_render_node(renderer, node, err_out)
+        Ok(do_render_node(renderer, node, err_out)?)
     })?;
     let (mut renderer, links) = renderer.into_inner();
     let lines = renderer.finalise(links);
@@ -1617,7 +1594,6 @@ fn render_tree_to_string<T: Write, D: TextDecorator>(
 }
 
 fn pending2<
-    'a,
     D: TextDecorator,
     F: FnOnce(
             &mut TextRenderer<D>,
@@ -1627,7 +1603,7 @@ fn pending2<
 >(
     children: Vec<RenderNode>,
     f: F,
-) -> TreeMapResult<'a, TextRenderer<D>, RenderNode, Option<SubRenderer<D>>> {
+) -> TreeMapResult<'static, TextRenderer<D>, RenderNode, Option<SubRenderer<D>>> {
     TreeMapResult::PendingChildren {
         children,
         cons: Box::new(f),
@@ -1650,35 +1626,25 @@ impl PushedStyleInfo {
     fn apply<D: TextDecorator>(render: &mut TextRenderer<D>, style: &ComputedStyle) -> Self {
         #[allow(unused_mut)]
         let mut result: PushedStyleInfo = Default::default();
-        {
-            #[cfg(feature = "css")]
-            if let Some(col) = style.colour.val() {
-                render.push_colour(col);
-                result.colour = true;
-            }
-            #[cfg(feature = "css")]
-            if let Some(col) = style.bg_colour.val() {
-                render.push_bgcolour(col);
-                result.bgcolour = true;
-            }
-            if let Some(ws) = style.white_space.val() {
-                match ws {
-                    WhiteSpace::Normal => {}
-                    WhiteSpace::Pre | WhiteSpace::PreWrap => {
-                        render.push_ws(ws);
-                        result.white_space = true;
-                    }
-                }
-            }
-            if style.internal_pre {
-                render.push_preformat();
-                result.preformat = true;
+        #[cfg(feature = "css")]
+        if let Some(col) = style.colour.val() {
+            render.push_colour(col);
+            result.colour = true;
+        }
+        #[cfg(feature = "css")]
+        if let Some(col) = style.bg_colour.val() {
+            render.push_bgcolour(col);
+            result.bgcolour = true;
+        }
+        if let Some(ws) = style.white_space.val() {
+            if let WhiteSpace::Pre | WhiteSpace::PreWrap = ws {
+                render.push_ws(ws);
+                result.white_space = true;
             }
         }
-        #[cfg(not(feature = "css"))]
-        {
-            let _ = render;
-            let _ = style;
+        if style.internal_pre {
+            render.push_preformat();
+            result.preformat = true;
         }
         result
     }
@@ -1702,7 +1668,7 @@ fn do_render_node<T: Write, D: TextDecorator>(
     renderer: &mut TextRenderer<D>,
     tree: RenderNode,
     err_out: &mut T,
-) -> Result<TreeMapResult<'static, TextRenderer<D>, RenderNode, Option<SubRenderer<D>>>> {
+) -> render::Result<TreeMapResult<'static, TextRenderer<D>, RenderNode, Option<SubRenderer<D>>>> {
     html_trace!("do_render_node({:?}", tree);
     use RenderNodeInfo::*;
     use TreeMapResult::*;
@@ -1944,10 +1910,10 @@ fn do_render_node<T: Write, D: TextDecorator>(
             // Special case for digit-only superscripts - use superscript
             // characters.
             fn sup_digits(children: &[RenderNode]) -> Option<String> {
-                if children.len() != 1 {
+                let [node] = children else {
                     return None;
-                }
-                if let Text(s) = &children[0].info {
+                };
+                if let Text(s) = &node.info {
                     if s.chars().all(|d| d.is_ascii_digit()) {
                         // It's just a string of digits - replace by superscript characters.
                         const SUPERSCRIPTS: [char; 10] =
@@ -1981,7 +1947,7 @@ fn render_table_tree<T: Write, D: TextDecorator>(
     renderer: &mut TextRenderer<D>,
     table: RenderTable,
     _err_out: &mut T,
-) -> Result<TreeMapResult<'static, TextRenderer<D>, RenderNode, Option<SubRenderer<D>>>> {
+) -> render::Result<TreeMapResult<'static, TextRenderer<D>, RenderNode, Option<SubRenderer<D>>>> {
     /* Now lay out the table. */
     let num_columns = table.num_columns;
 
@@ -2080,8 +2046,8 @@ fn render_table_tree<T: Write, D: TextDecorator>(
     Ok(TreeMapResult::PendingChildren {
         children: table.into_rows(col_widths, vert_row),
         cons: Box::new(|_, _| Ok(Some(None))),
-        prefn: Some(Box::new(|_, _| Ok(()))),
-        postfn: Some(Box::new(|_, _| Ok(()))),
+        prefn: None,
+        postfn: None,
     })
 }
 
@@ -2158,8 +2124,9 @@ fn render_table_cell<T: Write, D: TextDecorator>(
 pub mod config {
     //! Configure the HTML to text translation using the `Config` type, which can be
     //! constructed using one of the functions in this module.
+    use std::io;
 
-    use super::{Discard, Error};
+    use super::Error;
     #[cfg(feature = "css")]
     use crate::css::StyleData;
     use crate::{
@@ -2208,7 +2175,7 @@ pub mod config {
             }
         }
         /// Parse with context.
-        fn do_parse<R: std::io::Read>(
+        fn do_parse<R: io::Read>(
             &mut self,
             context: &mut HtmlContext,
             input: R,
@@ -2217,7 +2184,7 @@ pub mod config {
         }
 
         /// Parse the HTML into a DOM structure.
-        pub fn parse_html<R: std::io::Read>(&self, mut input: R) -> Result<super::RcDom> {
+        pub fn parse_html<R: io::Read>(&self, mut input: R) -> Result<super::RcDom> {
             use html5ever::tendril::TendrilSink;
             let opts = super::ParseOpts {
                 tree_builder: super::TreeBuilderOpts {
@@ -2236,7 +2203,7 @@ pub mod config {
             Ok(RenderTree(
                 super::dom_to_render_tree_with_context(
                     dom.document.clone(),
-                    &mut Discard {},
+                    &mut io::sink(),
                     &mut self.make_context(),
                 )?
                 .ok_or(Error::Fail)?,
@@ -2245,13 +2212,14 @@ pub mod config {
 
         /// Render an existing RenderTree into a string.
         pub fn render_to_string(&self, render_tree: RenderTree, width: usize) -> Result<String> {
-            render_tree
+            let s = render_tree
                 .render_with_context(
                     &mut self.make_context(),
                     width,
                     self.decorator.make_subblock_decorator(),
                 )?
-                .into_string()
+                .into_string()?;
+            Ok(s)
         }
 
         /// Take an existing RenderTree, and returns text wrapped to `width` columns.
@@ -2280,9 +2248,11 @@ pub mod config {
             width: usize,
         ) -> Result<String> {
             let mut context = self.make_context();
-            self.do_parse(&mut context, input)?
+            let s = self
+                .do_parse(&mut context, input)?
                 .render_with_context(&mut context, width, self.decorator)?
-                .into_string()
+                .into_string()?;
+            Ok(s)
         }
 
         /// Reads HTML from `input`, and returns text wrapped to `width` columns.
@@ -2517,7 +2487,7 @@ impl RenderTree {
         let test_decorator = decorator.make_subblock_decorator();
         let builder = SubRenderer::new(width, render_options, decorator);
         let builder =
-            render_tree_to_string(context, builder, &test_decorator, self.0, &mut Discard {})?;
+            render_tree_to_string(context, builder, &test_decorator, self.0, &mut io::sink())?;
         Ok(RenderedText(builder))
     }
 
@@ -2532,7 +2502,7 @@ struct RenderedText<D: TextDecorator>(SubRenderer<D>);
 
 impl<D: TextDecorator> RenderedText<D> {
     /// Convert the rendered HTML document to a string.
-    fn into_string(self) -> Result<String> {
+    fn into_string(self) -> render::Result<String> {
         self.0.into_string()
     }
 
@@ -2560,7 +2530,7 @@ fn parse_with_context(mut input: impl io::Read, context: &mut HtmlContext) -> Re
         .from_utf8()
         .read_from(&mut input)?;
     let render_tree =
-        dom_to_render_tree_with_context(dom.document.clone(), &mut Discard {}, context)?
+        dom_to_render_tree_with_context(dom.document.clone(), &mut io::sink(), context)?
             .ok_or(Error::Fail)?;
     Ok(RenderTree(render_tree))
 }

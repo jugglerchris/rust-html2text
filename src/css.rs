@@ -69,12 +69,8 @@ impl Selector {
                     false
                 }
                 SelectorComponent::Element(name) => match &node.data {
-                    Element { name: eltname, .. } => {
-                        if name == eltname.expanded().local.deref() {
-                            Self::do_matches(&comps[1..], node)
-                        } else {
-                            false
-                        }
+                    Element { name: eltname, .. } if name == eltname.expanded().local.deref() => {
+                        Self::do_matches(&comps[1..], node)
                     }
                     _ => false,
                 },
@@ -306,11 +302,11 @@ impl StyleData {
 
     pub(crate) fn computed_style(
         &self,
-        parent_style: &ComputedStyle,
+        parent_style: ComputedStyle,
         handle: &Handle,
         use_doc_css: bool,
     ) -> ComputedStyle {
-        let mut result = *parent_style;
+        let mut result = parent_style;
 
         for (origin, ruleset) in [
             (StyleOrigin::Agent, &self.agent_rules),
@@ -425,9 +421,9 @@ impl StyleData {
     }
 }
 
-fn pending<'a, F>(handle: Handle, f: F) -> TreeMapResult<'a, (), Handle, Vec<String>>
+fn pending<F>(handle: Handle, f: F) -> TreeMapResult<'static, (), Handle, Vec<String>>
 where
-    for<'r> F: Fn(&'r mut (), Vec<Vec<String>>) -> Result<Option<Vec<String>>> + 'static,
+    F: Fn(&mut (), Vec<Vec<String>>) -> Result<Option<Vec<String>>> + 'static,
 {
     TreeMapResult::PendingChildren {
         children: handle.children.borrow().clone(),
@@ -451,10 +447,10 @@ fn combine_vecs(vecs: Vec<Vec<String>>) -> Vec<String> {
     }
 }
 
-fn extract_style_nodes<'a, T: Write>(
+fn extract_style_nodes<T: Write>(
     handle: Handle,
     _err_out: &mut T,
-) -> TreeMapResult<'a, (), Handle, Vec<String>> {
+) -> TreeMapResult<'static, (), Handle, Vec<String>> {
     use TreeMapResult::*;
 
     match handle.clone().data {
@@ -467,7 +463,7 @@ fn extract_style_nodes<'a, T: Write>(
                     // Assume just a flat text node
                     for child in handle.children.borrow().iter() {
                         if let NodeData::Text { ref contents } = child.data {
-                            result += &String::from(contents.borrow().deref());
+                            result += &contents.borrow();
                         }
                     }
                     Finished(vec![result])
