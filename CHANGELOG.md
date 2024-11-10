@@ -11,6 +11,12 @@ Possible log types:
 
 ### Latest
 
+### 0.13.3
+
+- [fixed] Handle some obsolete `bgcolor=...` attributes.
+- [added] html2text example has `--show-render` to help debugging render issues.
+- [changed] Some error handling and other tidyups (thanks sftse)
+
 ### 0.13.2
 
 - [fixed] Fixed errors when building with Rust 1.72.
