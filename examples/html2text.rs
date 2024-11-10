@@ -132,7 +132,11 @@ where
         let dom = conf.parse_html(input).unwrap();
         dom.as_dom_string()
     } else if flags.show_render {
-        todo!()
+        let conf = config::plain();
+        let conf = update_config(conf, &flags);
+        let dom = conf.parse_html(input).unwrap();
+        let rendertree = conf.dom_to_render_tree(&dom).unwrap();
+        rendertree.to_string()
     } else if literal {
         let conf = config::with_decorator(TrivialDecorator::new());
         let conf = update_config(conf, &flags);
@@ -144,6 +148,7 @@ where
     }
 }
 
+#[derive(Debug)]
 struct Flags {
     width: usize,
     wrap_width: Option<usize>,

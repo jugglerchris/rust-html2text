@@ -385,7 +385,25 @@ pub(crate) fn parse_color_attribute(
     text: &str,
 ) -> Result<Colour, nom::Err<nom::error::Error<&'static str>>> {
     let (_rest, value) = parse_value(text).map_err(|_| empty_fail())?;
-    parse_color(&value.tokens)
+    parse_color(&value.tokens).or_else(|e| parse_faulty_color(e, text))
+}
+
+// Both Firefox and Chromium accept "00aabb" as a bgcolor - I'm not sure this has ever been legal,
+// but regrettably I've had e-mails which were unreadable without doing this.
+fn parse_faulty_color(
+    e: nom::Err<nom::error::Error<&'static str>>,
+    text: &str,
+) -> Result<Colour, nom::Err<nom::error::Error<&'static str>>> {
+    let text = text.trim();
+    if text.chars().all(|c| c.is_hex_digit()) {
+        if text.len() == 6 {
+            let r = u8::from_str_radix(&text[0..2], 16).unwrap();
+            let g = u8::from_str_radix(&text[2..4], 16).unwrap();
+            let b = u8::from_str_radix(&text[4..6], 16).unwrap();
+            return Ok(Colour::Rgb(r, g, b));
+        }
+    }
+    Err(e)
 }
 
 #[derive(Copy, Clone, PartialEq, Eq, Debug)]
