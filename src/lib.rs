@@ -779,6 +779,79 @@ impl RenderNode {
             FragStart(_) => true,
         }
     }
+
+    fn write_container(&self, name: &str, items: &[RenderNode], f: &mut std::fmt::Formatter, indent: usize) -> std::prelude::v1::Result<(), std::fmt::Error> {
+        writeln!(f, "{:indent$}{name}:", "")?;
+        for item in items {
+            item.write_self(f, indent+1)?;
+        }
+        Ok(())
+    }
+    fn write_style(f: &mut std::fmt::Formatter, indent: usize, style: &ComputedStyle) -> std::result::Result<(), std::fmt::Error> {
+        writeln!(f, "{:indent$}[Style: colour={:?} bgcolour={:?} disp={:?} ws={:?} in_pre={}]", "",
+            style.colour.val(), style.bg_colour.val(),
+            style.display_none.val(), style.white_space.val(),
+            style.internal_pre)
+    }
+    fn write_self(&self, f: &mut std::fmt::Formatter, indent: usize) -> std::prelude::v1::Result<(), std::fmt::Error> {
+        Self::write_style(f, indent, &self.style)?;
+
+        match &self.info {
+            RenderNodeInfo::Text(s) => writeln!(f, "{:indent$}{s:?}", "")?,
+            RenderNodeInfo::Container(v) => {
+                self.write_container("Container", &v, f, indent)?;
+            }
+            RenderNodeInfo::Link(targ, v) => {
+                self.write_container(&format!("Link({})", targ), &v, f, indent)?;
+            }
+            RenderNodeInfo::Em(_) => todo!(),
+            RenderNodeInfo::Strong(v) => {
+                self.write_container("Strong", &v, f, indent)?;
+            }
+            RenderNodeInfo::Strikeout(_) => todo!(),
+            RenderNodeInfo::Code(_) => todo!(),
+            RenderNodeInfo::Img(src, title) => {
+                writeln!(f, "{:indent$}Img src={:?} title={:?}:", "", src, title)?;
+            }
+            RenderNodeInfo::Block(_) => todo!(),
+            RenderNodeInfo::Header(_, _) => todo!(),
+            RenderNodeInfo::Div(v) => {
+                self.write_container("Div", &v, f, indent)?;
+            }
+            RenderNodeInfo::BlockQuote(_) => todo!(),
+            RenderNodeInfo::Ul(_) => todo!(),
+            RenderNodeInfo::Ol(_, _) => todo!(),
+            RenderNodeInfo::Dl(_) => todo!(),
+            RenderNodeInfo::Dt(_) => todo!(),
+            RenderNodeInfo::Dd(_) => todo!(),
+            RenderNodeInfo::Break => {
+                writeln!(f, "{:indent$}Break", "", indent=indent)?;
+            }
+            RenderNodeInfo::Table(rows) => {
+                writeln!(f, "{:indent$}Table ({} cols):", "", rows.num_columns)?;
+                for rtr in &rows.rows {
+                    Self::write_style(f, indent+1, &rtr.style)?;
+                    writeln!(f, "{:width$}Row ({} cells):", "", rtr.cells.len(), width=indent+1)?;
+                    for cell in &rtr.cells {
+                        Self::write_style(f, indent+2, &cell.style)?;
+                        writeln!(f, "{:width$}Cell colspan={} width={:?}:", "", cell.colspan, cell.col_width, width=indent+2)?;
+                        for node in &cell.content {
+                            node.write_self(f, indent+3)?;
+                        }
+                    }
+                }
+            }
+            RenderNodeInfo::TableBody(_) => todo!(),
+            RenderNodeInfo::TableRow(_, _) => todo!(),
+            RenderNodeInfo::TableCell(_) => todo!(),
+            RenderNodeInfo::FragStart(frag) => {
+                writeln!(f, "{:indent$}FragStart({}):", "", frag)?;
+            }
+            RenderNodeInfo::ListItem(_) => todo!(),
+            RenderNodeInfo::Sup(_) => todo!(),
+        }
+        Ok(())
+    }
 }
 
 fn precalc_size_estimate<'a, D: TextDecorator>(
@@ -2464,6 +2537,13 @@ pub mod config {
 
 #[derive(Clone, Debug)]
 pub struct RenderTree(RenderNode);
+
+impl std::fmt::Display for RenderTree {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        writeln!(f, "Render tree:")?;
+        self.0.write_self(f, 1)
+    }
+}
 
 impl RenderTree {
     /// Render this document using the given `decorator` and wrap it to `width` columns.
