@@ -780,20 +780,40 @@ impl RenderNode {
         }
     }
 
-    fn write_container(&self, name: &str, items: &[RenderNode], f: &mut std::fmt::Formatter, indent: usize) -> std::prelude::v1::Result<(), std::fmt::Error> {
+    fn write_container(
+        &self,
+        name: &str,
+        items: &[RenderNode],
+        f: &mut std::fmt::Formatter,
+        indent: usize,
+    ) -> std::prelude::v1::Result<(), std::fmt::Error> {
         writeln!(f, "{:indent$}{name}:", "")?;
         for item in items {
-            item.write_self(f, indent+1)?;
+            item.write_self(f, indent + 1)?;
         }
         Ok(())
     }
-    fn write_style(f: &mut std::fmt::Formatter, indent: usize, style: &ComputedStyle) -> std::result::Result<(), std::fmt::Error> {
-        writeln!(f, "{:indent$}[Style: colour={:?} bgcolour={:?} disp={:?} ws={:?} in_pre={}]", "",
-            style.colour.val(), style.bg_colour.val(),
-            style.display_none.val(), style.white_space.val(),
-            style.internal_pre)
+    fn write_style(
+        f: &mut std::fmt::Formatter,
+        indent: usize,
+        style: &ComputedStyle,
+    ) -> std::result::Result<(), std::fmt::Error> {
+        writeln!(
+            f,
+            "{:indent$}[Style: colour={:?} bgcolour={:?} disp={:?} ws={:?} in_pre={}]",
+            "",
+            style.colour.val(),
+            style.bg_colour.val(),
+            style.display_none.val(),
+            style.white_space.val(),
+            style.internal_pre
+        )
     }
-    fn write_self(&self, f: &mut std::fmt::Formatter, indent: usize) -> std::prelude::v1::Result<(), std::fmt::Error> {
+    fn write_self(
+        &self,
+        f: &mut std::fmt::Formatter,
+        indent: usize,
+    ) -> std::prelude::v1::Result<(), std::fmt::Error> {
         Self::write_style(f, indent, &self.style)?;
 
         match &self.info {
@@ -804,39 +824,74 @@ impl RenderNode {
             RenderNodeInfo::Link(targ, v) => {
                 self.write_container(&format!("Link({})", targ), &v, f, indent)?;
             }
-            RenderNodeInfo::Em(_) => todo!(),
+            RenderNodeInfo::Em(v) => {
+                self.write_container("Em", &v, f, indent)?;
+            }
             RenderNodeInfo::Strong(v) => {
                 self.write_container("Strong", &v, f, indent)?;
             }
-            RenderNodeInfo::Strikeout(_) => todo!(),
-            RenderNodeInfo::Code(_) => todo!(),
+            RenderNodeInfo::Strikeout(v) => {
+                self.write_container("Strikeout", &v, f, indent)?;
+            }
+            RenderNodeInfo::Code(v) => {
+                self.write_container("Code", &v, f, indent)?;
+            }
             RenderNodeInfo::Img(src, title) => {
                 writeln!(f, "{:indent$}Img src={:?} title={:?}:", "", src, title)?;
             }
-            RenderNodeInfo::Block(_) => todo!(),
-            RenderNodeInfo::Header(_, _) => todo!(),
+            RenderNodeInfo::Block(v) => {
+                self.write_container("Block", &v, f, indent)?;
+            }
+            RenderNodeInfo::Header(depth, v) => {
+                self.write_container(&format!("Header({})", depth), &v, f, indent)?;
+            }
             RenderNodeInfo::Div(v) => {
                 self.write_container("Div", &v, f, indent)?;
             }
-            RenderNodeInfo::BlockQuote(_) => todo!(),
-            RenderNodeInfo::Ul(_) => todo!(),
-            RenderNodeInfo::Ol(_, _) => todo!(),
-            RenderNodeInfo::Dl(_) => todo!(),
-            RenderNodeInfo::Dt(_) => todo!(),
-            RenderNodeInfo::Dd(_) => todo!(),
+            RenderNodeInfo::BlockQuote(v) => {
+                self.write_container("BlockQuote", &v, f, indent)?;
+            }
+            RenderNodeInfo::Ul(v) => {
+                self.write_container("Ul", &v, f, indent)?;
+            }
+            RenderNodeInfo::Ol(start, v) => {
+                self.write_container(&format!("Ol({})", start), &v, f, indent)?;
+            }
+            RenderNodeInfo::Dl(v) => {
+                self.write_container("Dl", &v, f, indent)?;
+            }
+            RenderNodeInfo::Dt(v) => {
+                self.write_container("Dt", &v, f, indent)?;
+            }
+            RenderNodeInfo::Dd(v) => {
+                self.write_container("Dd", &v, f, indent)?;
+            }
             RenderNodeInfo::Break => {
-                writeln!(f, "{:indent$}Break", "", indent=indent)?;
+                writeln!(f, "{:indent$}Break", "", indent = indent)?;
             }
             RenderNodeInfo::Table(rows) => {
                 writeln!(f, "{:indent$}Table ({} cols):", "", rows.num_columns)?;
                 for rtr in &rows.rows {
-                    Self::write_style(f, indent+1, &rtr.style)?;
-                    writeln!(f, "{:width$}Row ({} cells):", "", rtr.cells.len(), width=indent+1)?;
+                    Self::write_style(f, indent + 1, &rtr.style)?;
+                    writeln!(
+                        f,
+                        "{:width$}Row ({} cells):",
+                        "",
+                        rtr.cells.len(),
+                        width = indent + 1
+                    )?;
                     for cell in &rtr.cells {
-                        Self::write_style(f, indent+2, &cell.style)?;
-                        writeln!(f, "{:width$}Cell colspan={} width={:?}:", "", cell.colspan, cell.col_width, width=indent+2)?;
+                        Self::write_style(f, indent + 2, &cell.style)?;
+                        writeln!(
+                            f,
+                            "{:width$}Cell colspan={} width={:?}:",
+                            "",
+                            cell.colspan,
+                            cell.col_width,
+                            width = indent + 2
+                        )?;
                         for node in &cell.content {
-                            node.write_self(f, indent+3)?;
+                            node.write_self(f, indent + 3)?;
                         }
                     }
                 }
@@ -847,8 +902,12 @@ impl RenderNode {
             RenderNodeInfo::FragStart(frag) => {
                 writeln!(f, "{:indent$}FragStart({}):", "", frag)?;
             }
-            RenderNodeInfo::ListItem(_) => todo!(),
-            RenderNodeInfo::Sup(_) => todo!(),
+            RenderNodeInfo::ListItem(v) => {
+                self.write_container("ListItem", &v, f, indent)?;
+            }
+            RenderNodeInfo::Sup(v) => {
+                self.write_container("Sup", &v, f, indent)?;
+            }
         }
         Ok(())
     }
