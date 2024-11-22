@@ -2087,6 +2087,12 @@ foo
     );
 }
 
+#[test]
+fn test_issue_187() {
+    let html = br#"<div><table><tbody><tr><td><div><table><tbody><tr><td><div><pre>na na na na na na na na na na na na na na na</p></div></td></tr>/<tbody></table></div></td></tr>/<tbody></table></div>"#;
+    let _ = crate::config::plain().string_from_read(&html[..], 17);
+}
+
 #[cfg(feature = "css")]
 mod css_tests {
     use super::{

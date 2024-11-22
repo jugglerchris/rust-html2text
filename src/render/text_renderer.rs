@@ -218,7 +218,6 @@ impl<T: Debug + Eq + PartialEq + Clone + Default> TaggedLine<T> {
             s: " ".repeat(len),
             tag: tag.clone(),
         }));
-        self.len += len;
     }
 
     /// Add a new fragment to the start of the line
