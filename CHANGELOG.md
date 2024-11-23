@@ -11,6 +11,11 @@ Possible log types:
 
 ### Latest
 
+### 0.13.4
+
+- [fixed] Fix a debug assertion from a double-counted length increment
+  (thanks JadedBlueeyes).
+
 ### 0.13.3
 
 - [fixed] Handle some obsolete `bgcolor=...` attributes.
