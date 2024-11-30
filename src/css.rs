@@ -31,10 +31,33 @@ pub(crate) enum SelectorComponent {
     },
 }
 
+impl std::fmt::Display for SelectorComponent {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            SelectorComponent::Class(name) => write!(f, ".{}", name),
+            SelectorComponent::Element(name) => write!(f, "{}", name),
+            SelectorComponent::Hash(val) => write!(f, "#{}", val),
+            SelectorComponent::Star => write!(f, " * "),
+            SelectorComponent::CombChild => write!(f, " > "),
+            SelectorComponent::CombDescendant => write!(f, " "),
+            SelectorComponent::NthChild { a, b, .. } => write!(f, ":nth-child({}n+{})", a, b),
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) struct Selector {
     // List of components, right first so we match from the leaf.
     components: Vec<SelectorComponent>,
+}
+
+impl std::fmt::Display for Selector {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        for comp in self.components.iter().rev() {
+            comp.fmt(f)?;
+        }
+        Ok(())
+    }
 }
 
 impl Selector {
@@ -190,10 +213,41 @@ pub(crate) struct StyleDecl {
     importance: Importance,
 }
 
+impl std::fmt::Display for StyleDecl {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self.style {
+            Style::Colour(col) => write!(f, "color: {}", col)?,
+            Style::BgColour(col) => write!(f, "background-color: {}", col)?,
+            Style::Display(Display::None) => write!(f, "display: none")?,
+            #[cfg(feature = "css_ext")]
+            Style::Display(Display::ExtRawDom) => write!(f, "display: x-raw-dom")?,
+            Style::WhiteSpace(_) => todo!(),
+        }
+        match self.importance {
+            Importance::Default => (),
+            Importance::Important => {
+                write!(f, " !important")?
+            }
+        }
+        Ok(())
+    }
+}
+
 #[derive(Debug, Clone)]
 struct Ruleset {
     selector: Selector,
     styles: Vec<StyleDecl>,
+}
+
+impl std::fmt::Display for Ruleset {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        writeln!(f, "  {} {{", self.selector)?;
+        for decl in &self.styles {
+            writeln!(f, "    {}", decl)?;
+        }
+        writeln!(f, "  }}")?;
+        Ok(())
+    }
 }
 
 /// Stylesheet data which can be used while building the render tree.
@@ -473,6 +527,30 @@ impl StyleData {
                     .maybe_update(important, origin, specificity, ws);
             }
         }
+    }
+}
+
+impl std::fmt::Display for StyleData {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if !self.agent_rules.is_empty() {
+            writeln!(f, "Agent rules:")?;
+            for ruleset in &self.agent_rules {
+                ruleset.fmt(f)?;
+            }
+        }
+        if !self.user_rules.is_empty() {
+            writeln!(f, "User rules:")?;
+            for ruleset in &self.user_rules {
+                ruleset.fmt(f)?;
+            }
+        }
+        if !self.author_rules.is_empty() {
+            writeln!(f, "Author rules:")?;
+            for ruleset in &self.author_rules {
+                ruleset.fmt(f)?;
+            }
+        }
+        Ok(())
     }
 }
 

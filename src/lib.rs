@@ -128,6 +128,12 @@ pub struct Colour {
     pub b: u8,
 }
 
+impl std::fmt::Display for Colour {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "#{:02x}{:02x}{:02x}", self.r, self.g, self.b)
+    }
+}
+
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Default, PartialOrd)]
 pub(crate) enum StyleOrigin {
     #[default]
@@ -1364,6 +1370,15 @@ fn dom_to_render_tree_with_context<T: Write>(
 
     html_trace!("### dom_to_render_tree: out= {:#?}", result);
     result
+}
+
+#[cfg(feature = "css")]
+/// Return a string representation of the CSS rules parsed from
+/// the DOM document.
+pub fn dom_to_parsed_style(dom: &RcDom) -> Result<String> {
+    let handle = dom.document.clone();
+    let doc_style_data = css::dom_to_stylesheet(handle, &mut std::io::sink())?;
+    Ok(doc_style_data.to_string())
 }
 
 fn pending<F>(

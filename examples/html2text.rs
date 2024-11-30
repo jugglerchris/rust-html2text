@@ -126,6 +126,15 @@ where
                 .unwrap();
         }
     }
+    #[cfg(feature = "css")]
+    {
+        if flags.show_css {
+            let conf = config::plain();
+            let conf = update_config(conf, &flags);
+            let dom = conf.parse_html(input).unwrap();
+            return html2text::dom_to_parsed_style(&dom).expect("Parsing CSS");
+        }
+    }
     if flags.show_dom {
         let conf = config::plain();
         let conf = update_config(conf, &flags);
@@ -162,6 +171,8 @@ struct Flags {
     use_only_css: bool,
     show_dom: bool,
     show_render: bool,
+    #[cfg(feature = "css")]
+    show_css: bool,
 }
 
 fn main() {
@@ -182,6 +193,8 @@ fn main() {
         use_only_css: false,
         show_dom: false,
         show_render: false,
+        #[cfg(feature = "css")]
+        show_css: false,
     };
     let mut literal: bool = false;
 
@@ -239,6 +252,11 @@ fn main() {
             &["--show-render"],
             StoreTrue,
             "Show the computed render tree instead of the rendered output",
+        );
+        ap.refer(&mut flags.show_css).add_option(
+            &["--show-css"],
+            StoreTrue,
+            "Show the parsed CSS instead of rendered output",
         );
         ap.parse_args_or_exit();
     }
