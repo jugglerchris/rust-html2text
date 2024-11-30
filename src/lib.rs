@@ -158,6 +158,28 @@ impl Specificity {
     }
 }
 
+impl std::ops::Add<&Specificity> for &Specificity {
+    type Output = Specificity;
+
+    fn add(self, rhs: &Specificity) -> Self::Output {
+        Specificity {
+            inline: self.inline || rhs.inline,
+            id: self.id + rhs.id,
+            class: self.class + rhs.class,
+            typ: self.typ + rhs.typ,
+        }
+    }
+}
+
+impl std::ops::AddAssign<&Specificity> for Specificity {
+    fn add_assign(&mut self, rhs: &Specificity) {
+        self.inline = self.inline || rhs.inline;
+        self.id += rhs.id;
+        self.class += rhs.class;
+        self.typ += rhs.typ;
+    }
+}
+
 impl PartialOrd for Specificity {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
         match self.inline.partial_cmp(&other.inline) {

@@ -47,6 +47,7 @@ use std::io;
 use std::mem;
 use std::rc::{Rc, Weak};
 
+use html5ever::interface::ElemName;
 use tendril::StrTendril;
 
 use markup5ever::interface::tree_builder;
@@ -121,6 +122,39 @@ impl Node {
             parent: Cell::new(None),
             children: RefCell::new(Vec::new()),
         })
+    }
+
+    pub fn get_parent(&self) -> Option<Rc<Self>> {
+        if let Some(parent) = self.parent.take() {
+            let parent_handle = parent.upgrade();
+            self.parent.set(Some(parent));
+            parent_handle
+        } else {
+            None
+        }
+    }
+
+    /// Return the nth child element of this node, or None.
+    pub fn nth_child(&self, idx: usize) -> Option<Rc<Self>> {
+        let mut element_idx = 0;
+        for child in self.children.borrow().iter() {
+            if let NodeData::Element { .. } = child.data {
+                element_idx += 1;
+                if element_idx == idx {
+                    return Some(child.clone());
+                }
+            }
+        }
+        None
+    }
+
+    /// Return the element type (if an element)
+    pub fn element_name(&self) -> Option<String> {
+        if let NodeData::Element { ref name, .. } = self.data {
+            Some(format!("{}", &*name.local_name()))
+        } else {
+            None
+        }
     }
 }
 

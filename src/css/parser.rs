@@ -752,6 +752,100 @@ fn parse_class(text: &str) -> IResult<&str, SelectorComponent> {
     Ok((rest, SelectorComponent::Class(classname)))
 }
 
+#[derive(Eq, PartialEq, Copy, Clone)]
+enum Sign {
+    Plus,
+    Neg
+}
+
+impl Sign {
+    fn val(&self) -> i32 {
+        match self {
+            Sign::Plus => 1,
+            Sign::Neg => -1,
+        }
+    }
+}
+
+fn opt_sign(text: &str) -> IResult<&str, Sign> {
+    match text.chars().next() {
+        Some('-') => Ok((&text[1..], Sign::Neg)),
+        Some('+') => Ok((&text[1..], Sign::Plus)),
+        _ => Ok((text, Sign::Plus)),
+    }
+}
+fn sign(text: &str) -> IResult<&str, Sign> {
+    match text.chars().next() {
+        Some('-') => Ok((&text[1..], Sign::Neg)),
+        Some('+') => Ok((&text[1..], Sign::Plus)),
+        _ => fail(text),
+    }
+}
+
+fn parse_nth_child_args(text: &str) -> IResult<&str, SelectorComponent> {
+    let (rest, _) = tag("(")(text)?;
+    let (rest, _) = skip_optional_whitespace(rest)?;
+
+    let (rest, (a, b)) = 
+        alt((
+            map(
+                tag("even"),
+                |_| (2, 0),
+            ),
+            map(
+                tag("odd"),
+                |_| (2, 1),
+            ),
+            // The case where both a and b are specified
+            map(
+                tuple((
+                    opt_sign, opt(digit1), tag("n"),
+                    skip_optional_whitespace,
+                    sign, digit1)),
+                |(a_sign, a_opt_val, _,
+                  _,
+                  b_sign, b_val)| {
+                    let a = <i32 as FromStr>::from_str(a_opt_val.unwrap_or("1")).unwrap() * a_sign.val();
+                    let b = <i32 as FromStr>::from_str(b_val).unwrap() * b_sign.val();
+                    (a, b)
+                }),
+            // Just a
+            map(
+                tuple((opt_sign, opt(digit1), tag("n"))),
+                |(a_sign, a_opt_val, _)| {
+                    let a = <i32 as FromStr>::from_str(a_opt_val.unwrap_or("1")).unwrap() * a_sign.val();
+                    (a, 0)
+                }),
+            // Just b
+            map(
+                tuple((
+                    opt_sign, digit1)),
+                |(b_sign, b_val)| {
+                    let b = <i32 as FromStr>::from_str(b_val).unwrap() * b_sign.val();
+                    (0, b)
+                }),
+        ))(rest)?;
+
+    let (rest, _) = tuple((skip_optional_whitespace, tag(")")))(rest)?;
+
+    let sel = Selector {
+        components: vec![SelectorComponent::Star]
+    };
+    Ok((rest, SelectorComponent::NthChild { a, b, sel }))
+}
+
+fn parse_pseudo_class(text: &str) -> IResult<&str, SelectorComponent> {
+    let (rest, _) = tag(":")(text)?;
+    let (rest, pseudo_classname) = parse_ident(rest)?;
+    match pseudo_classname.as_str() {
+        "nth-child" => {
+            let (rest, component) = parse_nth_child_args(rest)?;
+            Ok((rest, component))
+        }
+        _ => fail(text),
+    }
+}
+
 fn parse_hash(text: &str) -> IResult<&str, SelectorComponent> {
     let (rest, _) = tag("#")(text)?;
     let (rest, word) = parse_identstring(rest)?;
@@ -777,6 +871,7 @@ fn parse_simple_selector_component(text: &str) -> IResult<&str, SelectorComponen
         parse_class,
         parse_hash,
         map(parse_ident, SelectorComponent::Element),
+        parse_pseudo_class,
     ))(text)
 }
 
@@ -1074,5 +1169,51 @@ mod test {
                 })
             ))
         );
+    }
+
+    #[test]
+    fn test_nth_child() {
+        use SelectorComponent::NthChild;
+        let (_, sel_all) = super::parse_selector("*").unwrap();
+        assert_eq!(super::parse_selector(":nth-child(even)").unwrap(),
+            ("", Selector {
+                components: vec![NthChild { a: 2, b: 0, sel: sel_all.clone() }]
+            }));
+        assert_eq!(super::parse_selector(":nth-child(odd)").unwrap(),
+            ("", Selector {
+                components: vec![NthChild { a: 2, b: 1, sel: sel_all.clone() }]
+            }));
+        assert_eq!(super::parse_selector(":nth-child(17)").unwrap(),
+            ("", Selector {
+                components: vec![NthChild { a: 0, b: 17, sel: sel_all.clone() }]
+            }));
+        assert_eq!(super::parse_selector(":nth-child(17n)").unwrap(),
+            ("", Selector {
+                components: vec![NthChild { a: 17, b: 0, sel: sel_all.clone() }]
+            }));
+        assert_eq!(super::parse_selector(":nth-child(10n-1)").unwrap(),
+            ("", Selector {
+                components: vec![NthChild { a: 10, b: -1, sel: sel_all.clone() }]
+            }));
+        assert_eq!(super::parse_selector(":nth-child(10n+9)").unwrap(),
+            ("", Selector {
+                components: vec![NthChild { a: 10, b: 9, sel: sel_all.clone() }]
+            }));
+        assert_eq!(super::parse_selector(":nth-child(-n+3)").unwrap(),
+            ("", Selector {
+                components: vec![NthChild { a: -1, b: 3, sel: sel_all.clone() }]
+            }));
+        assert_eq!(super::parse_selector(":nth-child(n)").unwrap(),
+            ("", Selector {
+                components: vec![NthChild { a: 1, b: 0, sel: sel_all.clone() }]
+            }));
+        assert_eq!(super::parse_selector(":nth-child(+n)").unwrap(),
+            ("", Selector {
+                components: vec![NthChild { a: 1, b: 0, sel: sel_all.clone() }]
+            }));
+        assert_eq!(super::parse_selector(":nth-child(-n)").unwrap(),
+            ("", Selector {
+                components: vec![NthChild { a: -1, b: 0, sel: sel_all.clone() }]
+            }));
     }
 }

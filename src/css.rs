@@ -1,5 +1,5 @@
 //! Some basic CSS support.
-use std::io::Write;
+use std::{io::Write, rc::Rc};
 use std::ops::Deref;
 
 mod parser;
@@ -7,8 +7,7 @@ mod parser;
 use crate::{
     css::parser::parse_rules,
     markup5ever_rcdom::{
-        Handle,
-        NodeData::{self, Comment, Document, Element},
+        Handle, NodeData::{self, Comment, Document, Element}
     },
     tree_map_reduce, Colour, ComputedStyle, Result, Specificity, StyleOrigin, TreeMapResult,
     WhiteSpace,
@@ -24,6 +23,12 @@ pub(crate) enum SelectorComponent {
     Star,
     CombChild,
     CombDescendant,
+    NthChild {
+        /* An + B [of sel] */
+        a: i32,
+        b: i32,
+        sel: Selector,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -76,30 +81,57 @@ impl Selector {
                 },
                 SelectorComponent::Star => Self::do_matches(&comps[1..], node),
                 SelectorComponent::CombChild => {
-                    if let Some(parent) = node.parent.take() {
-                        let parent_handle = parent.upgrade();
-                        node.parent.set(Some(parent));
-                        if let Some(ph) = parent_handle {
-                            Self::do_matches(&comps[1..], &ph)
-                        } else {
-                            false
-                        }
+                    if let Some(parent) = node.get_parent() {
+                        Self::do_matches(&comps[1..], &parent)
                     } else {
                         false
                     }
                 }
                 SelectorComponent::CombDescendant => {
-                    if let Some(parent) = node.parent.take() {
-                        let parent_handle = parent.upgrade();
-                        node.parent.set(Some(parent));
-                        if let Some(ph) = parent_handle {
-                            Self::do_matches(&comps[1..], &ph) || Self::do_matches(comps, &ph)
-                        } else {
-                            false
-                        }
+                    if let Some(parent) = node.get_parent() {
+                        Self::do_matches(&comps[1..], &parent) || Self::do_matches(comps, &parent)
                     } else {
                         false
                     }
+                }
+                SelectorComponent::NthChild { a, b, sel } => {
+                    let parent = if let Some(parent) = node.get_parent() {
+                        parent
+                    } else {
+                        return false;
+                    };
+                    let mut idx = 0i32;
+                    for child in parent.children.borrow().iter() {
+                        if let Element { .. } = child.data {
+                            if sel.matches(child) {
+                                idx += 1;
+                                if Rc::ptr_eq(child, node) {
+                                    break;
+                                }
+                            } else {
+                                if Rc::ptr_eq(child, node) {
+                                    return false;
+                                }
+                            }
+                        }
+                    }
+                    if idx == 0 {
+                        // The child wasn't found(?)
+                        return false;
+                    }
+                    /* The selector matches if idx == a*n + b, where
+                     * n >= 0
+                     */
+                    let idx_offset = idx - b;
+                    if *a == 0 {
+                        return idx_offset == 0 && Self::do_matches(&comps[1..], &node);
+                    }
+                    if (idx_offset % a) != 0 {
+                        // Not a multiple
+                        return false;
+                    }
+                    let n = idx_offset / a;
+                    n >= 0 && Self::do_matches(&comps[1..], &node)
                 }
             },
         }
@@ -124,6 +156,10 @@ impl Selector {
                 SelectorComponent::Star => {}
                 SelectorComponent::CombChild => {}
                 SelectorComponent::CombDescendant => {}
+                SelectorComponent::NthChild { sel, .. } => {
+                    result.class += 1;
+                    result += &sel.specificity();
+                }
             }
         }
 
