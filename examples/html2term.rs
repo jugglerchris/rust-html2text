@@ -4,9 +4,9 @@ extern crate argparse;
 extern crate unicode_width;
 #[cfg(unix)]
 mod top {
-    use argparse::{ArgumentParser, Store};
     #[cfg(feature = "css")]
     use argparse::StoreFalse;
+    use argparse::{ArgumentParser, Store};
     use html2text::render::{RichAnnotation, TaggedLine, TaggedLineElement};
     use std::collections::HashMap;
     use std::io::{self, Write};
@@ -358,8 +358,7 @@ mod top {
         dom: &html2text::RcDom,
         inspect_path: &[usize],
         width: usize,
-        #[allow(unused)]
-        options: &Options,
+        #[allow(unused)] options: &Options,
     ) -> Vec<TaggedLine<Vec<RichAnnotation>>> {
         let config = html2text::config::rich();
         #[cfg(feature = "css")]
@@ -394,14 +393,14 @@ mod top {
                 let config = config
                     .add_agent_css(
                         &(format!(
-                                r#"
+                            r#"
                     html {} {{
                         color: white !important;
                         background-color: black !important;
                         display: x-raw-dom;
                     }}
                 "#,
-                path_selector
+                            path_selector
                         )),
                     )
                     .expect("Invalid CSS");
