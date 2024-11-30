@@ -26,36 +26,21 @@ mod top {
                     style.push_str(&format!("{}", termion::style::Underline));
                 }
                 RichAnnotation::Image(_) => {
-                    style.push_str(&format!(
-                        "{}",
-                        Fg(LightBlue)
-                    ));
+                    style.push_str(&format!("{}", Fg(LightBlue)));
                 }
                 RichAnnotation::Emphasis => {
-                    style.push_str(&format!(
-                        "{}",
-                        Fg(LightGreen)
-                    ));
+                    style.push_str(&format!("{}", Fg(LightGreen)));
                 }
                 RichAnnotation::Strong => {
-                    style.push_str(&format!(
-                        "{}",
-                        Fg(LightGreen)
-                    ));
+                    style.push_str(&format!("{}", Fg(LightGreen)));
                 }
                 RichAnnotation::Strikeout => (),
                 RichAnnotation::Code => {
-                    style.push_str(&format!(
-                        "{}",
-                        Fg(LightYellow)
-                    ));
+                    style.push_str(&format!("{}", Fg(LightYellow)));
                 }
                 RichAnnotation::Preformat(is_cont) => {
                     if is_cont {
-                        style.push_str(&format!(
-                            "{}",
-                            Fg(LightMagenta)
-                        ));
+                        style.push_str(&format!("{}", Fg(LightMagenta)));
                     } else {
                         style.push_str(&format!("{}", Fg(Magenta)));
                     }
@@ -170,7 +155,9 @@ mod top {
 
         let mut file = std::fs::File::open(filename).expect("Tried to open file");
 
-        let dom = html2text::config::plain().parse_html(&mut file).expect("Failed to parse HTML");
+        let dom = html2text::config::plain()
+            .parse_html(&mut file)
+            .expect("Failed to parse HTML");
 
         let mut keys = io::stdin().keys();
 
@@ -242,7 +229,14 @@ mod top {
                     node = node.nth_child(idx).unwrap();
                     pth.push_str(&format!("> {}", node.element_name().unwrap()));
                 }
-                write!(screen, "{}{}{:?}", Goto(1, vis_y_limit as u16), pth, &inspect_path).unwrap();
+                write!(
+                    screen,
+                    "{}{}{:?}",
+                    Goto(1, vis_y_limit as u16),
+                    pth,
+                    &inspect_path
+                )
+                .unwrap();
             }
 
             // 1-based screen coordinates
@@ -356,37 +350,60 @@ mod top {
         }
     }
 
-    fn rerender(dom: &html2text::RcDom, inspect_path: &[usize], width: usize, options: &Options) -> Vec<TaggedLine<Vec<RichAnnotation>>> {
+    fn rerender(
+        dom: &html2text::RcDom,
+        inspect_path: &[usize],
+        width: usize,
+        options: &Options,
+    ) -> Vec<TaggedLine<Vec<RichAnnotation>>> {
         let config = html2text::config::rich();
         #[cfg(feature = "css")]
         let config = if options.use_css {
-            config.use_doc_css()
-                .add_agent_css(r#"
+            config
+                .use_doc_css()
+                .add_agent_css(
+                    r#"
                     img {
                         color: #77f;
                     }
-                "#).unwrap()
+                "#,
+                )
+                .unwrap()
         } else {
             config
         };
         if inspect_path.is_empty() {
-            let render_tree = config.dom_to_render_tree(&dom).expect("Failed to build render tree");
-            config.render_to_lines(render_tree, width).expect("Failed to render")
+            let render_tree = config
+                .dom_to_render_tree(&dom)
+                .expect("Failed to build render tree");
+            config
+                .render_to_lines(render_tree, width)
+                .expect("Failed to render")
         } else {
             let mut path_selector = String::new();
             for &idx in &inspect_path[1..] {
                 path_selector.push_str(&format!(" > :nth-child({})", idx));
             }
             let config = config
-                .add_agent_css(&(format!(r#"
+                .add_agent_css(
+                    &(format!(
+                        r#"
                     html {} {{
                         color: white !important;
                         background-color: black !important;
                         display: x-raw-dom;
                     }}
-                "#, path_selector))).expect("Invalid CSS");
-            let render_tree = config.dom_to_render_tree(&dom).expect("Failed to build render tree");
-            config.render_to_lines(render_tree, width).expect("Failed to render")
+                "#,
+                        path_selector
+                    )),
+                )
+                .expect("Invalid CSS");
+            let render_tree = config
+                .dom_to_render_tree(&dom)
+                .expect("Failed to build render tree");
+            config
+                .render_to_lines(render_tree, width)
+                .expect("Failed to render")
         }
     }
 }

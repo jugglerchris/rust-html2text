@@ -1530,7 +1530,10 @@ fn process_dom_node<T: Write>(
                             WhiteSpace::Pre,
                         );
                         let text = RenderNode::new(RenderNodeInfo::Text(result_text));
-                        return Ok(Finished(RenderNode::new_styled(RenderNodeInfo::Block(vec![text]), computed)));
+                        return Ok(Finished(RenderNode::new_styled(
+                            RenderNodeInfo::Block(vec![text]),
+                            computed,
+                        )));
                     }
                     _ => (),
                 }

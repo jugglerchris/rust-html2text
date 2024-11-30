@@ -1,13 +1,14 @@
 //! Some basic CSS support.
-use std::{io::Write, rc::Rc};
 use std::ops::Deref;
+use std::{io::Write, rc::Rc};
 
 mod parser;
 
 use crate::{
     css::parser::parse_rules,
     markup5ever_rcdom::{
-        Handle, NodeData::{self, Comment, Document, Element}
+        Handle,
+        NodeData::{self, Comment, Document, Element},
     },
     tree_map_reduce, Colour, ComputedStyle, Result, Specificity, StyleOrigin, TreeMapResult,
     WhiteSpace,
@@ -225,9 +226,7 @@ impl std::fmt::Display for StyleDecl {
         }
         match self.importance {
             Importance::Default => (),
-            Importance::Important => {
-                write!(f, " !important")?
-            }
+            Importance::Important => write!(f, " !important")?,
         }
         Ok(())
     }
@@ -325,24 +324,22 @@ fn styles_from_properties(decls: &[parser::Declaration]) -> Vec<StyleDecl> {
                 overflow_hidden = true;
             }
             parser::Decl::Overflow { .. } | parser::Decl::OverflowY { .. } => {}
-            parser::Decl::Display { value } => {
-                match value {
-                    parser::Display::None => {
-                        styles.push(StyleDecl {
-                            style: Style::Display(Display::None),
-                            importance: decl.important,
-                        });
-                    }
-                    #[cfg(feature = "css_ext")]
-                    parser::Display::RawDom => {
-                        styles.push(StyleDecl {
-                            style: Style::Display(Display::ExtRawDom),
-                            importance: decl.important,
-                        });
-                    }
-                    _ => (),
+            parser::Decl::Display { value } => match value {
+                parser::Display::None => {
+                    styles.push(StyleDecl {
+                        style: Style::Display(Display::None),
+                        importance: decl.important,
+                    });
                 }
-            }
+                #[cfg(feature = "css_ext")]
+                parser::Display::RawDom => {
+                    styles.push(StyleDecl {
+                        style: Style::Display(Display::ExtRawDom),
+                        importance: decl.important,
+                    });
+                }
+                _ => (),
+            },
             parser::Decl::WhiteSpace { value } => {
                 styles.push(StyleDecl {
                     style: Style::WhiteSpace(*value),

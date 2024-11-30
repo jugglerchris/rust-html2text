@@ -759,7 +759,7 @@ fn parse_class(text: &str) -> IResult<&str, SelectorComponent> {
 #[derive(Eq, PartialEq, Copy, Clone)]
 enum Sign {
     Plus,
-    Neg
+    Neg,
 }
 
 impl Sign {
@@ -790,50 +790,46 @@ fn parse_nth_child_args(text: &str) -> IResult<&str, SelectorComponent> {
     let (rest, _) = tag("(")(text)?;
     let (rest, _) = skip_optional_whitespace(rest)?;
 
-    let (rest, (a, b)) = 
-        alt((
-            map(
-                tag("even"),
-                |_| (2, 0),
-            ),
-            map(
-                tag("odd"),
-                |_| (2, 1),
-            ),
-            // The case where both a and b are specified
-            map(
-                tuple((
-                    opt_sign, opt(digit1), tag("n"),
-                    skip_optional_whitespace,
-                    sign, digit1)),
-                |(a_sign, a_opt_val, _,
-                  _,
-                  b_sign, b_val)| {
-                    let a = <i32 as FromStr>::from_str(a_opt_val.unwrap_or("1")).unwrap() * a_sign.val();
-                    let b = <i32 as FromStr>::from_str(b_val).unwrap() * b_sign.val();
-                    (a, b)
-                }),
-            // Just a
-            map(
-                tuple((opt_sign, opt(digit1), tag("n"))),
-                |(a_sign, a_opt_val, _)| {
-                    let a = <i32 as FromStr>::from_str(a_opt_val.unwrap_or("1")).unwrap() * a_sign.val();
-                    (a, 0)
-                }),
-            // Just b
-            map(
-                tuple((
-                    opt_sign, digit1)),
-                |(b_sign, b_val)| {
-                    let b = <i32 as FromStr>::from_str(b_val).unwrap() * b_sign.val();
-                    (0, b)
-                }),
-        ))(rest)?;
+    let (rest, (a, b)) = alt((
+        map(tag("even"), |_| (2, 0)),
+        map(tag("odd"), |_| (2, 1)),
+        // The case where both a and b are specified
+        map(
+            tuple((
+                opt_sign,
+                opt(digit1),
+                tag("n"),
+                skip_optional_whitespace,
+                sign,
+                digit1,
+            )),
+            |(a_sign, a_opt_val, _, _, b_sign, b_val)| {
+                let a =
+                    <i32 as FromStr>::from_str(a_opt_val.unwrap_or("1")).unwrap() * a_sign.val();
+                let b = <i32 as FromStr>::from_str(b_val).unwrap() * b_sign.val();
+                (a, b)
+            },
+        ),
+        // Just a
+        map(
+            tuple((opt_sign, opt(digit1), tag("n"))),
+            |(a_sign, a_opt_val, _)| {
+                let a =
+                    <i32 as FromStr>::from_str(a_opt_val.unwrap_or("1")).unwrap() * a_sign.val();
+                (a, 0)
+            },
+        ),
+        // Just b
+        map(tuple((opt_sign, digit1)), |(b_sign, b_val)| {
+            let b = <i32 as FromStr>::from_str(b_val).unwrap() * b_sign.val();
+            (0, b)
+        }),
+    ))(rest)?;
 
     let (rest, _) = tuple((skip_optional_whitespace, tag(")")))(rest)?;
 
     let sel = Selector {
-        components: vec![SelectorComponent::Star]
+        components: vec![SelectorComponent::Star],
     };
     Ok((rest, SelectorComponent::NthChild { a, b, sel }))
 }
@@ -943,22 +939,21 @@ fn skip_to_end_of_statement(text: &str) -> IResult<&str, ()> {
             Err(_) => return Ok((rest, ())),
         };
         match &tok {
-            Token::Ident(..) |
-            Token::AtKeyword(_) |
-            Token::Hash(_) |
-            Token::String(_) |
-            Token::BadString(_) |
-            Token::Url(_) |
-            Token::BadUrl(_) |
-            Token::Delim(_) |
-            Token::Number(_) |
-            Token::Dimension(_, _) |
-            Token::Percentage(_) |
-            Token::Colon |
-            Token::Comma => (),
+            Token::Ident(..)
+            | Token::AtKeyword(_)
+            | Token::Hash(_)
+            | Token::String(_)
+            | Token::BadString(_)
+            | Token::Url(_)
+            | Token::BadUrl(_)
+            | Token::Delim(_)
+            | Token::Number(_)
+            | Token::Dimension(_, _)
+            | Token::Percentage(_)
+            | Token::Colon
+            | Token::Comma => (),
 
-            Token::Function(_) |
-            Token::OpenRound => {
+            Token::Function(_) | Token::OpenRound => {
                 bra_stack.push(Token::CloseRound);
             }
             Token::CDO => {
@@ -980,10 +975,7 @@ fn skip_to_end_of_statement(text: &str) -> IResult<&str, ()> {
                 return Ok((rest, ()));
             }
             // Standard closing brackets
-            Token::CDC |
-            Token::CloseSquare |
-            Token::CloseRound |
-            Token::CloseBrace => {
+            Token::CDC | Token::CloseSquare | Token::CloseRound | Token::CloseBrace => {
                 if bra_stack.last() == Some(&tok) {
                     bra_stack.pop();
 
@@ -1004,18 +996,17 @@ fn skip_to_end_of_statement(text: &str) -> IResult<&str, ()> {
 
 fn parse_at_rule(text: &str) -> IResult<&str, ()> {
     let (rest, _) = tuple((
-            skip_optional_whitespace,
-            tag("@"),
-            skip_optional_whitespace,
-            parse_ident))(text)?;
+        skip_optional_whitespace,
+        tag("@"),
+        skip_optional_whitespace,
+        parse_ident,
+    ))(text)?;
 
     skip_to_end_of_statement(rest)
 }
 
 fn parse_statement(text: &str) -> IResult<&str, Option<RuleSet>> {
-    alt((
-        map(parse_ruleset, Some),
-        map(parse_at_rule, |_| None)))(text)
+    alt((map(parse_ruleset, Some), map(parse_at_rule, |_| None)))(text)
 }
 
 pub(crate) fn parse_stylesheet(text: &str) -> IResult<&str, Vec<RuleSet>> {
@@ -1315,45 +1306,135 @@ mod test {
     fn test_nth_child() {
         use SelectorComponent::NthChild;
         let (_, sel_all) = super::parse_selector("*").unwrap();
-        assert_eq!(super::parse_selector(":nth-child(even)").unwrap(),
-            ("", Selector {
-                components: vec![NthChild { a: 2, b: 0, sel: sel_all.clone() }]
-            }));
-        assert_eq!(super::parse_selector(":nth-child(odd)").unwrap(),
-            ("", Selector {
-                components: vec![NthChild { a: 2, b: 1, sel: sel_all.clone() }]
-            }));
-        assert_eq!(super::parse_selector(":nth-child(17)").unwrap(),
-            ("", Selector {
-                components: vec![NthChild { a: 0, b: 17, sel: sel_all.clone() }]
-            }));
-        assert_eq!(super::parse_selector(":nth-child(17n)").unwrap(),
-            ("", Selector {
-                components: vec![NthChild { a: 17, b: 0, sel: sel_all.clone() }]
-            }));
-        assert_eq!(super::parse_selector(":nth-child(10n-1)").unwrap(),
-            ("", Selector {
-                components: vec![NthChild { a: 10, b: -1, sel: sel_all.clone() }]
-            }));
-        assert_eq!(super::parse_selector(":nth-child(10n+9)").unwrap(),
-            ("", Selector {
-                components: vec![NthChild { a: 10, b: 9, sel: sel_all.clone() }]
-            }));
-        assert_eq!(super::parse_selector(":nth-child(-n+3)").unwrap(),
-            ("", Selector {
-                components: vec![NthChild { a: -1, b: 3, sel: sel_all.clone() }]
-            }));
-        assert_eq!(super::parse_selector(":nth-child(n)").unwrap(),
-            ("", Selector {
-                components: vec![NthChild { a: 1, b: 0, sel: sel_all.clone() }]
-            }));
-        assert_eq!(super::parse_selector(":nth-child(+n)").unwrap(),
-            ("", Selector {
-                components: vec![NthChild { a: 1, b: 0, sel: sel_all.clone() }]
-            }));
-        assert_eq!(super::parse_selector(":nth-child(-n)").unwrap(),
-            ("", Selector {
-                components: vec![NthChild { a: -1, b: 0, sel: sel_all.clone() }]
-            }));
+        assert_eq!(
+            super::parse_selector(":nth-child(even)").unwrap(),
+            (
+                "",
+                Selector {
+                    components: vec![NthChild {
+                        a: 2,
+                        b: 0,
+                        sel: sel_all.clone()
+                    }]
+                }
+            )
+        );
+        assert_eq!(
+            super::parse_selector(":nth-child(odd)").unwrap(),
+            (
+                "",
+                Selector {
+                    components: vec![NthChild {
+                        a: 2,
+                        b: 1,
+                        sel: sel_all.clone()
+                    }]
+                }
+            )
+        );
+        assert_eq!(
+            super::parse_selector(":nth-child(17)").unwrap(),
+            (
+                "",
+                Selector {
+                    components: vec![NthChild {
+                        a: 0,
+                        b: 17,
+                        sel: sel_all.clone()
+                    }]
+                }
+            )
+        );
+        assert_eq!(
+            super::parse_selector(":nth-child(17n)").unwrap(),
+            (
+                "",
+                Selector {
+                    components: vec![NthChild {
+                        a: 17,
+                        b: 0,
+                        sel: sel_all.clone()
+                    }]
+                }
+            )
+        );
+        assert_eq!(
+            super::parse_selector(":nth-child(10n-1)").unwrap(),
+            (
+                "",
+                Selector {
+                    components: vec![NthChild {
+                        a: 10,
+                        b: -1,
+                        sel: sel_all.clone()
+                    }]
+                }
+            )
+        );
+        assert_eq!(
+            super::parse_selector(":nth-child(10n+9)").unwrap(),
+            (
+                "",
+                Selector {
+                    components: vec![NthChild {
+                        a: 10,
+                        b: 9,
+                        sel: sel_all.clone()
+                    }]
+                }
+            )
+        );
+        assert_eq!(
+            super::parse_selector(":nth-child(-n+3)").unwrap(),
+            (
+                "",
+                Selector {
+                    components: vec![NthChild {
+                        a: -1,
+                        b: 3,
+                        sel: sel_all.clone()
+                    }]
+                }
+            )
+        );
+        assert_eq!(
+            super::parse_selector(":nth-child(n)").unwrap(),
+            (
+                "",
+                Selector {
+                    components: vec![NthChild {
+                        a: 1,
+                        b: 0,
+                        sel: sel_all.clone()
+                    }]
+                }
+            )
+        );
+        assert_eq!(
+            super::parse_selector(":nth-child(+n)").unwrap(),
+            (
+                "",
+                Selector {
+                    components: vec![NthChild {
+                        a: 1,
+                        b: 0,
+                        sel: sel_all.clone()
+                    }]
+                }
+            )
+        );
+        assert_eq!(
+            super::parse_selector(":nth-child(-n)").unwrap(),
+            (
+                "",
+                Selector {
+                    components: vec![NthChild {
+                        a: -1,
+                        b: 0,
+                        sel: sel_all.clone()
+                    }]
+                }
+            )
+        );
     }
 }
