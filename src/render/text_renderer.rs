@@ -318,7 +318,6 @@ impl<T: Debug + Eq + PartialEq + Clone + Default> TaggedLine<T> {
 struct WrappedBlock<T> {
     width: usize,
     text: Vec<TaggedLine<T>>,
-    textlen: usize,
     line: TaggedLine<T>,
     spacetag: Option<T>, // Tag for the whitespace before the current word
     word: TaggedLine<T>, // The current word (with no whitespace).
@@ -334,7 +333,6 @@ impl<T: Clone + Eq + Debug + Default> WrappedBlock<T> {
         WrappedBlock {
             width,
             text: Vec::new(),
-            textlen: 0,
             line: TaggedLine::new(),
             spacetag: None,
             word: TaggedLine::new(),
@@ -646,7 +644,7 @@ impl<T: Clone + Eq + Debug + Default> WrappedBlock<T> {
     }
 
     fn text_len(&self) -> usize {
-        self.textlen + self.line.len + self.wordlen
+        self.text.len() + self.line.len + self.wordlen
     }
 
     fn is_empty(&self) -> bool {

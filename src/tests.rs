@@ -2643,4 +2643,128 @@ at  line  breaks
             },
         );
     }
+
+    #[test]
+    fn test_nth_child() {
+        test_html_coloured(
+            br#"
+          <style>
+              li:nth-child(even) {
+                  color: #f00;
+              }
+          </style>
+          <body><ul>
+              <li>One</li>
+              <li>Two</li>
+              <li>Three</li>
+              <li>Four</li>
+              <li>Five</li>
+          </ul>"#,
+            r#"* One
+* <R>Two</R>
+* Three
+* <R>Four</R>
+* Five
+"#,
+            20,
+        );
+        test_html_coloured(
+            br#"
+          <style>
+              li:nth-child(odd) {
+                  color: #f00;
+              }
+          </style>
+          <body><ul>
+              <li>One</li>
+              <li>Two</li>
+              <li>Three</li>
+              <li>Four</li>
+              <li>Five</li>
+          </ul>"#,
+            r#"* <R>One</R>
+* Two
+* <R>Three</R>
+* Four
+* <R>Five</R>
+"#,
+            20,
+        );
+        test_html_coloured(
+            br#"
+          <style>
+              li:nth-child(-n+3) {
+                  color: #f00;
+              }
+          </style>
+          <body><ul>
+              <li>One</li>
+              <li>Two</li>
+              <li>Three</li>
+              <li>Four</li>
+              <li>Five</li>
+          </ul>"#,
+            r#"* <R>One</R>
+* <R>Two</R>
+* <R>Three</R>
+* Four
+* Five
+"#,
+            20,
+        );
+        test_html_coloured(
+            br#"
+          <style>
+              li:nth-child(2) {
+                  color: #f00;
+              }
+          </style>
+          <body><ul>
+              <li>One</li>
+              <li>Two</li>
+              <li>Three</li>
+              <li>Four</li>
+              <li>Five</li>
+          </ul>"#,
+            r#"* One
+* <R>Two</R>
+* Three
+* Four
+* Five
+"#,
+            20,
+        );
+        test_html_coloured(
+            br#"
+          <style>
+              li:nth-child(n+3):nth-child(-n+5) {
+                  color: #f00;
+              }
+          </style>
+          <body><ul>
+              <li>One</li>
+              <li>Two</li>
+              <li>Three</li>
+              <li>Four</li>
+              <li>Five</li>
+              <li>Six</li>
+              <li>Seven</li>
+              <li>Eight</li>
+              <li>Nine</li>
+              <li>Ten</li>
+          </ul>"#,
+            r#"* One
+* Two
+* <R>Three</R>
+* <R>Four</R>
+* <R>Five</R>
+* Six
+* Seven
+* Eight
+* Nine
+* Ten
+"#,
+            20,
+        );
+    }
 }

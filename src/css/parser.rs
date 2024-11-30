@@ -61,6 +61,8 @@ pub(crate) enum Overflow {
 pub(crate) enum Display {
     None,
     Other,
+    #[cfg(feature = "css_ext")]
+    RawDom,
 }
 
 #[derive(Debug, PartialEq)]
@@ -715,6 +717,8 @@ fn parse_display(value: &RawValue) -> Result<Display, nom::Err<nom::error::Error
             #[allow(clippy::single_match)]
             match word.deref() {
                 "none" => return Ok(Display::None),
+                #[cfg(feature = "css_ext")]
+                "x-raw-dom" => return Ok(Display::RawDom),
                 _ => (),
             }
         }
@@ -752,6 +756,96 @@ fn parse_class(text: &str) -> IResult<&str, SelectorComponent> {
     Ok((rest, SelectorComponent::Class(classname)))
 }
 
+#[derive(Eq, PartialEq, Copy, Clone)]
+enum Sign {
+    Plus,
+    Neg,
+}
+
+impl Sign {
+    fn val(&self) -> i32 {
+        match self {
+            Sign::Plus => 1,
+            Sign::Neg => -1,
+        }
+    }
+}
+
+fn opt_sign(text: &str) -> IResult<&str, Sign> {
+    match text.chars().next() {
+        Some('-') => Ok((&text[1..], Sign::Neg)),
+        Some('+') => Ok((&text[1..], Sign::Plus)),
+        _ => Ok((text, Sign::Plus)),
+    }
+}
+fn sign(text: &str) -> IResult<&str, Sign> {
+    match text.chars().next() {
+        Some('-') => Ok((&text[1..], Sign::Neg)),
+        Some('+') => Ok((&text[1..], Sign::Plus)),
+        _ => fail(text),
+    }
+}
+
+fn parse_nth_child_args(text: &str) -> IResult<&str, SelectorComponent> {
+    let (rest, _) = tag("(")(text)?;
+    let (rest, _) = skip_optional_whitespace(rest)?;
+
+    let (rest, (a, b)) = alt((
+        map(tag("even"), |_| (2, 0)),
+        map(tag("odd"), |_| (2, 1)),
+        // The case where both a and b are specified
+        map(
+            tuple((
+                opt_sign,
+                opt(digit1),
+                tag("n"),
+                skip_optional_whitespace,
+                sign,
+                digit1,
+            )),
+            |(a_sign, a_opt_val, _, _, b_sign, b_val)| {
+                let a =
+                    <i32 as FromStr>::from_str(a_opt_val.unwrap_or("1")).unwrap() * a_sign.val();
+                let b = <i32 as FromStr>::from_str(b_val).unwrap() * b_sign.val();
+                (a, b)
+            },
+        ),
+        // Just a
+        map(
+            tuple((opt_sign, opt(digit1), tag("n"))),
+            |(a_sign, a_opt_val, _)| {
+                let a =
+                    <i32 as FromStr>::from_str(a_opt_val.unwrap_or("1")).unwrap() * a_sign.val();
+                (a, 0)
+            },
+        ),
+        // Just b
+        map(tuple((opt_sign, digit1)), |(b_sign, b_val)| {
+            let b = <i32 as FromStr>::from_str(b_val).unwrap() * b_sign.val();
+            (0, b)
+        }),
+    ))(rest)?;
+
+    let (rest, _) = tuple((skip_optional_whitespace, tag(")")))(rest)?;
+
+    let sel = Selector {
+        components: vec![SelectorComponent::Star],
+    };
+    Ok((rest, SelectorComponent::NthChild { a, b, sel }))
+}
+
+fn parse_pseudo_class(text: &str) -> IResult<&str, SelectorComponent> {
+    let (rest, _) = tag(":")(text)?;
+    let (rest, pseudo_classname) = parse_ident(rest)?;
+    match pseudo_classname.as_str() {
+        "nth-child" => {
+            let (rest, component) = parse_nth_child_args(rest)?;
+            Ok((rest, component))
+        }
+        _ => fail(text),
+    }
+}
+
 fn parse_hash(text: &str) -> IResult<&str, SelectorComponent> {
     let (rest, _) = tag("#")(text)?;
     let (rest, word) = parse_identstring(rest)?;
@@ -777,6 +871,7 @@ fn parse_simple_selector_component(text: &str) -> IResult<&str, SelectorComponen
         parse_class,
         parse_hash,
         map(parse_ident, SelectorComponent::Element),
+        parse_pseudo_class,
     ))(text)
 }
 
@@ -834,8 +929,89 @@ fn parse_ruleset(text: &str) -> IResult<&str, RuleSet> {
     ))
 }
 
+fn skip_to_end_of_statement(text: &str) -> IResult<&str, ()> {
+    let mut rest = text;
+
+    let mut bra_stack = vec![];
+    loop {
+        let (remain, tok) = match parse_token(rest) {
+            Ok(res) => res,
+            Err(_) => return Ok((rest, ())),
+        };
+        match &tok {
+            Token::Ident(..)
+            | Token::AtKeyword(_)
+            | Token::Hash(_)
+            | Token::String(_)
+            | Token::BadString(_)
+            | Token::Url(_)
+            | Token::BadUrl(_)
+            | Token::Delim(_)
+            | Token::Number(_)
+            | Token::Dimension(_, _)
+            | Token::Percentage(_)
+            | Token::Colon
+            | Token::Comma => (),
+
+            Token::Function(_) | Token::OpenRound => {
+                bra_stack.push(Token::CloseRound);
+            }
+            Token::CDO => {
+                bra_stack.push(Token::CDC);
+            }
+            Token::OpenSquare => {
+                bra_stack.push(Token::CloseSquare);
+            }
+            Token::OpenBrace => {
+                bra_stack.push(Token::CloseBrace);
+            }
+            Token::Semicolon => {
+                if bra_stack.is_empty() {
+                    return Ok((remain, ()));
+                }
+            }
+            Token::CloseBrace if bra_stack.is_empty() => {
+                // The stack is empty, so don't include the closing brace.
+                return Ok((rest, ()));
+            }
+            // Standard closing brackets
+            Token::CDC | Token::CloseSquare | Token::CloseRound | Token::CloseBrace => {
+                if bra_stack.last() == Some(&tok) {
+                    bra_stack.pop();
+
+                    if tok == Token::CloseBrace && bra_stack.is_empty() {
+                        // The rule lasted until the end of the next block;
+                        // eat this closing brace.
+                        return Ok((remain, ()));
+                    }
+                } else {
+                    // Unbalanced brackets
+                    return fail(rest);
+                }
+            }
+        }
+        rest = remain;
+    }
+}
+
+fn parse_at_rule(text: &str) -> IResult<&str, ()> {
+    let (rest, _) = tuple((
+        skip_optional_whitespace,
+        tag("@"),
+        skip_optional_whitespace,
+        parse_ident,
+    ))(text)?;
+
+    skip_to_end_of_statement(rest)
+}
+
+fn parse_statement(text: &str) -> IResult<&str, Option<RuleSet>> {
+    alt((map(parse_ruleset, Some), map(parse_at_rule, |_| None)))(text)
+}
+
 pub(crate) fn parse_stylesheet(text: &str) -> IResult<&str, Vec<RuleSet>> {
-    many0(parse_ruleset)(text)
+    let (rest, items) = many0(parse_statement)(text)?;
+    Ok((rest, items.into_iter().flatten().collect()))
 }
 
 #[cfg(test)]
@@ -1005,6 +1181,56 @@ mod test {
     }
 
     #[test]
+    fn test_parse_at_rules() {
+        assert_eq!(
+            super::parse_stylesheet(
+                "
+            @media paper {
+            }
+
+            @blah asldfkjasfda;
+
+            @nested { lkasjfd alkdsjfa sldkfjas ( alksjdasfd ) [ alskdjfalskdf] }
+
+            @keyframes foo {
+                0% { transform: translateY(0); }
+               50% { opacity:0.8; }
+              100% { }
+            }
+
+
+            .foo {
+                color: #112233;
+                background-color: #332211 !important;
+            }
+            "
+            ),
+            Ok((
+                "",
+                vec![RuleSet {
+                    selectors: vec![Selector {
+                        components: vec![SelectorComponent::Class("foo".into()),],
+                    },],
+                    declarations: vec![
+                        Declaration {
+                            data: Decl::Color {
+                                value: Colour::Rgb(0x11, 0x22, 0x33)
+                            },
+                            important: Importance::Default,
+                        },
+                        Declaration {
+                            data: Decl::BackgroundColor {
+                                value: Colour::Rgb(0x33, 0x22, 0x11)
+                            },
+                            important: Importance::Important,
+                        },
+                    ],
+                }]
+            ))
+        );
+    }
+
+    #[test]
     fn test_parse_named_colour() {
         assert_eq!(
             super::parse_declaration("color: white"),
@@ -1073,6 +1299,142 @@ mod test {
                     important: Importance::Default,
                 })
             ))
+        );
+    }
+
+    #[test]
+    fn test_nth_child() {
+        use SelectorComponent::NthChild;
+        let (_, sel_all) = super::parse_selector("*").unwrap();
+        assert_eq!(
+            super::parse_selector(":nth-child(even)").unwrap(),
+            (
+                "",
+                Selector {
+                    components: vec![NthChild {
+                        a: 2,
+                        b: 0,
+                        sel: sel_all.clone()
+                    }]
+                }
+            )
+        );
+        assert_eq!(
+            super::parse_selector(":nth-child(odd)").unwrap(),
+            (
+                "",
+                Selector {
+                    components: vec![NthChild {
+                        a: 2,
+                        b: 1,
+                        sel: sel_all.clone()
+                    }]
+                }
+            )
+        );
+        assert_eq!(
+            super::parse_selector(":nth-child(17)").unwrap(),
+            (
+                "",
+                Selector {
+                    components: vec![NthChild {
+                        a: 0,
+                        b: 17,
+                        sel: sel_all.clone()
+                    }]
+                }
+            )
+        );
+        assert_eq!(
+            super::parse_selector(":nth-child(17n)").unwrap(),
+            (
+                "",
+                Selector {
+                    components: vec![NthChild {
+                        a: 17,
+                        b: 0,
+                        sel: sel_all.clone()
+                    }]
+                }
+            )
+        );
+        assert_eq!(
+            super::parse_selector(":nth-child(10n-1)").unwrap(),
+            (
+                "",
+                Selector {
+                    components: vec![NthChild {
+                        a: 10,
+                        b: -1,
+                        sel: sel_all.clone()
+                    }]
+                }
+            )
+        );
+        assert_eq!(
+            super::parse_selector(":nth-child(10n+9)").unwrap(),
+            (
+                "",
+                Selector {
+                    components: vec![NthChild {
+                        a: 10,
+                        b: 9,
+                        sel: sel_all.clone()
+                    }]
+                }
+            )
+        );
+        assert_eq!(
+            super::parse_selector(":nth-child(-n+3)").unwrap(),
+            (
+                "",
+                Selector {
+                    components: vec![NthChild {
+                        a: -1,
+                        b: 3,
+                        sel: sel_all.clone()
+                    }]
+                }
+            )
+        );
+        assert_eq!(
+            super::parse_selector(":nth-child(n)").unwrap(),
+            (
+                "",
+                Selector {
+                    components: vec![NthChild {
+                        a: 1,
+                        b: 0,
+                        sel: sel_all.clone()
+                    }]
+                }
+            )
+        );
+        assert_eq!(
+            super::parse_selector(":nth-child(+n)").unwrap(),
+            (
+                "",
+                Selector {
+                    components: vec![NthChild {
+                        a: 1,
+                        b: 0,
+                        sel: sel_all.clone()
+                    }]
+                }
+            )
+        );
+        assert_eq!(
+            super::parse_selector(":nth-child(-n)").unwrap(),
+            (
+                "",
+                Selector {
+                    components: vec![NthChild {
+                        a: -1,
+                        b: 0,
+                        sel: sel_all.clone()
+                    }]
+                }
+            )
         );
     }
 }

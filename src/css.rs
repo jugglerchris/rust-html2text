@@ -1,6 +1,6 @@
 //! Some basic CSS support.
-use std::io::Write;
 use std::ops::Deref;
+use std::{io::Write, rc::Rc};
 
 mod parser;
 
@@ -24,12 +24,41 @@ pub(crate) enum SelectorComponent {
     Star,
     CombChild,
     CombDescendant,
+    NthChild {
+        /* An + B [of sel] */
+        a: i32,
+        b: i32,
+        sel: Selector,
+    },
+}
+
+impl std::fmt::Display for SelectorComponent {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            SelectorComponent::Class(name) => write!(f, ".{}", name),
+            SelectorComponent::Element(name) => write!(f, "{}", name),
+            SelectorComponent::Hash(val) => write!(f, "#{}", val),
+            SelectorComponent::Star => write!(f, " * "),
+            SelectorComponent::CombChild => write!(f, " > "),
+            SelectorComponent::CombDescendant => write!(f, " "),
+            SelectorComponent::NthChild { a, b, .. } => write!(f, ":nth-child({}n+{})", a, b),
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) struct Selector {
     // List of components, right first so we match from the leaf.
     components: Vec<SelectorComponent>,
+}
+
+impl std::fmt::Display for Selector {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        for comp in self.components.iter().rev() {
+            comp.fmt(f)?;
+        }
+        Ok(())
+    }
 }
 
 impl Selector {
@@ -76,30 +105,57 @@ impl Selector {
                 },
                 SelectorComponent::Star => Self::do_matches(&comps[1..], node),
                 SelectorComponent::CombChild => {
-                    if let Some(parent) = node.parent.take() {
-                        let parent_handle = parent.upgrade();
-                        node.parent.set(Some(parent));
-                        if let Some(ph) = parent_handle {
-                            Self::do_matches(&comps[1..], &ph)
-                        } else {
-                            false
-                        }
+                    if let Some(parent) = node.get_parent() {
+                        Self::do_matches(&comps[1..], &parent)
                     } else {
                         false
                     }
                 }
                 SelectorComponent::CombDescendant => {
-                    if let Some(parent) = node.parent.take() {
-                        let parent_handle = parent.upgrade();
-                        node.parent.set(Some(parent));
-                        if let Some(ph) = parent_handle {
-                            Self::do_matches(&comps[1..], &ph) || Self::do_matches(comps, &ph)
-                        } else {
-                            false
-                        }
+                    if let Some(parent) = node.get_parent() {
+                        Self::do_matches(&comps[1..], &parent) || Self::do_matches(comps, &parent)
                     } else {
                         false
                     }
+                }
+                SelectorComponent::NthChild { a, b, sel } => {
+                    let parent = if let Some(parent) = node.get_parent() {
+                        parent
+                    } else {
+                        return false;
+                    };
+                    let mut idx = 0i32;
+                    for child in parent.children.borrow().iter() {
+                        if let Element { .. } = child.data {
+                            if sel.matches(child) {
+                                idx += 1;
+                                if Rc::ptr_eq(child, node) {
+                                    break;
+                                }
+                            } else {
+                                if Rc::ptr_eq(child, node) {
+                                    return false;
+                                }
+                            }
+                        }
+                    }
+                    if idx == 0 {
+                        // The child wasn't found(?)
+                        return false;
+                    }
+                    /* The selector matches if idx == a*n + b, where
+                     * n >= 0
+                     */
+                    let idx_offset = idx - b;
+                    if *a == 0 {
+                        return idx_offset == 0 && Self::do_matches(&comps[1..], &node);
+                    }
+                    if (idx_offset % a) != 0 {
+                        // Not a multiple
+                        return false;
+                    }
+                    let n = idx_offset / a;
+                    n >= 0 && Self::do_matches(&comps[1..], &node)
                 }
             },
         }
@@ -124,6 +180,10 @@ impl Selector {
                 SelectorComponent::Star => {}
                 SelectorComponent::CombChild => {}
                 SelectorComponent::CombDescendant => {}
+                SelectorComponent::NthChild { sel, .. } => {
+                    result.class += 1;
+                    result += &sel.specificity();
+                }
             }
         }
 
@@ -131,11 +191,20 @@ impl Selector {
     }
 }
 
+#[derive(Debug, Clone, Copy)]
+pub(crate) enum Display {
+    /// display: none
+    None,
+    #[cfg(feature = "css_ext")]
+    /// Show node as HTML DOM
+    ExtRawDom,
+}
+
 #[derive(Debug, Clone)]
 pub(crate) enum Style {
     Colour(Colour),
     BgColour(Colour),
-    DisplayNone,
+    Display(Display),
     WhiteSpace(WhiteSpace),
 }
 
@@ -145,10 +214,39 @@ pub(crate) struct StyleDecl {
     importance: Importance,
 }
 
+impl std::fmt::Display for StyleDecl {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self.style {
+            Style::Colour(col) => write!(f, "color: {}", col)?,
+            Style::BgColour(col) => write!(f, "background-color: {}", col)?,
+            Style::Display(Display::None) => write!(f, "display: none")?,
+            #[cfg(feature = "css_ext")]
+            Style::Display(Display::ExtRawDom) => write!(f, "display: x-raw-dom")?,
+            Style::WhiteSpace(_) => todo!(),
+        }
+        match self.importance {
+            Importance::Default => (),
+            Importance::Important => write!(f, " !important")?,
+        }
+        Ok(())
+    }
+}
+
 #[derive(Debug, Clone)]
 struct Ruleset {
     selector: Selector,
     styles: Vec<StyleDecl>,
+}
+
+impl std::fmt::Display for Ruleset {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        writeln!(f, "  {} {{", self.selector)?;
+        for decl in &self.styles {
+            writeln!(f, "    {}", decl)?;
+        }
+        writeln!(f, "  }}")?;
+        Ok(())
+    }
 }
 
 /// Stylesheet data which can be used while building the render tree.
@@ -226,14 +324,22 @@ fn styles_from_properties(decls: &[parser::Declaration]) -> Vec<StyleDecl> {
                 overflow_hidden = true;
             }
             parser::Decl::Overflow { .. } | parser::Decl::OverflowY { .. } => {}
-            parser::Decl::Display { value } => {
-                if let parser::Display::None = value {
+            parser::Decl::Display { value } => match value {
+                parser::Display::None => {
                     styles.push(StyleDecl {
-                        style: Style::DisplayNone,
+                        style: Style::Display(Display::None),
                         importance: decl.important,
                     });
                 }
-            }
+                #[cfg(feature = "css_ext")]
+                parser::Display::RawDom => {
+                    styles.push(StyleDecl {
+                        style: Style::Display(Display::ExtRawDom),
+                        importance: decl.important,
+                    });
+                }
+                _ => (),
+            },
             parser::Decl::WhiteSpace { value } => {
                 styles.push(StyleDecl {
                     style: Style::WhiteSpace(*value),
@@ -249,7 +355,7 @@ fn styles_from_properties(decls: &[parser::Declaration]) -> Vec<StyleDecl> {
     // If the height is set to zero and overflow hidden, treat as display: none
     if height_zero && overflow_hidden {
         styles.push(StyleDecl {
-            style: Style::DisplayNone,
+            style: Style::Display(Display::None),
             importance: Importance::Default,
         });
     }
@@ -406,11 +512,11 @@ impl StyleData {
                     .bg_colour
                     .maybe_update(important, origin, specificity, col);
             }
-            Style::DisplayNone => {
+            Style::Display(disp) => {
                 // We don't have a "not DisplayNone" - we might need to fix this.
                 result
-                    .display_none
-                    .maybe_update(important, origin, specificity, true);
+                    .display
+                    .maybe_update(important, origin, specificity, disp);
             }
             Style::WhiteSpace(ws) => {
                 result
@@ -418,6 +524,30 @@ impl StyleData {
                     .maybe_update(important, origin, specificity, ws);
             }
         }
+    }
+}
+
+impl std::fmt::Display for StyleData {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if !self.agent_rules.is_empty() {
+            writeln!(f, "Agent rules:")?;
+            for ruleset in &self.agent_rules {
+                ruleset.fmt(f)?;
+            }
+        }
+        if !self.user_rules.is_empty() {
+            writeln!(f, "User rules:")?;
+            for ruleset in &self.user_rules {
+                ruleset.fmt(f)?;
+            }
+        }
+        if !self.author_rules.is_empty() {
+            writeln!(f, "Author rules:")?;
+            for ruleset in &self.author_rules {
+                ruleset.fmt(f)?;
+            }
+        }
+        Ok(())
     }
 }
 

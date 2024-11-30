@@ -47,6 +47,7 @@ use std::io;
 use std::mem;
 use std::rc::{Rc, Weak};
 
+use html5ever::interface::ElemName;
 use tendril::StrTendril;
 
 use markup5ever::interface::tree_builder;
@@ -121,6 +122,39 @@ impl Node {
             parent: Cell::new(None),
             children: RefCell::new(Vec::new()),
         })
+    }
+
+    pub fn get_parent(&self) -> Option<Rc<Self>> {
+        if let Some(parent) = self.parent.take() {
+            let parent_handle = parent.upgrade();
+            self.parent.set(Some(parent));
+            parent_handle
+        } else {
+            None
+        }
+    }
+
+    /// Return the nth child element of this node, or None.
+    pub fn nth_child(&self, idx: usize) -> Option<Rc<Self>> {
+        let mut element_idx = 0;
+        for child in self.children.borrow().iter() {
+            if let NodeData::Element { .. } = child.data {
+                element_idx += 1;
+                if element_idx == idx {
+                    return Some(child.clone());
+                }
+            }
+        }
+        None
+    }
+
+    /// Return the element type (if an element)
+    pub fn element_name(&self) -> Option<String> {
+        if let NodeData::Element { ref name, .. } = self.data {
+            Some(format!("{}", &*name.local_name()))
+        } else {
+            None
+        }
     }
 }
 
@@ -249,6 +283,26 @@ impl RcDom {
         let mut s = String::new();
         Self::add_node_to_string(&mut s, &self.document, 0);
         s
+    }
+
+    /// A low-quality debug DOM rendering of an individual node
+    pub fn node_as_dom_string(node: &Handle) -> String {
+        let mut s = String::new();
+        Self::add_node_to_string(&mut s, node, 0);
+        s
+    }
+
+    /// Find the node at a child path starting from the root element.  At each level, 1 is the
+    /// first child element, and only elements are counted.
+    pub fn get_node_by_path(&self, path: &[usize]) -> Option<Handle> {
+        let mut node = self.document.clone();
+        for idx in path {
+            node = match node.nth_child(*idx) {
+                Some(new_node) => new_node,
+                None => return None,
+            };
+        }
+        Some(node)
     }
 }
 

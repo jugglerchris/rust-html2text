@@ -127,6 +127,12 @@ pub struct Colour {
     pub b: u8,
 }
 
+impl std::fmt::Display for Colour {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "#{:02x}{:02x}{:02x}", self.r, self.g, self.b)
+    }
+}
+
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Default, PartialOrd)]
 pub(crate) enum StyleOrigin {
     #[default]
@@ -155,6 +161,28 @@ impl Specificity {
             class: 0,
             typ: 0,
         }
+    }
+}
+
+impl std::ops::Add<&Specificity> for &Specificity {
+    type Output = Specificity;
+
+    fn add(self, rhs: &Specificity) -> Self::Output {
+        Specificity {
+            inline: self.inline || rhs.inline,
+            id: self.id + rhs.id,
+            class: self.class + rhs.class,
+            typ: self.typ + rhs.typ,
+        }
+    }
+}
+
+impl std::ops::AddAssign<&Specificity> for Specificity {
+    fn add_assign(&mut self, rhs: &Specificity) {
+        self.inline = self.inline || rhs.inline;
+        self.id += rhs.id;
+        self.class += rhs.class;
+        self.typ += rhs.typ;
     }
 }
 
@@ -248,7 +276,7 @@ pub(crate) struct ComputedStyle {
     pub(crate) bg_colour: WithSpec<Colour>,
     #[cfg(feature = "css")]
     /// If set, indicates whether `display: none` or something equivalent applies
-    pub(crate) display_none: WithSpec<bool>,
+    pub(crate) display: WithSpec<css::Display>,
     /// The CSS white-space property
     pub(crate) white_space: WithSpec<WhiteSpace>,
 
@@ -808,8 +836,8 @@ impl RenderNode {
             if let Some(col) = style.bg_colour.val() {
                 write!(f, " bg_colour={:?}", col)?;
             }
-            if let Some(val) = style.display_none.val() {
-                write!(f, " disp_none={:?}", val)?;
+            if let Some(val) = style.display.val() {
+                write!(f, " disp={:?}", val)?;
             }
         }
         if let Some(ws) = style.white_space.val() {
@@ -1343,6 +1371,15 @@ fn dom_to_render_tree_with_context<T: Write>(
     result
 }
 
+#[cfg(feature = "css")]
+/// Return a string representation of the CSS rules parsed from
+/// the DOM document.
+pub fn dom_to_parsed_style(dom: &RcDom) -> Result<String> {
+    let handle = dom.document.clone();
+    let doc_style_data = css::dom_to_stylesheet(handle, &mut std::io::sink())?;
+    Ok(doc_style_data.to_string())
+}
+
 fn pending<F>(
     input: RenderInput,
     f: F,
@@ -1479,8 +1516,25 @@ fn process_dom_node<T: Write>(
                     context
                         .style_data
                         .computed_style(**parent_style, handle, context.use_doc_css);
-                if let Some(true) = computed.display_none.val() {
-                    return Ok(Nothing);
+                match computed.display.val() {
+                    Some(css::Display::None) => return Ok(Nothing),
+                    #[cfg(feature = "css_ext")]
+                    Some(css::Display::ExtRawDom) => {
+                        let result_text = RcDom::node_as_dom_string(handle);
+                        let mut computed = computed;
+                        computed.white_space.maybe_update(
+                            false,
+                            StyleOrigin::Agent,
+                            Default::default(),
+                            WhiteSpace::Pre,
+                        );
+                        let text = RenderNode::new(RenderNodeInfo::Text(result_text));
+                        return Ok(Finished(RenderNode::new_styled(
+                            RenderNodeInfo::Block(vec![text]),
+                            computed,
+                        )));
+                    }
+                    _ => (),
                 }
                 computed
             };

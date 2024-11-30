@@ -28,6 +28,7 @@ html_trace = ["dep:log"]
 html_trace_bt = ["html_trace", "dep:backtrace"]
 default = []
 css = []
+css_ext = ["css"]
 
 [[example]]
 name = "html2term"
