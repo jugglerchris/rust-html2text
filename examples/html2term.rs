@@ -4,7 +4,9 @@ extern crate argparse;
 extern crate unicode_width;
 #[cfg(unix)]
 mod top {
-    use argparse::{ArgumentParser, Store, StoreFalse};
+    use argparse::{ArgumentParser, Store};
+    #[cfg(feature = "css")]
+    use argparse::StoreFalse;
     use html2text::render::{RichAnnotation, TaggedLine, TaggedLineElement};
     use std::collections::HashMap;
     use std::io::{self, Write};
@@ -139,6 +141,7 @@ mod top {
 
     pub fn main() {
         let mut filename = String::new();
+        #[allow(unused_mut)]
         let mut options = Options::new();
         {
             let mut ap = ArgumentParser::new();
@@ -335,6 +338,7 @@ mod top {
                             }
                         }
                     }
+                    #[cfg(feature = "css_ext")]
                     Key::Char('I') => {
                         // Enter/leave inspect mode
                         if inspect_path.is_empty() {
@@ -354,6 +358,7 @@ mod top {
         dom: &html2text::RcDom,
         inspect_path: &[usize],
         width: usize,
+        #[allow(unused)]
         options: &Options,
     ) -> Vec<TaggedLine<Vec<RichAnnotation>>> {
         let config = html2text::config::rich();
@@ -380,30 +385,35 @@ mod top {
                 .render_to_lines(render_tree, width)
                 .expect("Failed to render")
         } else {
-            let mut path_selector = String::new();
-            for &idx in &inspect_path[1..] {
-                path_selector.push_str(&format!(" > :nth-child({})", idx));
-            }
-            let config = config
-                .add_agent_css(
-                    &(format!(
-                        r#"
+            #[cfg(feature = "css_ext")]
+            {
+                let mut path_selector = String::new();
+                for &idx in &inspect_path[1..] {
+                    path_selector.push_str(&format!(" > :nth-child({})", idx));
+                }
+                let config = config
+                    .add_agent_css(
+                        &(format!(
+                                r#"
                     html {} {{
                         color: white !important;
                         background-color: black !important;
                         display: x-raw-dom;
                     }}
                 "#,
-                        path_selector
-                    )),
-                )
-                .expect("Invalid CSS");
-            let render_tree = config
-                .dom_to_render_tree(&dom)
-                .expect("Failed to build render tree");
-            config
-                .render_to_lines(render_tree, width)
-                .expect("Failed to render")
+                path_selector
+                        )),
+                    )
+                    .expect("Invalid CSS");
+                let render_tree = config
+                    .dom_to_render_tree(&dom)
+                    .expect("Failed to build render tree");
+                config
+                    .render_to_lines(render_tree, width)
+                    .expect("Failed to render")
+            }
+            #[cfg(not(feature = "css_ext"))]
+            unreachable!()
         }
     }
 }

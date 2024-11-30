@@ -64,7 +64,6 @@ mod macros;
 pub mod css;
 pub mod render;
 
-use css::Display;
 use render::text_renderer::{
     RenderLine, RenderOptions, RichAnnotation, SubRenderer, TaggedLine, TextRenderer,
 };
@@ -1518,9 +1517,9 @@ fn process_dom_node<T: Write>(
                         .style_data
                         .computed_style(**parent_style, handle, context.use_doc_css);
                 match computed.display.val() {
-                    Some(Display::None) => return Ok(Nothing),
+                    Some(css::Display::None) => return Ok(Nothing),
                     #[cfg(feature = "css_ext")]
-                    Some(Display::ExtRawDom) => {
+                    Some(css::Display::ExtRawDom) => {
                         let result_text = RcDom::node_as_dom_string(handle);
                         let mut computed = computed;
                         computed.white_space.maybe_update(

@@ -253,6 +253,7 @@ fn main() {
             StoreTrue,
             "Show the computed render tree instead of the rendered output",
         );
+        #[cfg(feature = "css")]
         ap.refer(&mut flags.show_css).add_option(
             &["--show-css"],
             StoreTrue,
