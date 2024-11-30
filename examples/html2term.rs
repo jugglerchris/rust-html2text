@@ -4,7 +4,7 @@ extern crate argparse;
 extern crate unicode_width;
 #[cfg(unix)]
 mod top {
-    use argparse::{ArgumentParser, Store};
+    use argparse::{ArgumentParser, Store, StoreFalse};
     use html2text::render::{RichAnnotation, TaggedLine, TaggedLineElement};
     use std::collections::HashMap;
     use std::io::{self, Write};
@@ -16,6 +16,7 @@ mod top {
     use unicode_width::UnicodeWidthStr;
 
     fn to_style(tag: &[RichAnnotation]) -> String {
+        use termion::color::*;
         let mut style = String::new();
 
         for ann in tag {
@@ -27,40 +28,45 @@ mod top {
                 RichAnnotation::Image(_) => {
                     style.push_str(&format!(
                         "{}",
-                        termion::color::Fg(termion::color::LightBlue)
+                        Fg(LightBlue)
                     ));
                 }
                 RichAnnotation::Emphasis => {
                     style.push_str(&format!(
                         "{}",
-                        termion::color::Fg(termion::color::LightGreen)
+                        Fg(LightGreen)
                     ));
                 }
                 RichAnnotation::Strong => {
                     style.push_str(&format!(
                         "{}",
-                        termion::color::Fg(termion::color::LightGreen)
+                        Fg(LightGreen)
                     ));
                 }
                 RichAnnotation::Strikeout => (),
                 RichAnnotation::Code => {
                     style.push_str(&format!(
                         "{}",
-                        termion::color::Fg(termion::color::LightYellow)
+                        Fg(LightYellow)
                     ));
                 }
                 RichAnnotation::Preformat(is_cont) => {
                     if is_cont {
                         style.push_str(&format!(
                             "{}",
-                            termion::color::Fg(termion::color::LightMagenta)
+                            Fg(LightMagenta)
                         ));
                     } else {
-                        style.push_str(&format!("{}", termion::color::Fg(termion::color::Magenta)));
+                        style.push_str(&format!("{}", Fg(Magenta)));
                     }
                 }
-                // Ignore unhandled annotations
-                _ => {}
+                RichAnnotation::Colour(col) => {
+                    style.push_str(&format!("{}", Fg(Rgb(col.r, col.g, col.b))));
+                }
+                RichAnnotation::BgColour(col) => {
+                    style.push_str(&format!("{}", Bg(Rgb(col.r, col.g, col.b))));
+                }
+                _ => todo!(),
             }
         }
         style
@@ -132,12 +138,30 @@ mod top {
         FragMap { start_xy: map }
     }
 
+    struct Options {
+        #[cfg(feature = "css")]
+        use_css: bool,
+    }
+
+    impl Options {
+        fn new() -> Options {
+            Options {
+                #[cfg(feature = "css")]
+                use_css: true,
+            }
+        }
+    }
+
     pub fn main() {
         let mut filename = String::new();
+        let mut options = Options::new();
         {
             let mut ap = ArgumentParser::new();
             ap.refer(&mut filename)
                 .add_argument("filename", Store, "Set HTML filename");
+            #[cfg(feature = "css")]
+            ap.refer(&mut options.use_css)
+                .add_option(&["--no-css"], StoreFalse, "Disable CSS");
             ap.parse_args_or_exit();
         }
 
@@ -145,16 +169,11 @@ mod top {
         let (width, height) = (width as usize, height as usize);
 
         let mut file = std::fs::File::open(filename).expect("Tried to open file");
-        let annotated =
-            html2text::from_read_rich(&mut file, width).expect("Failed to convert from HTML");
 
-        let link_map = find_links(&annotated);
-        let frag_map = find_frags(&annotated);
+        let dom = html2text::config::plain().parse_html(&mut file).expect("Failed to parse HTML");
 
         let mut keys = io::stdin().keys();
 
-        // max_y is the largest (0-based) index of a real document line.
-        let max_y = annotated.len() - 1;
         // top_y is the (0-based) index of the document line shown at
         // the top of the visible screen.
         let mut top_y = 0;
@@ -169,7 +188,17 @@ mod top {
             .into_alternate_screen()
             .unwrap();
 
+        let mut annotated = rerender(&dom, &[], width, &options);
+
+        let link_map = find_links(&annotated);
+        let frag_map = find_frags(&annotated);
+
+        let mut inspect_path = vec![];
+
         loop {
+            // max_y is the largest (0-based) index of a real document line.
+            let max_y = annotated.len() - 1;
+
             // Sanity-check the current screen position. max_y should
             // be small enough that no blank lines beyond the end of
             // the document are visible on screen (except when the
@@ -186,7 +215,10 @@ mod top {
             top_y = std::cmp::min(top_y, doc_y);
 
             let opt_url = link_map.link_at(doc_x, doc_y);
-            let vis_y_limit = std::cmp::min(top_y + height, max_y + 1);
+            let mut vis_y_limit = std::cmp::min(top_y + height, max_y + 1);
+            if !inspect_path.is_empty() {
+                vis_y_limit -= 1;
+            }
             write!(screen, "{}", termion::clear::All).unwrap();
             for (i, line) in annotated[top_y..vis_y_limit].iter().enumerate() {
                 write!(screen, "{}", Goto(1, i as u16 + 1)).unwrap();
@@ -202,6 +234,20 @@ mod top {
                     write!(screen, "{}{}{}", style, ts.s, termion::style::Reset).unwrap();
                 }
             }
+            if !inspect_path.is_empty() {
+                let mut pth = String::from("top ");
+                let mut node = dom.document.clone();
+
+                let mut l=1;
+                for &idx in &inspect_path {
+                    node = node.nth_child(idx).unwrap();
+                    pth.push_str(&format!("> {}", node.element_name().unwrap()));
+
+                    pth.push_str(&format!("[{}]", dom.get_node_by_path(&inspect_path[..l]).unwrap().element_name().unwrap()));
+                    l += 1;
+                }
+                write!(screen, "{}{}{:?}", Goto(1, vis_y_limit as u16), pth, &inspect_path).unwrap();
+            }
 
             // 1-based screen coordinates
             let cursor_x = (doc_x + 1) as u16;
@@ -213,19 +259,52 @@ mod top {
                 match k {
                     Key::Char('q') => break,
                     Key::Char('j') | Key::Down => {
-                        if doc_y < max_y {
-                            doc_y += 1;
+                        if inspect_path.is_empty() {
+                            if doc_y < max_y {
+                                doc_y += 1;
+                            }
+                        } else {
+                            *inspect_path.last_mut().unwrap() += 1;
+                            if dom.get_node_by_path(&inspect_path).is_none() {
+                                // No next node - undo.
+                                *inspect_path.last_mut().unwrap() -= 1;
+                            } else {
+                                annotated = rerender(&dom, &inspect_path, width, &options);
+                            }
                         }
                     }
                     Key::Char('k') | Key::Up => {
-                        doc_y = doc_y.saturating_sub(1);
+                        if inspect_path.is_empty() {
+                            doc_y = doc_y.saturating_sub(1);
+                        } else {
+                            if *inspect_path.last().unwrap() > 1 {
+                                *inspect_path.last_mut().unwrap() -= 1;
+                                annotated = rerender(&dom, &inspect_path, width, &options);
+                            }
+                        }
                     }
                     Key::Char('h') | Key::Left => {
-                        doc_x = doc_x.saturating_sub(1);
+                        if inspect_path.is_empty() {
+                            doc_x = doc_x.saturating_sub(1);
+                        } else {
+                            if inspect_path.len() > 1 {
+                                inspect_path.pop();
+                                annotated = rerender(&dom, &inspect_path, width, &options);
+                            }
+                        }
                     }
                     Key::Char('l') | Key::Right => {
-                        if doc_x + 1 < width {
-                            doc_x += 1;
+                        if inspect_path.is_empty() {
+                            if doc_x + 1 < width {
+                                doc_x += 1;
+                            }
+                        } else {
+                            inspect_path.push(1);
+                            if dom.get_node_by_path(&inspect_path).is_none() {
+                                inspect_path.pop();
+                            } else {
+                                annotated = rerender(&dom, &inspect_path, width, &options);
+                            }
                         }
                     }
                     Key::Char(' ') | Key::PageDown => {
@@ -266,9 +345,52 @@ mod top {
                             }
                         }
                     }
+                    Key::Char('I') => {
+                        // Enter/leave inspect mode
+                        if inspect_path.is_empty() {
+                            inspect_path.push(1);
+                        } else {
+                            inspect_path.clear();
+                        }
+                        annotated = rerender(&dom, &inspect_path, width, &options);
+                    }
                     _ => {}
                 }
             }
+        }
+    }
+
+    fn rerender(dom: &html2text::RcDom, inspect_path: &[usize], width: usize, options: &Options) -> Vec<TaggedLine<Vec<RichAnnotation>>> {
+        let config = html2text::config::rich();
+        #[cfg(feature = "css")]
+        let config = if options.use_css {
+            config.use_doc_css()
+                .add_agent_css(r#"
+                    img {
+                        color: #77f;
+                    }
+                "#).unwrap()
+        } else {
+            config
+        };
+        if inspect_path.is_empty() {
+            let render_tree = config.dom_to_render_tree(&dom).expect("Failed to build render tree");
+            config.render_to_lines(render_tree, width).expect("Failed to render")
+        } else {
+            let mut path_selector = String::new();
+            for &idx in &inspect_path[1..] {
+                path_selector.push_str(&format!(" > :nth-child({})", idx));
+            }
+            let config = config
+                .add_agent_css(&(format!(r#"
+                    html {} {{
+                        color: white !important;
+                        background-color: black !important;
+                        display: x-raw-dom;
+                    }}
+                "#, path_selector))).expect("Invalid CSS");
+            let render_tree = config.dom_to_render_tree(&dom).expect("Failed to build render tree");
+            config.render_to_lines(render_tree, width).expect("Failed to render")
         }
     }
 }
