@@ -238,13 +238,9 @@ mod top {
                 let mut pth = String::from("top ");
                 let mut node = dom.document.clone();
 
-                let mut l=1;
                 for &idx in &inspect_path {
                     node = node.nth_child(idx).unwrap();
                     pth.push_str(&format!("> {}", node.element_name().unwrap()));
-
-                    pth.push_str(&format!("[{}]", dom.get_node_by_path(&inspect_path[..l]).unwrap().element_name().unwrap()));
-                    l += 1;
                 }
                 write!(screen, "{}{}{:?}", Goto(1, vis_y_limit as u16), pth, &inspect_path).unwrap();
             }
