@@ -167,11 +167,20 @@ impl Selector {
     }
 }
 
+#[derive(Debug, Clone, Copy)]
+pub(crate) enum Display {
+    /// display: none
+    None,
+    #[cfg(feature = "css_ext")]
+    /// Show node as HTML DOM
+    ExtRawDom,
+}
+
 #[derive(Debug, Clone)]
 pub(crate) enum Style {
     Colour(Colour),
     BgColour(Colour),
-    DisplayNone,
+    Display(Display),
     WhiteSpace(WhiteSpace),
 }
 
@@ -263,11 +272,21 @@ fn styles_from_properties(decls: &[parser::Declaration]) -> Vec<StyleDecl> {
             }
             parser::Decl::Overflow { .. } | parser::Decl::OverflowY { .. } => {}
             parser::Decl::Display { value } => {
-                if let parser::Display::None = value {
-                    styles.push(StyleDecl {
-                        style: Style::DisplayNone,
-                        importance: decl.important,
-                    });
+                match value {
+                    parser::Display::None => {
+                        styles.push(StyleDecl {
+                            style: Style::Display(Display::None),
+                            importance: decl.important,
+                        });
+                    }
+                    #[cfg(feature = "css_ext")]
+                    parser::Display::RawDom => {
+                        styles.push(StyleDecl {
+                            style: Style::Display(Display::ExtRawDom),
+                            importance: decl.important,
+                        });
+                    }
+                    _ => (),
                 }
             }
             parser::Decl::WhiteSpace { value } => {
@@ -285,7 +304,7 @@ fn styles_from_properties(decls: &[parser::Declaration]) -> Vec<StyleDecl> {
     // If the height is set to zero and overflow hidden, treat as display: none
     if height_zero && overflow_hidden {
         styles.push(StyleDecl {
-            style: Style::DisplayNone,
+            style: Style::Display(Display::None),
             importance: Importance::Default,
         });
     }
@@ -442,11 +461,11 @@ impl StyleData {
                     .bg_colour
                     .maybe_update(important, origin, specificity, col);
             }
-            Style::DisplayNone => {
+            Style::Display(disp) => {
                 // We don't have a "not DisplayNone" - we might need to fix this.
                 result
-                    .display_none
-                    .maybe_update(important, origin, specificity, true);
+                    .display
+                    .maybe_update(important, origin, specificity, disp);
             }
             Style::WhiteSpace(ws) => {
                 result

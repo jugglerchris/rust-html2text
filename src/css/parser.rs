@@ -61,6 +61,8 @@ pub(crate) enum Overflow {
 pub(crate) enum Display {
     None,
     Other,
+    #[cfg(feature = "css_ext")]
+    RawDom,
 }
 
 #[derive(Debug, PartialEq)]
@@ -715,6 +717,8 @@ fn parse_display(value: &RawValue) -> Result<Display, nom::Err<nom::error::Error
             #[allow(clippy::single_match)]
             match word.deref() {
                 "none" => return Ok(Display::None),
+                #[cfg(feature = "css_ext")]
+                "x-raw-dom" => return Ok(Display::RawDom),
                 _ => (),
             }
         }

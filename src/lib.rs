@@ -64,6 +64,7 @@ mod macros;
 pub mod css;
 pub mod render;
 
+use css::Display;
 use render::text_renderer::{
     RenderLine, RenderOptions, RichAnnotation, SubRenderer, TaggedLine, TextRenderer,
 };
@@ -270,7 +271,7 @@ pub(crate) struct ComputedStyle {
     pub(crate) bg_colour: WithSpec<Colour>,
     #[cfg(feature = "css")]
     /// If set, indicates whether `display: none` or something equivalent applies
-    pub(crate) display_none: WithSpec<bool>,
+    pub(crate) display: WithSpec<css::Display>,
     /// The CSS white-space property
     pub(crate) white_space: WithSpec<WhiteSpace>,
 
@@ -830,8 +831,8 @@ impl RenderNode {
             if let Some(col) = style.bg_colour.val() {
                 write!(f, " bg_colour={:?}", col)?;
             }
-            if let Some(val) = style.display_none.val() {
-                write!(f, " disp_none={:?}", val)?;
+            if let Some(val) = style.display.val() {
+                write!(f, " disp={:?}", val)?;
             }
         }
         if let Some(ws) = style.white_space.val() {
@@ -1501,8 +1502,22 @@ fn process_dom_node<T: Write>(
                     context
                         .style_data
                         .computed_style(**parent_style, handle, context.use_doc_css);
-                if let Some(true) = computed.display_none.val() {
-                    return Ok(Nothing);
+                match computed.display.val() {
+                    Some(Display::None) => return Ok(Nothing),
+                    #[cfg(feature = "css_ext")]
+                    Some(Display::ExtRawDom) => {
+                        let result_text = RcDom::node_as_dom_string(handle);
+                        let mut computed = computed;
+                        computed.white_space.maybe_update(
+                            false,
+                            StyleOrigin::Agent,
+                            Default::default(),
+                            WhiteSpace::Pre,
+                        );
+                        let text = RenderNode::new(RenderNodeInfo::Text(result_text));
+                        return Ok(Finished(RenderNode::new_styled(RenderNodeInfo::Block(vec![text]), computed)));
+                    }
+                    _ => (),
                 }
                 computed
             };

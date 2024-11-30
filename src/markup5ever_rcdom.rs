@@ -284,6 +284,26 @@ impl RcDom {
         Self::add_node_to_string(&mut s, &self.document, 0);
         s
     }
+
+    /// A low-quality debug DOM rendering of an individual node
+    pub fn node_as_dom_string(node: &Handle) -> String {
+        let mut s = String::new();
+        Self::add_node_to_string(&mut s, node, 0);
+        s
+    }
+
+    /// Find the node at a child path starting from the root element.  At each level, 1 is the
+    /// first child element, and only elements are counted.
+    pub fn get_node_by_path(&self, path: &[usize]) -> Option<Handle> {
+        let mut node = self.document.clone();
+        for idx in path {
+            node = match node.nth_child(*idx) {
+                Some(new_node) => new_node,
+                None => return None,
+            };
+        }
+        Some(node)
+    }
 }
 
 impl TreeSink for RcDom {
