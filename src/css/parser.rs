@@ -933,8 +933,94 @@ fn parse_ruleset(text: &str) -> IResult<&str, RuleSet> {
     ))
 }
 
+fn skip_to_end_of_statement(text: &str) -> IResult<&str, ()> {
+    let mut rest = text;
+
+    let mut bra_stack = vec![];
+    loop {
+        let (remain, tok) = match parse_token(rest) {
+            Ok(res) => res,
+            Err(_) => return Ok((rest, ())),
+        };
+        match &tok {
+            Token::Ident(..) |
+            Token::AtKeyword(_) |
+            Token::Hash(_) |
+            Token::String(_) |
+            Token::BadString(_) |
+            Token::Url(_) |
+            Token::BadUrl(_) |
+            Token::Delim(_) |
+            Token::Number(_) |
+            Token::Dimension(_, _) |
+            Token::Percentage(_) |
+            Token::Colon |
+            Token::Comma => (),
+
+            Token::Function(_) |
+            Token::OpenRound => {
+                bra_stack.push(Token::CloseRound);
+            }
+            Token::CDO => {
+                bra_stack.push(Token::CDC);
+            }
+            Token::OpenSquare => {
+                bra_stack.push(Token::CloseSquare);
+            }
+            Token::OpenBrace => {
+                bra_stack.push(Token::CloseBrace);
+            }
+            Token::Semicolon => {
+                if bra_stack.is_empty() {
+                    return Ok((remain, ()));
+                }
+            }
+            Token::CloseBrace if bra_stack.is_empty() => {
+                // The stack is empty, so don't include the closing brace.
+                return Ok((rest, ()));
+            }
+            // Standard closing brackets
+            Token::CDC |
+            Token::CloseSquare |
+            Token::CloseRound |
+            Token::CloseBrace => {
+                if bra_stack.last() == Some(&tok) {
+                    bra_stack.pop();
+
+                    if tok == Token::CloseBrace && bra_stack.is_empty() {
+                        // The rule lasted until the end of the next block;
+                        // eat this closing brace.
+                        return Ok((remain, ()));
+                    }
+                } else {
+                    // Unbalanced brackets
+                    return fail(rest);
+                }
+            }
+        }
+        rest = remain;
+    }
+}
+
+fn parse_at_rule(text: &str) -> IResult<&str, ()> {
+    let (rest, _) = tuple((
+            skip_optional_whitespace,
+            tag("@"),
+            skip_optional_whitespace,
+            parse_ident))(text)?;
+
+    skip_to_end_of_statement(rest)
+}
+
+fn parse_statement(text: &str) -> IResult<&str, Option<RuleSet>> {
+    alt((
+        map(parse_ruleset, Some),
+        map(parse_at_rule, |_| None)))(text)
+}
+
 pub(crate) fn parse_stylesheet(text: &str) -> IResult<&str, Vec<RuleSet>> {
-    many0(parse_ruleset)(text)
+    let (rest, items) = many0(parse_statement)(text)?;
+    Ok((rest, items.into_iter().flatten().collect()))
 }
 
 #[cfg(test)]
@@ -1072,6 +1158,56 @@ mod test {
         assert_eq!(
             super::parse_stylesheet(
                 "
+            .foo {
+                color: #112233;
+                background-color: #332211 !important;
+            }
+            "
+            ),
+            Ok((
+                "",
+                vec![RuleSet {
+                    selectors: vec![Selector {
+                        components: vec![SelectorComponent::Class("foo".into()),],
+                    },],
+                    declarations: vec![
+                        Declaration {
+                            data: Decl::Color {
+                                value: Colour::Rgb(0x11, 0x22, 0x33)
+                            },
+                            important: Importance::Default,
+                        },
+                        Declaration {
+                            data: Decl::BackgroundColor {
+                                value: Colour::Rgb(0x33, 0x22, 0x11)
+                            },
+                            important: Importance::Important,
+                        },
+                    ],
+                }]
+            ))
+        );
+    }
+
+    #[test]
+    fn test_parse_at_rules() {
+        assert_eq!(
+            super::parse_stylesheet(
+                "
+            @media paper {
+            }
+
+            @blah asldfkjasfda;
+
+            @nested { lkasjfd alkdsjfa sldkfjas ( alksjdasfd ) [ alskdjfalskdf] }
+
+            @keyframes foo {
+                0% { transform: translateY(0); }
+               50% { opacity:0.8; }
+              100% { }
+            }
+
+
             .foo {
                 color: #112233;
                 background-color: #332211 !important;
