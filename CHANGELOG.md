@@ -11,6 +11,17 @@ Possible log types:
 
 ### Latest
 
+### 0.13.5
+
+- [added] CSS support for `:nth-child()` (not yet with the `of foo`).
+- [added] Non-standard `display: x-raw-dom` for debugging (with `css_ext`
+  feature flag).
+- [fixed] An issue which could (apparently rarely) miss out some output depending on wrapping
+- [fixed] CSS parsing stopped when it hit an at-rule.
+- [added] Add `--show-css` option to `html2text` example for debugging what rules were parsed.
+- [added] Add poor-man's inspect mode to `html2term` - `I` to enable/disable, and arrows to navigate
+  around the DOM.  Implemented using `:nth-child` and `x-raw-dom`.
+
 ### 0.13.4
 
 - [fixed] Fix a debug assertion from a double-counted length increment
