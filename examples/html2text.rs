@@ -13,6 +13,7 @@ fn default_colour_map(
     s: &str,
     use_css_colours: bool,
     no_default_colours: bool,
+    hyperlinks: bool,
 ) -> String {
     use yansi::{hyperlink::HyperlinkExt, Paint};
     use RichAnnotation::*;
@@ -23,14 +24,20 @@ fn default_colour_map(
     for annotation in annotations.iter() {
         styled = match annotation {
             Default => styled,
-            Link(url) => styled.link(url).blue().underline().to_string(),
+            Link(url) => {
+                if hyperlinks {
+                    styled.link(url).blue().underline().to_string()
+                } else if !have_explicit_colour {
+                    styled.blue().underline().to_string()
+                } else {
+                    styled
+                }
+            }
             Image(img) => {
-                if !have_explicit_colour {
-                    format!(
-                        "{} {}",
-                        styled.yellow().italic(),
-                        "img".underline().blue().link(img)
-                    )
+                if hyperlinks {
+                    styled.underline().blue().italic().link(img).to_string()
+                } else if !have_explicit_colour {
+                    styled.yellow().italic().to_string()
                 } else {
                     styled
                 }
@@ -116,7 +123,7 @@ where
             let use_only_css = false;
             return conf
                 .coloured(input, flags.width, move |anns, s| {
-                    default_colour_map(anns, s, use_css_colours, use_only_css)
+                    default_colour_map(anns, s, use_css_colours, use_only_css, flags.hyperlinks)
                 })
                 .unwrap();
         }
@@ -168,6 +175,7 @@ struct Flags {
     show_render: bool,
     #[cfg(feature = "css")]
     show_css: bool,
+    hyperlinks: bool,
 }
 
 fn main() {
@@ -190,6 +198,7 @@ fn main() {
         show_render: false,
         #[cfg(feature = "css")]
         show_css: false,
+        hyperlinks: false,
     };
     let mut literal: bool = false;
 
@@ -252,6 +261,11 @@ fn main() {
             &["--show-css"],
             StoreTrue,
             "Show the parsed CSS instead of rendered output",
+        );
+        ap.refer(&mut flags.hyperlinks).add_option(
+            &["--hyperlinks"],
+            StoreTrue,
+            "Show clickable, proper hyperlinks",
         );
         ap.parse_args_or_exit();
     }
