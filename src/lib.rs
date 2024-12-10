@@ -67,7 +67,7 @@ pub mod render;
 use render::text_renderer::{
     RenderLine, RenderOptions, RichAnnotation, SubRenderer, TaggedLine, TextRenderer,
 };
-use render::{Renderer, RichDecorator, TextDecorator};
+use render::{Renderer, TextDecorator};
 
 use html5ever::driver::ParseOpts;
 use html5ever::parse_document;
@@ -2371,12 +2371,8 @@ pub mod config {
             }
         }
         /// Parse with context.
-        fn do_parse<R: io::Read>(
-            &mut self,
-            context: &mut HtmlContext,
-            input: R,
-        ) -> Result<RenderTree> {
-            super::parse_with_context(input, context)
+        fn do_parse<R: io::Read>(&self, input: R) -> Result<RenderTree> {
+            super::parse_with_context(input, &mut self.make_context())
         }
 
         /// Parse the HTML into a DOM structure.
@@ -2438,14 +2434,10 @@ pub mod config {
 
         /// Reads HTML from `input`, and returns a `String` with text wrapped to
         /// `width` columns.
-        pub fn string_from_read<R: std::io::Read>(
-            mut self,
-            input: R,
-            width: usize,
-        ) -> Result<String> {
+        pub fn string_from_read<R: std::io::Read>(self, input: R, width: usize) -> Result<String> {
             let mut context = self.make_context();
             let s = self
-                .do_parse(&mut context, input)?
+                .do_parse(input)?
                 .render_with_context(&mut context, width, self.decorator)?
                 .into_string()?;
             Ok(s)
@@ -2456,12 +2448,12 @@ pub mod config {
         /// of the provided text decorator's `Annotation`.  The "outer" annotation comes first in
         /// the `Vec`.
         pub fn lines_from_read<R: std::io::Read>(
-            mut self,
+            self,
             input: R,
             width: usize,
         ) -> Result<Vec<TaggedLine<Vec<D::Annotation>>>> {
             let mut context = self.make_context();
-            self.do_parse(&mut context, input)?
+            self.do_parse(input)?
                 .render_with_context(&mut context, width, self.decorator)?
                 .into_lines()
         }
@@ -2548,19 +2540,14 @@ pub mod config {
         /// a list of `RichAnnotation` and some text, and returns the text
         /// with any terminal escapes desired to indicate those annotations
         /// (such as colour).
-        pub fn coloured<R, FMap>(
-            mut self,
-            input: R,
-            width: usize,
-            colour_map: FMap,
-        ) -> Result<String>
+        pub fn coloured<R, FMap>(self, input: R, width: usize, colour_map: FMap) -> Result<String>
         where
             R: std::io::Read,
             FMap: Fn(&[RichAnnotation], &str) -> String,
         {
             let mut context = self.make_context();
             let lines = self
-                .do_parse(&mut context, input)?
+                .do_parse(input)?
                 .render_with_context(&mut context, width, self.decorator)?
                 .into_lines()?;
 
