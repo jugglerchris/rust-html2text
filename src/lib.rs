@@ -2601,38 +2601,12 @@ pub mod config {
 
     /// Return a Config initialized with a `RichDecorator`.
     pub fn rich() -> Config<RichDecorator> {
-        Config {
-            decorator: RichDecorator::new(),
-            #[cfg(feature = "css")]
-            style: Default::default(),
-            #[cfg(feature = "css")]
-            use_doc_css: false,
-            max_wrap_width: None,
-            pad_block_width: false,
-            allow_width_overflow: false,
-            min_wrap_width: MIN_WIDTH,
-            raw: false,
-            draw_borders: true,
-            wrap_links: true,
-        }
+        with_decorator(RichDecorator::new())
     }
 
     /// Return a Config initialized with a `PlainDecorator`.
     pub fn plain() -> Config<PlainDecorator> {
-        Config {
-            decorator: PlainDecorator::new(),
-            #[cfg(feature = "css")]
-            style: Default::default(),
-            #[cfg(feature = "css")]
-            use_doc_css: false,
-            max_wrap_width: None,
-            pad_block_width: false,
-            allow_width_overflow: false,
-            min_wrap_width: MIN_WIDTH,
-            raw: false,
-            draw_borders: true,
-            wrap_links: true,
-        }
+        with_decorator(PlainDecorator::new())
     }
 
     /// Return a Config initialized with a custom decorator.
