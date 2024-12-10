@@ -132,10 +132,8 @@ impl Selector {
                                 if Rc::ptr_eq(child, node) {
                                     break;
                                 }
-                            } else {
-                                if Rc::ptr_eq(child, node) {
-                                    return false;
-                                }
+                            } else if Rc::ptr_eq(child, node) {
+                                return false;
                             }
                         }
                     }
@@ -148,14 +146,14 @@ impl Selector {
                      */
                     let idx_offset = idx - b;
                     if *a == 0 {
-                        return idx_offset == 0 && Self::do_matches(&comps[1..], &node);
+                        return idx_offset == 0 && Self::do_matches(&comps[1..], node);
                     }
                     if (idx_offset % a) != 0 {
                         // Not a multiple
                         return false;
                     }
                     let n = idx_offset / a;
-                    n >= 0 && Self::do_matches(&comps[1..], &node)
+                    n >= 0 && Self::do_matches(&comps[1..], node)
                 }
             },
         }

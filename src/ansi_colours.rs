@@ -8,6 +8,7 @@ use crate::{parse, RichAnnotation, RichDecorator};
 use std::io;
 
 /// Reads HTML from `input`, and returns text wrapped to `width` columns.
+///
 /// The text is returned as a `Vec<TaggedLine<_>>`; the annotations are vectors
 /// of `RichAnnotation`.  The "outer" annotation comes first in the `Vec`.
 ///

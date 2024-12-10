@@ -846,7 +846,7 @@ impl RenderNode {
         if style.internal_pre {
             write!(f, " internal_pre")?;
         }
-        writeln!(f, "")
+        writeln!(f)
     }
     fn write_self(
         &self,
@@ -858,52 +858,52 @@ impl RenderNode {
         match &self.info {
             RenderNodeInfo::Text(s) => writeln!(f, "{:indent$}{s:?}", "")?,
             RenderNodeInfo::Container(v) => {
-                self.write_container("Container", &v, f, indent)?;
+                self.write_container("Container", v, f, indent)?;
             }
             RenderNodeInfo::Link(targ, v) => {
-                self.write_container(&format!("Link({})", targ), &v, f, indent)?;
+                self.write_container(&format!("Link({})", targ), v, f, indent)?;
             }
             RenderNodeInfo::Em(v) => {
-                self.write_container("Em", &v, f, indent)?;
+                self.write_container("Em", v, f, indent)?;
             }
             RenderNodeInfo::Strong(v) => {
-                self.write_container("Strong", &v, f, indent)?;
+                self.write_container("Strong", v, f, indent)?;
             }
             RenderNodeInfo::Strikeout(v) => {
-                self.write_container("Strikeout", &v, f, indent)?;
+                self.write_container("Strikeout", v, f, indent)?;
             }
             RenderNodeInfo::Code(v) => {
-                self.write_container("Code", &v, f, indent)?;
+                self.write_container("Code", v, f, indent)?;
             }
             RenderNodeInfo::Img(src, title) => {
                 writeln!(f, "{:indent$}Img src={:?} title={:?}:", "", src, title)?;
             }
             RenderNodeInfo::Block(v) => {
-                self.write_container("Block", &v, f, indent)?;
+                self.write_container("Block", v, f, indent)?;
             }
             RenderNodeInfo::Header(depth, v) => {
-                self.write_container(&format!("Header({})", depth), &v, f, indent)?;
+                self.write_container(&format!("Header({})", depth), v, f, indent)?;
             }
             RenderNodeInfo::Div(v) => {
-                self.write_container("Div", &v, f, indent)?;
+                self.write_container("Div", v, f, indent)?;
             }
             RenderNodeInfo::BlockQuote(v) => {
-                self.write_container("BlockQuote", &v, f, indent)?;
+                self.write_container("BlockQuote", v, f, indent)?;
             }
             RenderNodeInfo::Ul(v) => {
-                self.write_container("Ul", &v, f, indent)?;
+                self.write_container("Ul", v, f, indent)?;
             }
             RenderNodeInfo::Ol(start, v) => {
-                self.write_container(&format!("Ol({})", start), &v, f, indent)?;
+                self.write_container(&format!("Ol({})", start), v, f, indent)?;
             }
             RenderNodeInfo::Dl(v) => {
-                self.write_container("Dl", &v, f, indent)?;
+                self.write_container("Dl", v, f, indent)?;
             }
             RenderNodeInfo::Dt(v) => {
-                self.write_container("Dt", &v, f, indent)?;
+                self.write_container("Dt", v, f, indent)?;
             }
             RenderNodeInfo::Dd(v) => {
-                self.write_container("Dd", &v, f, indent)?;
+                self.write_container("Dd", v, f, indent)?;
             }
             RenderNodeInfo::Break => {
                 writeln!(f, "{:indent$}Break", "", indent = indent)?;
@@ -942,10 +942,10 @@ impl RenderNode {
                 writeln!(f, "{:indent$}FragStart({}):", "", frag)?;
             }
             RenderNodeInfo::ListItem(v) => {
-                self.write_container("ListItem", &v, f, indent)?;
+                self.write_container("ListItem", v, f, indent)?;
             }
             RenderNodeInfo::Sup(v) => {
-                self.write_container("Sup", &v, f, indent)?;
+                self.write_container("Sup", v, f, indent)?;
             }
         }
         Ok(())
@@ -2764,6 +2764,7 @@ where
 }
 
 /// Reads HTML from `input`, and returns text wrapped to `width` columns.
+///
 /// The text is returned as a `Vec<TaggedLine<_>>`; the annotations are vectors
 /// of `RichAnnotation`.  The "outer" annotation comes first in the `Vec`.
 pub fn from_read_rich<R>(input: R, width: usize) -> Result<Vec<TaggedLine<Vec<RichAnnotation>>>>

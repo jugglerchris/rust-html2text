@@ -397,13 +397,11 @@ fn parse_faulty_color(
     text: &str,
 ) -> Result<Colour, nom::Err<nom::error::Error<&'static str>>> {
     let text = text.trim();
-    if text.chars().all(|c| c.is_hex_digit()) {
-        if text.len() == 6 {
-            let r = u8::from_str_radix(&text[0..2], 16).unwrap();
-            let g = u8::from_str_radix(&text[2..4], 16).unwrap();
-            let b = u8::from_str_radix(&text[4..6], 16).unwrap();
-            return Ok(Colour::Rgb(r, g, b));
-        }
+    if text.chars().all(|c| c.is_hex_digit()) && text.len() == 6 {
+        let r = u8::from_str_radix(&text[0..2], 16).unwrap();
+        let g = u8::from_str_radix(&text[2..4], 16).unwrap();
+        let b = u8::from_str_radix(&text[4..6], 16).unwrap();
+        return Ok(Colour::Rgb(r, g, b));
     }
     Err(e)
 }
