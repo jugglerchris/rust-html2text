@@ -71,7 +71,6 @@ use render::{Renderer, RichDecorator, TextDecorator};
 
 use html5ever::driver::ParseOpts;
 use html5ever::parse_document;
-use html5ever::tendril::TendrilSink;
 use html5ever::tree_builder::TreeBuilderOpts;
 mod markup5ever_rcdom;
 pub use markup5ever_rcdom::RcDom;
@@ -2722,17 +2721,8 @@ impl<D: TextDecorator> RenderedText<D> {
     }
 }
 
-fn parse_with_context(mut input: impl io::Read, context: &mut HtmlContext) -> Result<RenderTree> {
-    let opts = ParseOpts {
-        tree_builder: TreeBuilderOpts {
-            drop_doctype: true,
-            ..Default::default()
-        },
-        ..Default::default()
-    };
-    let dom = parse_document(RcDom::default(), opts)
-        .from_utf8()
-        .read_from(&mut input)?;
+fn parse_with_context(input: impl io::Read, context: &mut HtmlContext) -> Result<RenderTree> {
+    let dom = config::plain().parse_html(input)?;
     let render_tree =
         dom_to_render_tree_with_context(dom.document.clone(), &mut io::sink(), context)?
             .ok_or(Error::Fail)?;
