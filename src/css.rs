@@ -16,7 +16,7 @@ use crate::{
 
 use self::parser::Importance;
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum SelectorComponent {
     Class(String),
     Element(String),
@@ -46,7 +46,7 @@ impl std::fmt::Display for SelectorComponent {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct Selector {
     // List of components, right first so we match from the leaf.
     components: Vec<SelectorComponent>,
@@ -189,7 +189,7 @@ impl Selector {
     }
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Display {
     /// display: none
     None,
@@ -198,7 +198,7 @@ pub(crate) enum Display {
     ExtRawDom,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum Style {
     Colour(Colour),
     BgColour(Colour),
@@ -206,7 +206,7 @@ pub(crate) enum Style {
     WhiteSpace(WhiteSpace),
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct StyleDecl {
     style: Style,
     importance: Importance,
@@ -230,7 +230,7 @@ impl std::fmt::Display for StyleDecl {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 struct Ruleset {
     selector: Selector,
     styles: Vec<StyleDecl>,
@@ -248,7 +248,7 @@ impl std::fmt::Display for Ruleset {
 }
 
 /// Stylesheet data which can be used while building the render tree.
-#[derive(Clone, Default, Debug)]
+#[derive(Clone, Default, Debug, PartialEq, Eq)]
 pub(crate) struct StyleData {
     agent_rules: Vec<Ruleset>,
     user_rules: Vec<Ruleset>,

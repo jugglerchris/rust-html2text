@@ -88,7 +88,7 @@ use std::io;
 use std::io::Write;
 use std::iter::{once, repeat};
 
-#[derive(Debug, Copy, Clone, Default, PartialEq)]
+#[derive(Debug, Copy, Clone, Default, PartialEq, Eq)]
 pub(crate) enum WhiteSpace {
     #[default]
     Normal,
@@ -1306,7 +1306,7 @@ where
     }
 }
 
-#[derive(Default, Debug)]
+#[derive(Default, Debug, PartialEq, Eq)]
 struct HtmlContext {
     #[cfg(feature = "css")]
     style_data: css::StyleData,
