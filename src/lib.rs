@@ -2435,12 +2435,8 @@ pub mod config {
         /// Reads HTML from `input`, and returns a `String` with text wrapped to
         /// `width` columns.
         pub fn string_from_read<R: std::io::Read>(self, input: R, width: usize) -> Result<String> {
-            let mut context = self.make_context();
-            let s = self
-                .do_parse(input)?
-                .render_with_context(&mut context, width, self.decorator)?
-                .into_string()?;
-            Ok(s)
+            let render_tree = self.do_parse(input)?;
+            self.render_to_string(render_tree, width)
         }
 
         /// Reads HTML from `input`, and returns text wrapped to `width` columns.
@@ -2452,10 +2448,8 @@ pub mod config {
             input: R,
             width: usize,
         ) -> Result<Vec<TaggedLine<Vec<D::Annotation>>>> {
-            let mut context = self.make_context();
-            self.do_parse(input)?
-                .render_with_context(&mut context, width, self.decorator)?
-                .into_lines()
+            let render_tree = self.do_parse(input)?;
+            self.render_to_lines(render_tree, width)
         }
 
         #[cfg(feature = "css")]
@@ -2545,20 +2539,8 @@ pub mod config {
             R: std::io::Read,
             FMap: Fn(&[RichAnnotation], &str) -> String,
         {
-            let mut context = self.make_context();
-            let lines = self
-                .do_parse(input)?
-                .render_with_context(&mut context, width, self.decorator)?
-                .into_lines()?;
-
-            let mut result = String::new();
-            for line in lines {
-                for ts in line.tagged_strings() {
-                    result.push_str(&colour_map(&ts.tag, &ts.s));
-                }
-                result.push('\n');
-            }
-            Ok(result)
+            let render_tree = self.do_parse(input)?;
+            self.render_coloured(render_tree, width, colour_map)
         }
 
         /// Return coloured text from a RenderTree.  `colour_map` is a function which takes a list
