@@ -1306,7 +1306,7 @@ where
     }
 }
 
-#[derive(Default, Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq)]
 struct HtmlContext {
     #[cfg(feature = "css")]
     style_data: css::StyleData,
@@ -2669,7 +2669,8 @@ fn parse_with_context(input: impl io::Read, context: &mut HtmlContext) -> Result
 
 /// Reads and parses HTML from `input` and prepares a render tree.
 pub fn parse(input: impl io::Read) -> Result<RenderTree> {
-    parse_with_context(input, &mut Default::default())
+    let mut context = config::plain().make_context();
+    parse_with_context(input, &mut context)
 }
 
 /// Reads HTML from `input`, decorates it using `decorator`, and
