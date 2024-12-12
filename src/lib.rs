@@ -2636,11 +2636,6 @@ impl RenderTree {
             render_tree_to_string(context, builder, &test_decorator, self.0, &mut io::sink())?;
         Ok(RenderedText(builder))
     }
-
-    /// Render this document using the given `decorator` and wrap it to `width` columns.
-    fn render<D: TextDecorator>(self, width: usize, decorator: D) -> Result<RenderedText<D>> {
-        self.render_with_context(&mut Default::default(), width, decorator)
-    }
 }
 
 /// A rendered HTML document.

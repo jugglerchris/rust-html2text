@@ -1531,11 +1531,8 @@ fn test_finalise() {
     }
 
     assert_eq!(
-        crate::parse("test".as_bytes())
-            .unwrap()
-            .render(80, TestDecorator)
-            .unwrap()
-            .into_lines()
+        config::with_decorator(TestDecorator)
+            .lines_from_read("test".as_bytes(), 80)
             .unwrap(),
         vec![
             TaggedLine::from_string("test".to_owned(), &Vec::new()),
@@ -1935,8 +1932,7 @@ fn test_issue_93_x() {
         104, 100, 100, 107, 105, 60, 120, 98, 255, 255, 255, 0, 60, 255, 127, 46, 60, 113, 127,
     ];
     let _local0 = crate::parse(&data[..]).unwrap();
-    let d1 = TrivialDecorator::new();
-    let _local1 = crate::RenderTree::render(_local0, 1, d1);
+    let _local1 = config::with_decorator(TrivialDecorator::new()).render_to_string(_local0, 1);
 }
 
 #[test]
