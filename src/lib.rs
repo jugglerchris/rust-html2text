@@ -2370,8 +2370,9 @@ pub mod config {
                 wrap_links: self.wrap_links,
             }
         }
-        /// Parse with context.
-        pub(crate) fn do_parse<R: io::Read>(&self, input: R) -> Result<RenderTree> {
+
+        /// Reads and parses HTML from `input` and prepares a render tree.
+        pub fn do_parse<R: io::Read>(&self, input: R) -> Result<RenderTree> {
             let doc = self.parse_html(input)?;
             self.dom_to_render_tree(&doc)
         }
@@ -2658,11 +2659,6 @@ impl<D: TextDecorator> RenderedText<D> {
             .map(RenderLine::into_tagged_line)
             .collect())
     }
-}
-
-/// Reads and parses HTML from `input` and prepares a render tree.
-pub fn parse(input: impl io::Read) -> Result<RenderTree> {
-    config::plain().do_parse(input)
 }
 
 /// Reads HTML from `input`, decorates it using `decorator`, and
