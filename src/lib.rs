@@ -2372,7 +2372,7 @@ pub mod config {
         }
         /// Parse with context.
         pub(crate) fn do_parse<R: io::Read>(&self, input: R) -> Result<RenderTree> {
-            let doc = plain().parse_html(input)?;
+            let doc = self.parse_html(input)?;
             self.dom_to_render_tree(&doc)
         }
 
