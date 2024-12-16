@@ -5,7 +5,7 @@ use crate::{config, Error};
 #[cfg(feature = "css")]
 use super::render::text_renderer::RichDecorator;
 use super::render::text_renderer::{RichAnnotation, TaggedLine, TrivialDecorator};
-use super::{from_read, from_read_with_decorator, parse, TextDecorator};
+use super::{from_read, from_read_with_decorator, TextDecorator};
 
 /// Like assert_eq!(), but prints out the results normally as well
 macro_rules! assert_eq_str {
@@ -1361,33 +1361,32 @@ fn test_s() {
 
 #[test]
 fn test_multi_parse() {
+    let cfg = config::plain();
     let html: &[u8] = b"one two three four five six seven eight nine ten eleven twelve thirteen \
                         fourteen fifteen sixteen seventeen";
-    let tree = parse(html).unwrap();
+    let tree = cfg.do_parse(html).unwrap();
     assert_eq!(
         "one two three four five six seven eight nine ten eleven twelve thirteen fourteen\n\
          fifteen sixteen seventeen\n",
-        config::plain().render_to_string(tree.clone(), 80).unwrap()
+        cfg.render_to_string(tree.clone(), 80).unwrap()
     );
     assert_eq!(
         "one two three four five six seven eight nine ten eleven twelve\n\
          thirteen fourteen fifteen sixteen seventeen\n",
-        config::plain().render_to_string(tree.clone(), 70).unwrap()
+        cfg.render_to_string(tree.clone(), 70).unwrap()
     );
     assert_eq!(
         "one two three four five six seven eight nine ten\n\
          eleven twelve thirteen fourteen fifteen sixteen\n\
          seventeen\n",
-        config::plain().render_to_string(tree.clone(), 50).unwrap()
+        cfg.render_to_string(tree.clone(), 50).unwrap()
     );
 }
 
 #[test]
 fn test_read_rich() {
     let html: &[u8] = b"<strong>bold</strong>";
-    let lines = config::rich()
-        .render_to_lines(parse(html).unwrap(), 80)
-        .unwrap();
+    let lines = config::rich().lines_from_read(html, 80).unwrap();
     let tag = vec![RichAnnotation::Strong];
     let line = TaggedLine::from_string("*bold*".to_owned(), &tag);
     assert_eq!(vec![line], lines);
@@ -1397,7 +1396,7 @@ fn test_read_rich() {
 fn test_read_custom() {
     let html: &[u8] = b"<strong>bold</strong>";
     let lines = config::with_decorator(TrivialDecorator::new())
-        .render_to_lines(parse(html).unwrap(), 80)
+        .lines_from_read(html, 80)
         .unwrap();
     let tag = vec![()];
     let line = TaggedLine::from_string("bold".to_owned(), &tag);
@@ -1409,7 +1408,7 @@ fn test_pre_rich() {
     use RichAnnotation::*;
     assert_eq!(
         config::rich()
-            .render_to_lines(parse(&b"<pre>test</pre>"[..]).unwrap(), 100)
+            .lines_from_read(&b"<pre>test</pre>"[..], 100)
             .unwrap(),
         [TaggedLine::from_string(
             "test".into(),
@@ -1419,7 +1418,7 @@ fn test_pre_rich() {
 
     assert_eq!(
         config::rich()
-            .render_to_lines(crate::parse("<pre>testlong</pre>".as_bytes()).unwrap(), 4)
+            .lines_from_read("<pre>testlong</pre>".as_bytes(), 4)
             .unwrap(),
         [
             TaggedLine::from_string("test".into(), &vec![Preformat(false)]),
@@ -1431,10 +1430,7 @@ fn test_pre_rich() {
     // tags.
     assert_eq!(
         config::rich()
-            .render_to_lines(
-                crate::parse(r#"<p style="white-space: pre">testlong</p>"#.as_bytes()).unwrap(),
-                4
-            )
+            .lines_from_read(r#"<p style="white-space: pre">testlong</p>"#.as_bytes(), 4)
             .unwrap(),
         [
             TaggedLine::from_string("test".into(), &vec![]),
@@ -1531,11 +1527,8 @@ fn test_finalise() {
     }
 
     assert_eq!(
-        crate::parse("test".as_bytes())
-            .unwrap()
-            .render(80, TestDecorator)
-            .unwrap()
-            .into_lines()
+        config::with_decorator(TestDecorator)
+            .lines_from_read("test".as_bytes(), 80)
             .unwrap(),
         vec![
             TaggedLine::from_string("test".to_owned(), &Vec::new()),
@@ -1934,9 +1927,9 @@ fn test_issue_93_x() {
         114, 104, 60, 47, 101, 109, 62, 60, 99, 99, 172, 97, 97, 58, 60, 119, 99, 64, 126, 118,
         104, 100, 100, 107, 105, 60, 120, 98, 255, 255, 255, 0, 60, 255, 127, 46, 60, 113, 127,
     ];
-    let _local0 = crate::parse(&data[..]).unwrap();
-    let d1 = TrivialDecorator::new();
-    let _local1 = crate::RenderTree::render(_local0, 1, d1);
+    let cfg = config::with_decorator(TrivialDecorator::new());
+    let _local0 = cfg.do_parse(&data[..]).unwrap();
+    let _local1 = cfg.render_to_string(_local0, 1);
 }
 
 #[test]

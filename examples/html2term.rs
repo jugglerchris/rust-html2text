@@ -269,21 +269,17 @@ mod top {
                     Key::Char('k') | Key::Up => {
                         if inspect_path.is_empty() {
                             doc_y = doc_y.saturating_sub(1);
-                        } else {
-                            if *inspect_path.last().unwrap() > 1 {
-                                *inspect_path.last_mut().unwrap() -= 1;
-                                annotated = rerender(&dom, &inspect_path, width, &options);
-                            }
+                        } else if *inspect_path.last().unwrap() > 1 {
+                            *inspect_path.last_mut().unwrap() -= 1;
+                            annotated = rerender(&dom, &inspect_path, width, &options);
                         }
                     }
                     Key::Char('h') | Key::Left => {
                         if inspect_path.is_empty() {
                             doc_x = doc_x.saturating_sub(1);
-                        } else {
-                            if inspect_path.len() > 1 {
-                                inspect_path.pop();
-                                annotated = rerender(&dom, &inspect_path, width, &options);
-                            }
+                        } else if inspect_path.len() > 1 {
+                            inspect_path.pop();
+                            annotated = rerender(&dom, &inspect_path, width, &options);
                         }
                     }
                     Key::Char('l') | Key::Right => {
@@ -378,7 +374,7 @@ mod top {
         };
         if inspect_path.is_empty() {
             let render_tree = config
-                .dom_to_render_tree(&dom)
+                .dom_to_render_tree(dom)
                 .expect("Failed to build render tree");
             config
                 .render_to_lines(render_tree, width)
@@ -405,7 +401,7 @@ mod top {
                     )
                     .expect("Invalid CSS");
                 let render_tree = config
-                    .dom_to_render_tree(&dom)
+                    .dom_to_render_tree(dom)
                     .expect("Failed to build render tree");
                 config
                     .render_to_lines(render_tree, width)
