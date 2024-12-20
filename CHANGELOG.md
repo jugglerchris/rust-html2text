@@ -11,6 +11,11 @@ Possible log types:
 
 ### Latest
 
+### 0.13.6
+
+- [fixed] Fixed issue parsing CSS rules with known rules but unknown values,
+  which caused parsing to stop instead of just skipping the unkown rule.
+
 ### 0.13.5
 
 - [added] CSS support for `:nth-child()` (not yet with the `of foo`).
