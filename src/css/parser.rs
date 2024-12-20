@@ -424,40 +424,64 @@ pub(crate) fn parse_declaration(text: &str) -> IResult<&str, Option<Declaration>
     ))(text)?;
     let decl = match prop.0.as_str() {
         "background-color" => {
-            let value = parse_color(&value.tokens)?;
-            Decl::BackgroundColor { value }
+            if let Ok(value) = parse_color(&value.tokens) {
+                Decl::BackgroundColor { value }
+            } else {
+                Decl::Unknown { name: prop }
+            }
         }
-        "background" => match parse_background_color(&value)? {
-            Some(value) => Decl::BackgroundColor { value },
+        "background" => match parse_background_color(&value) {
+            Ok(Some(value)) => Decl::BackgroundColor { value },
             _ => Decl::Unknown { name: prop },
         },
         "color" => {
-            let value = parse_color(&value.tokens)?;
-            Decl::Color { value }
+            if let Ok(value) = parse_color(&value.tokens) {
+                Decl::Color { value }
+            } else {
+                Decl::Unknown { name: prop }
+            }
         }
         "height" => {
-            let value = parse_height(&value)?;
-            Decl::Height { value }
+            if let Ok(value) = parse_height(&value) {
+                Decl::Height { value }
+            } else {
+                Decl::Unknown { name: prop }
+            }
         }
         "max-height" => {
-            let value = parse_height(&value)?;
-            Decl::MaxHeight { value }
+            if let Ok(value) = parse_height(&value) {
+                Decl::MaxHeight { value }
+            } else {
+                Decl::Unknown { name: prop }
+            }
         }
         "overflow" => {
-            let value = parse_overflow(&value)?;
-            Decl::Overflow { value }
+            if let Ok(value) = parse_overflow(&value) {
+                Decl::Overflow { value }
+            } else {
+                Decl::Unknown { name: prop }
+            }
         }
         "overflow-y" => {
-            let value = parse_overflow(&value)?;
-            Decl::OverflowY { value }
+            if let Ok(value) = parse_overflow(&value) {
+                Decl::OverflowY { value }
+            } else {
+                Decl::Unknown { name: prop }
+            }
         }
         "display" => {
-            let value = parse_display(&value)?;
-            Decl::Display { value }
+            if let Ok(value) = parse_display(&value) {
+                Decl::Display { value }
+            } else {
+                Decl::Unknown { name: prop }
+            }
         }
         "white-space" => {
-            let value = parse_white_space(&value)?;
-            Decl::WhiteSpace { value }
+            if let Ok(value) = parse_white_space(&value) {
+                Decl::WhiteSpace { value }
+            } else {
+                Decl::Unknown { name: prop }
+            }
         }
         _ => Decl::Unknown {
             name: prop,
@@ -893,7 +917,7 @@ pub(crate) fn parse_selector(text: &str) -> IResult<&str, Selector> {
         parse_selector_without_element,
         fail,
     ))(text)?;
-    // Reverse.  Also remove any leading/trailing CombDescendent, as leading/trailing whitespace
+    // Reverse.  Also remove any leading/trailing CombDescendant, as leading/trailing whitespace
     // shouldn't count as a descendent combinator.
     if let Some(&SelectorComponent::CombDescendant) = components.last() {
         components.pop();
@@ -1086,6 +1110,20 @@ mod test {
                 ]
             ))
         );
+        assert_eq!(
+            super::parse_rules("color: inherit"),
+            Ok((
+                "",
+                vec![
+                    Declaration {
+                        data: Decl::Unknown {
+                            name: PropertyName("color".into()),
+                        },
+                        important: Importance::Default,
+                    },
+                ]
+            ))
+        );
     }
 
     #[test]
@@ -1258,6 +1296,61 @@ mod test {
                     },
                     important: Importance::Default,
                 })
+            ))
+        );
+    }
+
+    #[test]
+    fn test_parse_multi_selector() {
+        assert_eq!(
+            super::parse_stylesheet(
+                "
+.foo a         .foo-bar2 { color: inherit; }
+.foo a.foo-bar .foo-bar2 { color: #112233; }
+            "
+            ),
+            Ok((
+                "",
+                vec![
+                RuleSet {
+                    selectors: vec![Selector {
+                        components: vec![
+                            SelectorComponent::Class("foo-bar2".into()),
+                            SelectorComponent::CombDescendant,
+                            SelectorComponent::Element("a".into()),
+                            SelectorComponent::CombDescendant,
+                            SelectorComponent::Class("foo".into()),
+                        ],
+                    },],
+                    declarations: vec![
+                        Declaration {
+                            data: Decl::Unknown {
+                                name: PropertyName("color".into()),
+                            },
+                            important: Importance::Default,
+                        },
+                    ],
+                },
+                RuleSet {
+                    selectors: vec![Selector {
+                        components: vec![
+                            SelectorComponent::Class("foo-bar2".into()),
+                            SelectorComponent::CombDescendant,
+                            SelectorComponent::Class("foo-bar".into()),
+                            SelectorComponent::Element("a".into()),
+                            SelectorComponent::CombDescendant,
+                            SelectorComponent::Class("foo".into()),
+                         ],
+                    },],
+                    declarations: vec![
+                        Declaration {
+                            data: Decl::Color {
+                                value: Colour::Rgb(0x11, 0x22, 0x33)
+                            },
+                            important: Importance::Default,
+                        },
+                    ],
+                }]
             ))
         );
     }
