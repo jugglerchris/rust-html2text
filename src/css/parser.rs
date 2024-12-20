@@ -1114,14 +1114,12 @@ mod test {
             super::parse_rules("color: inherit"),
             Ok((
                 "",
-                vec![
-                    Declaration {
-                        data: Decl::Unknown {
-                            name: PropertyName("color".into()),
-                        },
-                        important: Importance::Default,
+                vec![Declaration {
+                    data: Decl::Unknown {
+                        name: PropertyName("color".into()),
                     },
-                ]
+                    important: Importance::Default,
+                },]
             ))
         );
     }
@@ -1312,45 +1310,42 @@ mod test {
             Ok((
                 "",
                 vec![
-                RuleSet {
-                    selectors: vec![Selector {
-                        components: vec![
-                            SelectorComponent::Class("foo-bar2".into()),
-                            SelectorComponent::CombDescendant,
-                            SelectorComponent::Element("a".into()),
-                            SelectorComponent::CombDescendant,
-                            SelectorComponent::Class("foo".into()),
-                        ],
-                    },],
-                    declarations: vec![
-                        Declaration {
+                    RuleSet {
+                        selectors: vec![Selector {
+                            components: vec![
+                                SelectorComponent::Class("foo-bar2".into()),
+                                SelectorComponent::CombDescendant,
+                                SelectorComponent::Element("a".into()),
+                                SelectorComponent::CombDescendant,
+                                SelectorComponent::Class("foo".into()),
+                            ],
+                        },],
+                        declarations: vec![Declaration {
                             data: Decl::Unknown {
                                 name: PropertyName("color".into()),
                             },
                             important: Importance::Default,
-                        },
-                    ],
-                },
-                RuleSet {
-                    selectors: vec![Selector {
-                        components: vec![
-                            SelectorComponent::Class("foo-bar2".into()),
-                            SelectorComponent::CombDescendant,
-                            SelectorComponent::Class("foo-bar".into()),
-                            SelectorComponent::Element("a".into()),
-                            SelectorComponent::CombDescendant,
-                            SelectorComponent::Class("foo".into()),
-                         ],
-                    },],
-                    declarations: vec![
-                        Declaration {
+                        },],
+                    },
+                    RuleSet {
+                        selectors: vec![Selector {
+                            components: vec![
+                                SelectorComponent::Class("foo-bar2".into()),
+                                SelectorComponent::CombDescendant,
+                                SelectorComponent::Class("foo-bar".into()),
+                                SelectorComponent::Element("a".into()),
+                                SelectorComponent::CombDescendant,
+                                SelectorComponent::Class("foo".into()),
+                            ],
+                        },],
+                        declarations: vec![Declaration {
                             data: Decl::Color {
                                 value: Colour::Rgb(0x11, 0x22, 0x33)
                             },
                             important: Importance::Default,
-                        },
-                    ],
-                }]
+                        },],
+                    }
+                ]
             ))
         );
     }
