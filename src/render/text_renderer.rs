@@ -1174,11 +1174,6 @@ fn filter_text_strikeout(s: &str) -> Option<String> {
     let mut result = String::new();
     for c in s.chars() {
         result.push(c);
-        if UnicodeWidthChar::width(c).unwrap_or(0) > 0 {
-            // This is a character with width (not a combining or other character)
-            // so add a strikethrough combiner.
-            result.push('\u{336}');
-        }
     }
     Some(result)
 }
