@@ -2546,19 +2546,8 @@ pub mod config {
             FMap: Fn(&[RichAnnotation], &str) -> String,
         {
             let mut context = self.make_context();
-            let lines = self
-                .do_parse(&mut context, input)?
-                .render_with_context(&mut context, width, self.decorator)?
-                .into_lines()?;
-
-            let mut result = String::new();
-            for line in lines {
-                for ts in line.tagged_strings() {
-                    result.push_str(&colour_map(&ts.tag, &ts.s));
-                }
-                result.push('\n');
-            }
-            Ok(result)
+            let render_tree = self.do_parse(&mut context, input)?;
+            self.render_coloured(render_tree, width, colour_map)
         }
 
         /// Return coloured text from a RenderTree.  `colour_map` is a function which takes a list
