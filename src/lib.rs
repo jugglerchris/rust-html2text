@@ -67,7 +67,7 @@ pub mod render;
 use render::text_renderer::{
     RenderLine, RenderOptions, RichAnnotation, SubRenderer, TaggedLine, TextRenderer,
 };
-use render::{Renderer, RichDecorator, TextDecorator};
+use render::{Renderer, TextDecorator};
 
 use html5ever::driver::ParseOpts;
 use html5ever::parse_document;
@@ -2371,11 +2371,7 @@ pub mod config {
             }
         }
         /// Parse with context.
-        fn do_parse<R: io::Read>(
-            &mut self,
-            context: &mut HtmlContext,
-            input: R,
-        ) -> Result<RenderTree> {
+        fn do_parse<R: io::Read>(&self, context: &mut HtmlContext, input: R) -> Result<RenderTree> {
             super::parse_with_context(input, context)
         }
 
@@ -2438,11 +2434,7 @@ pub mod config {
 
         /// Reads HTML from `input`, and returns a `String` with text wrapped to
         /// `width` columns.
-        pub fn string_from_read<R: std::io::Read>(
-            mut self,
-            input: R,
-            width: usize,
-        ) -> Result<String> {
+        pub fn string_from_read<R: std::io::Read>(self, input: R, width: usize) -> Result<String> {
             let mut context = self.make_context();
             let s = self
                 .do_parse(&mut context, input)?
@@ -2456,7 +2448,7 @@ pub mod config {
         /// of the provided text decorator's `Annotation`.  The "outer" annotation comes first in
         /// the `Vec`.
         pub fn lines_from_read<R: std::io::Read>(
-            mut self,
+            self,
             input: R,
             width: usize,
         ) -> Result<Vec<TaggedLine<Vec<D::Annotation>>>> {
@@ -2548,12 +2540,7 @@ pub mod config {
         /// a list of `RichAnnotation` and some text, and returns the text
         /// with any terminal escapes desired to indicate those annotations
         /// (such as colour).
-        pub fn coloured<R, FMap>(
-            mut self,
-            input: R,
-            width: usize,
-            colour_map: FMap,
-        ) -> Result<String>
+        pub fn coloured<R, FMap>(self, input: R, width: usize, colour_map: FMap) -> Result<String>
         where
             R: std::io::Read,
             FMap: Fn(&[RichAnnotation], &str) -> String,
