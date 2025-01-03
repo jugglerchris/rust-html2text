@@ -2371,7 +2371,10 @@ pub mod config {
             }
         }
         /// Parse with context.
-        fn do_parse<R: io::Read>(&self, context: &mut HtmlContext, input: R) -> Result<RenderTree> {
+        pub(crate) fn do_parse<R>(&self, context: &mut HtmlContext, input: R) -> Result<RenderTree>
+        where
+            R: io::Read,
+        {
             super::parse_with_context(input, context)
         }
 
@@ -2682,8 +2685,8 @@ fn parse_with_context(input: impl io::Read, context: &mut HtmlContext) -> Result
 
 /// Reads and parses HTML from `input` and prepares a render tree.
 pub fn parse(input: impl io::Read) -> Result<RenderTree> {
-    let mut context = config::plain().make_context();
-    parse_with_context(input, &mut context)
+    let cfg = config::plain();
+    cfg.do_parse(&mut cfg.make_context(), input)
 }
 
 /// Reads HTML from `input`, decorates it using `decorator`, and
