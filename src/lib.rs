@@ -2375,7 +2375,14 @@ pub mod config {
         where
             R: io::Read,
         {
-            super::parse_with_context(input, context)
+            let dom = plain().parse_html(input)?;
+            let render_tree = super::dom_to_render_tree_with_context(
+                dom.document.clone(),
+                &mut io::sink(),
+                context,
+            )?
+            .ok_or(Error::Fail)?;
+            Ok(RenderTree(render_tree))
         }
 
         /// Parse the HTML into a DOM structure.
@@ -2673,14 +2680,6 @@ impl<D: TextDecorator> RenderedText<D> {
             .map(RenderLine::into_tagged_line)
             .collect())
     }
-}
-
-fn parse_with_context(input: impl io::Read, context: &mut HtmlContext) -> Result<RenderTree> {
-    let dom = config::plain().parse_html(input)?;
-    let render_tree =
-        dom_to_render_tree_with_context(dom.document.clone(), &mut io::sink(), context)?
-            .ok_or(Error::Fail)?;
-    Ok(RenderTree(render_tree))
 }
 
 /// Reads and parses HTML from `input` and prepares a render tree.
