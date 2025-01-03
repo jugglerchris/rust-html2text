@@ -1529,11 +1529,11 @@ fn test_finalise() {
             TestDecorator
         }
     }
-
+    let mut context = config::plain().make_context();
     assert_eq!(
         crate::parse("test".as_bytes())
             .unwrap()
-            .render(80, TestDecorator)
+            .render_with_context(&mut context, 80, TestDecorator)
             .unwrap()
             .into_lines()
             .unwrap(),
@@ -1936,7 +1936,8 @@ fn test_issue_93_x() {
     ];
     let _local0 = crate::parse(&data[..]).unwrap();
     let d1 = TrivialDecorator::new();
-    let _local1 = crate::RenderTree::render(_local0, 1, d1);
+    let mut context = config::plain().make_context();
+    let _local1 = _local0.render_with_context(&mut context, 1, d1);
 }
 
 #[test]
