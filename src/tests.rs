@@ -1529,9 +1529,10 @@ fn test_finalise() {
             TestDecorator
         }
     }
-    let mut context = config::plain().make_context();
+    let cfg = config::plain();
+    let mut context = cfg.make_context();
     assert_eq!(
-        crate::parse("test".as_bytes())
+        cfg.do_parse(&mut context, "test".as_bytes())
             .unwrap()
             .render_with_context(&mut context, 80, TestDecorator)
             .unwrap()
