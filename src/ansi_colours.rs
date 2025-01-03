@@ -4,10 +4,11 @@
 //! can be achieved using inline characters sent to the terminal such as
 //! underlining in some terminals).
 
-use crate::{parse, RichAnnotation, RichDecorator};
+use crate::RichAnnotation;
 use std::io;
 
 /// Reads HTML from `input`, and returns text wrapped to `width` columns.
+///
 /// The text is returned as a `Vec<TaggedLine<_>>`; the annotations are vectors
 /// of `RichAnnotation`.  The "outer" annotation comes first in the `Vec`.
 ///
@@ -24,16 +25,5 @@ where
     R: io::Read,
     FMap: Fn(&[RichAnnotation], &str) -> String,
 {
-    let lines = parse(input)?
-        .render(width, RichDecorator::new())?
-        .into_lines()?;
-
-    let mut result = String::new();
-    for line in lines {
-        for ts in line.tagged_strings() {
-            result.push_str(&colour_map(&ts.tag, &ts.s));
-        }
-        result.push('\n');
-    }
-    Ok(result)
+    super::config::rich().coloured(input, width, colour_map)
 }
