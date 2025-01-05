@@ -67,11 +67,10 @@ pub mod render;
 use render::text_renderer::{
     RenderLine, RenderOptions, RichAnnotation, SubRenderer, TaggedLine, TextRenderer,
 };
-use render::{Renderer, RichDecorator, TextDecorator};
+use render::{Renderer, TextDecorator};
 
 use html5ever::driver::ParseOpts;
 use html5ever::parse_document;
-use html5ever::tendril::TendrilSink;
 use html5ever::tree_builder::TreeBuilderOpts;
 mod markup5ever_rcdom;
 pub use markup5ever_rcdom::RcDom;
@@ -89,7 +88,7 @@ use std::io;
 use std::io::Write;
 use std::iter::{once, repeat};
 
-#[derive(Debug, Copy, Clone, Default, PartialEq)]
+#[derive(Debug, Copy, Clone, Default, PartialEq, Eq)]
 pub(crate) enum WhiteSpace {
     #[default]
     Normal,
@@ -846,7 +845,7 @@ impl RenderNode {
         if style.internal_pre {
             write!(f, " internal_pre")?;
         }
-        writeln!(f, "")
+        writeln!(f)
     }
     fn write_self(
         &self,
@@ -858,52 +857,52 @@ impl RenderNode {
         match &self.info {
             RenderNodeInfo::Text(s) => writeln!(f, "{:indent$}{s:?}", "")?,
             RenderNodeInfo::Container(v) => {
-                self.write_container("Container", &v, f, indent)?;
+                self.write_container("Container", v, f, indent)?;
             }
             RenderNodeInfo::Link(targ, v) => {
-                self.write_container(&format!("Link({})", targ), &v, f, indent)?;
+                self.write_container(&format!("Link({})", targ), v, f, indent)?;
             }
             RenderNodeInfo::Em(v) => {
-                self.write_container("Em", &v, f, indent)?;
+                self.write_container("Em", v, f, indent)?;
             }
             RenderNodeInfo::Strong(v) => {
-                self.write_container("Strong", &v, f, indent)?;
+                self.write_container("Strong", v, f, indent)?;
             }
             RenderNodeInfo::Strikeout(v) => {
-                self.write_container("Strikeout", &v, f, indent)?;
+                self.write_container("Strikeout", v, f, indent)?;
             }
             RenderNodeInfo::Code(v) => {
-                self.write_container("Code", &v, f, indent)?;
+                self.write_container("Code", v, f, indent)?;
             }
             RenderNodeInfo::Img(src, title) => {
                 writeln!(f, "{:indent$}Img src={:?} title={:?}:", "", src, title)?;
             }
             RenderNodeInfo::Block(v) => {
-                self.write_container("Block", &v, f, indent)?;
+                self.write_container("Block", v, f, indent)?;
             }
             RenderNodeInfo::Header(depth, v) => {
-                self.write_container(&format!("Header({})", depth), &v, f, indent)?;
+                self.write_container(&format!("Header({})", depth), v, f, indent)?;
             }
             RenderNodeInfo::Div(v) => {
-                self.write_container("Div", &v, f, indent)?;
+                self.write_container("Div", v, f, indent)?;
             }
             RenderNodeInfo::BlockQuote(v) => {
-                self.write_container("BlockQuote", &v, f, indent)?;
+                self.write_container("BlockQuote", v, f, indent)?;
             }
             RenderNodeInfo::Ul(v) => {
-                self.write_container("Ul", &v, f, indent)?;
+                self.write_container("Ul", v, f, indent)?;
             }
             RenderNodeInfo::Ol(start, v) => {
-                self.write_container(&format!("Ol({})", start), &v, f, indent)?;
+                self.write_container(&format!("Ol({})", start), v, f, indent)?;
             }
             RenderNodeInfo::Dl(v) => {
-                self.write_container("Dl", &v, f, indent)?;
+                self.write_container("Dl", v, f, indent)?;
             }
             RenderNodeInfo::Dt(v) => {
-                self.write_container("Dt", &v, f, indent)?;
+                self.write_container("Dt", v, f, indent)?;
             }
             RenderNodeInfo::Dd(v) => {
-                self.write_container("Dd", &v, f, indent)?;
+                self.write_container("Dd", v, f, indent)?;
             }
             RenderNodeInfo::Break => {
                 writeln!(f, "{:indent$}Break", "", indent = indent)?;
@@ -942,10 +941,10 @@ impl RenderNode {
                 writeln!(f, "{:indent$}FragStart({}):", "", frag)?;
             }
             RenderNodeInfo::ListItem(v) => {
-                self.write_container("ListItem", &v, f, indent)?;
+                self.write_container("ListItem", v, f, indent)?;
             }
             RenderNodeInfo::Sup(v) => {
-                self.write_container("Sup", &v, f, indent)?;
+                self.write_container("Sup", v, f, indent)?;
             }
         }
         Ok(())
@@ -1307,7 +1306,7 @@ where
     }
 }
 
-#[derive(Default, Debug)]
+#[derive(Debug, PartialEq, Eq)]
 struct HtmlContext {
     #[cfg(feature = "css")]
     style_data: css::StyleData,
@@ -2355,7 +2354,7 @@ pub mod config {
 
     impl<D: TextDecorator> Config<D> {
         /// Make the HtmlContext from self.
-        fn make_context(&self) -> HtmlContext {
+        pub(crate) fn make_context(&self) -> HtmlContext {
             HtmlContext {
                 #[cfg(feature = "css")]
                 style_data: self.style.clone(),
@@ -2372,12 +2371,18 @@ pub mod config {
             }
         }
         /// Parse with context.
-        fn do_parse<R: io::Read>(
-            &mut self,
-            context: &mut HtmlContext,
-            input: R,
-        ) -> Result<RenderTree> {
-            super::parse_with_context(input, context)
+        pub(crate) fn do_parse<R>(&self, context: &mut HtmlContext, input: R) -> Result<RenderTree>
+        where
+            R: io::Read,
+        {
+            let dom = self.parse_html(input)?;
+            let render_tree = super::dom_to_render_tree_with_context(
+                dom.document.clone(),
+                &mut io::sink(),
+                context,
+            )?
+            .ok_or(Error::Fail)?;
+            Ok(RenderTree(render_tree))
         }
 
         /// Parse the HTML into a DOM structure.
@@ -2439,11 +2444,7 @@ pub mod config {
 
         /// Reads HTML from `input`, and returns a `String` with text wrapped to
         /// `width` columns.
-        pub fn string_from_read<R: std::io::Read>(
-            mut self,
-            input: R,
-            width: usize,
-        ) -> Result<String> {
+        pub fn string_from_read<R: std::io::Read>(self, input: R, width: usize) -> Result<String> {
             let mut context = self.make_context();
             let s = self
                 .do_parse(&mut context, input)?
@@ -2457,7 +2458,7 @@ pub mod config {
         /// of the provided text decorator's `Annotation`.  The "outer" annotation comes first in
         /// the `Vec`.
         pub fn lines_from_read<R: std::io::Read>(
-            mut self,
+            self,
             input: R,
             width: usize,
         ) -> Result<Vec<TaggedLine<Vec<D::Annotation>>>> {
@@ -2549,30 +2550,14 @@ pub mod config {
         /// a list of `RichAnnotation` and some text, and returns the text
         /// with any terminal escapes desired to indicate those annotations
         /// (such as colour).
-        pub fn coloured<R, FMap>(
-            mut self,
-            input: R,
-            width: usize,
-            colour_map: FMap,
-        ) -> Result<String>
+        pub fn coloured<R, FMap>(self, input: R, width: usize, colour_map: FMap) -> Result<String>
         where
             R: std::io::Read,
             FMap: Fn(&[RichAnnotation], &str) -> String,
         {
             let mut context = self.make_context();
-            let lines = self
-                .do_parse(&mut context, input)?
-                .render_with_context(&mut context, width, self.decorator)?
-                .into_lines()?;
-
-            let mut result = String::new();
-            for line in lines {
-                for ts in line.tagged_strings() {
-                    result.push_str(&colour_map(&ts.tag, &ts.s));
-                }
-                result.push('\n');
-            }
-            Ok(result)
+            let render_tree = self.do_parse(&mut context, input)?;
+            self.render_coloured(render_tree, width, colour_map)
         }
 
         /// Return coloured text from a RenderTree.  `colour_map` is a function which takes a list
@@ -2602,38 +2587,12 @@ pub mod config {
 
     /// Return a Config initialized with a `RichDecorator`.
     pub fn rich() -> Config<RichDecorator> {
-        Config {
-            decorator: RichDecorator::new(),
-            #[cfg(feature = "css")]
-            style: Default::default(),
-            #[cfg(feature = "css")]
-            use_doc_css: false,
-            max_wrap_width: None,
-            pad_block_width: false,
-            allow_width_overflow: false,
-            min_wrap_width: MIN_WIDTH,
-            raw: false,
-            draw_borders: true,
-            wrap_links: true,
-        }
+        with_decorator(RichDecorator::new())
     }
 
     /// Return a Config initialized with a `PlainDecorator`.
     pub fn plain() -> Config<PlainDecorator> {
-        Config {
-            decorator: PlainDecorator::new(),
-            #[cfg(feature = "css")]
-            style: Default::default(),
-            #[cfg(feature = "css")]
-            use_doc_css: false,
-            max_wrap_width: None,
-            pad_block_width: false,
-            allow_width_overflow: false,
-            min_wrap_width: MIN_WIDTH,
-            raw: false,
-            draw_borders: true,
-            wrap_links: true,
-        }
+        with_decorator(PlainDecorator::new())
     }
 
     /// Return a Config initialized with a custom decorator.
@@ -2694,11 +2653,6 @@ impl RenderTree {
             render_tree_to_string(context, builder, &test_decorator, self.0, &mut io::sink())?;
         Ok(RenderedText(builder))
     }
-
-    /// Render this document using the given `decorator` and wrap it to `width` columns.
-    fn render<D: TextDecorator>(self, width: usize, decorator: D) -> Result<RenderedText<D>> {
-        self.render_with_context(&mut Default::default(), width, decorator)
-    }
 }
 
 /// A rendered HTML document.
@@ -2722,26 +2676,10 @@ impl<D: TextDecorator> RenderedText<D> {
     }
 }
 
-fn parse_with_context(mut input: impl io::Read, context: &mut HtmlContext) -> Result<RenderTree> {
-    let opts = ParseOpts {
-        tree_builder: TreeBuilderOpts {
-            drop_doctype: true,
-            ..Default::default()
-        },
-        ..Default::default()
-    };
-    let dom = parse_document(RcDom::default(), opts)
-        .from_utf8()
-        .read_from(&mut input)?;
-    let render_tree =
-        dom_to_render_tree_with_context(dom.document.clone(), &mut io::sink(), context)?
-            .ok_or(Error::Fail)?;
-    Ok(RenderTree(render_tree))
-}
-
 /// Reads and parses HTML from `input` and prepares a render tree.
 pub fn parse(input: impl io::Read) -> Result<RenderTree> {
-    parse_with_context(input, &mut Default::default())
+    let cfg = config::plain();
+    cfg.do_parse(&mut cfg.make_context(), input)
 }
 
 /// Reads HTML from `input`, decorates it using `decorator`, and
@@ -2764,6 +2702,7 @@ where
 }
 
 /// Reads HTML from `input`, and returns text wrapped to `width` columns.
+///
 /// The text is returned as a `Vec<TaggedLine<_>>`; the annotations are vectors
 /// of `RichAnnotation`.  The "outer" annotation comes first in the `Vec`.
 pub fn from_read_rich<R>(input: R, width: usize) -> Result<Vec<TaggedLine<Vec<RichAnnotation>>>>

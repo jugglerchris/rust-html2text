@@ -390,6 +390,10 @@ pub(crate) fn parse_color_attribute(
     parse_color(&value.tokens).or_else(|e| parse_faulty_color(e, text))
 }
 
+fn parse_color_part(text: &str, index: std::ops::Range<usize>) -> Option<u8> {
+    u8::from_str_radix(text.get(index)?, 16).ok()
+}
+
 // Both Firefox and Chromium accept "00aabb" as a bgcolor - I'm not sure this has ever been legal,
 // but regrettably I've had e-mails which were unreadable without doing this.
 fn parse_faulty_color(
@@ -397,13 +401,11 @@ fn parse_faulty_color(
     text: &str,
 ) -> Result<Colour, nom::Err<nom::error::Error<&'static str>>> {
     let text = text.trim();
-    if text.chars().all(|c| c.is_hex_digit()) {
-        if text.len() == 6 {
-            let r = u8::from_str_radix(&text[0..2], 16).unwrap();
-            let g = u8::from_str_radix(&text[2..4], 16).unwrap();
-            let b = u8::from_str_radix(&text[4..6], 16).unwrap();
-            return Ok(Colour::Rgb(r, g, b));
-        }
+    let r = parse_color_part(text, 0..2);
+    let g = parse_color_part(text, 2..4);
+    let b = parse_color_part(text, 4..6);
+    if let (Some(r), Some(g), Some(b)) = (r, g, b) {
+        return Ok(Colour::Rgb(r, g, b));
     }
     Err(e)
 }
@@ -644,7 +646,7 @@ fn parse_string_token(text: &str) -> IResult<&str, Token> {
 
     loop {
         match chars.next() {
-            None => return Ok((&text[text.len()..], Token::String(s.into()))),
+            None => return Ok(("", Token::String(s.into()))),
             Some((i, c)) if c == end_char => {
                 return Ok((&text[i + 1..], Token::String(s.into())));
             }
