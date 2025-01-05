@@ -2375,7 +2375,7 @@ pub mod config {
         where
             R: io::Read,
         {
-            let dom = plain().parse_html(input)?;
+            let dom = self.parse_html(input)?;
             let render_tree = super::dom_to_render_tree_with_context(
                 dom.document.clone(),
                 &mut io::sink(),
