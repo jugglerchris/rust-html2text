@@ -1529,14 +1529,9 @@ fn test_finalise() {
             TestDecorator
         }
     }
-    let cfg = config::plain();
-    let mut context = cfg.make_context();
     assert_eq!(
-        cfg.do_parse(&mut context, "test".as_bytes())
-            .unwrap()
-            .render_with_context(&mut context, 80, TestDecorator)
-            .unwrap()
-            .into_lines()
+        config::with_decorator(TestDecorator)
+            .lines_from_read("test".as_bytes(), 80)
             .unwrap(),
         vec![
             TaggedLine::from_string("test".to_owned(), &Vec::new()),
@@ -1935,10 +1930,9 @@ fn test_issue_93_x() {
         114, 104, 60, 47, 101, 109, 62, 60, 99, 99, 172, 97, 97, 58, 60, 119, 99, 64, 126, 118,
         104, 100, 100, 107, 105, 60, 120, 98, 255, 255, 255, 0, 60, 255, 127, 46, 60, 113, 127,
     ];
-    let _local0 = crate::parse(&data[..]).unwrap();
-    let d1 = TrivialDecorator::new();
-    let mut context = config::plain().make_context();
-    let _local1 = _local0.render_with_context(&mut context, 1, d1);
+    config::with_decorator(TrivialDecorator::new())
+        .string_from_read(&data[..], 1)
+        .unwrap_err();
 }
 
 #[test]
