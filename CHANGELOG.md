@@ -11,6 +11,12 @@ Possible log types:
 
 ### Latest
 
+### 0.14.0
+
+- [changed] Various small refactors (thanks sftse)
+- [added] New `config::rich_no_decorate`, to use annotations without '\*' markers around 
+  bold text etc.
+
 ### 0.13.6
 
 - [fixed] Fixed issue parsing CSS rules with known rules but unknown values,
