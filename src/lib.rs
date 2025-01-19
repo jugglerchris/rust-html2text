@@ -2590,6 +2590,11 @@ pub mod config {
         with_decorator(RichDecorator::new())
     }
 
+    /// Return a Config initialized with a `RichDecorator` and decoration disabled.
+    pub fn rich_no_decorate() -> Config<RichDecorator> {
+        with_decorator(RichDecorator::new_undecorated())
+    }
+
     /// Return a Config initialized with a `PlainDecorator`.
     pub fn plain() -> Config<PlainDecorator> {
         with_decorator(PlainDecorator::new())

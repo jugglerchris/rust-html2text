@@ -109,7 +109,11 @@ where
     #[cfg(unix)]
     {
         if flags.use_colour {
-            let conf = config::rich();
+            let conf = if flags.no_decorate {
+                config::rich_no_decorate()
+            } else {
+                config::rich()
+            };
             let conf = update_config(conf, &flags);
             #[cfg(feature = "css")]
             let use_css_colours = !flags.ignore_css_colours;
@@ -163,6 +167,8 @@ struct Flags {
     wrap_width: Option<usize>,
     #[allow(unused)]
     use_colour: bool,
+    #[allow(unused)]
+    no_decorate: bool,
     #[cfg(feature = "css")]
     use_css: bool,
     #[cfg(feature = "css")]
@@ -185,6 +191,7 @@ fn main() {
         width: 80,
         wrap_width: None,
         use_colour: false,
+        no_decorate: false,
         #[cfg(feature = "css")]
         use_css: false,
         #[cfg(feature = "css")]
@@ -230,6 +237,12 @@ fn main() {
             &["--colour"],
             StoreTrue,
             "Use ANSI terminal colours",
+        );
+        #[cfg(unix)]
+        ap.refer(&mut flags.no_decorate).add_option(
+            &["--no-decorate"],
+            StoreTrue,
+            "Skip decorations (with --colour)",
         );
         #[cfg(feature = "css")]
         ap.refer(&mut flags.use_css)
