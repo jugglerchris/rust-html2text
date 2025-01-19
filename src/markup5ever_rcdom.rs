@@ -151,7 +151,7 @@ impl Node {
     /// Return the element type (if an element)
     pub fn element_name(&self) -> Option<String> {
         if let NodeData::Element { ref name, .. } = self.data {
-            Some(format!("{}", &*name.local_name()))
+            Some(format!("{}", name.local_name()))
         } else {
             None
         }
