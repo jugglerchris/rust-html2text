@@ -778,7 +778,6 @@ bit of
 text to
 wrap
 
-
 * This is a
   bit of
   text to
@@ -803,16 +802,13 @@ fn test_wrap_max2() {
         </li></ul>"#,
         r#"plain para at the
 full screen width
-
 * bullet point uses
   same width so its
   margin is 2 chars
   further right
-  
   * nested bullets in
     turn move 2 chars
     right each time
-    
     * result: you never
       get text squashed
       too narrow
@@ -823,7 +819,7 @@ full screen width
 }
 
 #[test]
-fn test_nested_list() {
+fn test_nested_ul() {
     test_html(br"
     <ul>
       <li>Item 1</li>
@@ -842,6 +838,29 @@ fn test_nested_list() {
   * SubItem 2.1
   * SubItem 2.2
     * Sub Item 2.2.1
+"#, 80);
+}
+
+#[test]
+fn test_nested_ol() {
+    test_html(br"
+    <ol>
+      <li>Item 1</li>
+      <li>Item 2
+      <ol>
+        <li>SubItem 2.1</li>
+        <li>SubItem 2.2
+          <ol>
+            <li>Sub Item 2.2.1</li>
+          </ol>
+        </li>
+      </ol>
+    </ol>",
+    r#"1. Item 1
+2. Item 2
+   1. SubItem 2.1
+   2. SubItem 2.2
+      1. Sub Item 2.2.1
 "#, 80);
 }
 
@@ -940,7 +959,6 @@ fn test_subblock() {
      </ul></div>
      </div>"#,
         r"Here's a [link][1].
-
 * Bullet
 * Bullet
 * Bullet
@@ -1318,7 +1336,6 @@ fn test_trivial_decorator() {
      </ul></div>
      </div>"#,
         r"Here's a link.
-
 Bullet
 Bullet
 Bullet

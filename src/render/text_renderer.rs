@@ -975,6 +975,33 @@ impl<D: TextDecorator> std::fmt::Debug for SubRenderer<D> {
     }
 }
 
+impl<D: TextDecorator> std::fmt::Display for SubRenderer<D> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        writeln!(f, "SubRenderer(width={})", self.width)?;
+        writeln!(f, " Lines: {}", self.lines.len())?;
+        for line in &self.lines {
+            match line {
+                RenderLine::Text(tagged_line) => {
+                    writeln!(f, "  {}", tagged_line.to_string())?;
+                }
+                RenderLine::Line(_) => {
+                    writeln!(f, "  <<<border>>>")?;
+                }
+            }
+        }
+        if let Some(wrapping) = &self.wrapping {
+            writeln!(f, " WrappedBlock text:")?;
+            for line in &wrapping.text {
+                writeln!(f, "  {}", line.to_string())?;
+            }
+            writeln!(f, " WrappedBlock cur line:")?;
+            writeln!(f, "  {}", wrapping.line.to_string())?;
+            writeln!(f, " WrappedBlock Word: [[{}]]", wrapping.word.to_string())?;
+        }
+        writeln!(f)
+    }
+}
+
 /// Rendering options.
 #[derive(Clone)]
 #[non_exhaustive]
@@ -1324,8 +1351,11 @@ impl<D: TextDecorator> Renderer for SubRenderer<D> {
         I: Iterator<Item = &'a str>,
     {
         use self::TaggedLineElement::Str;
+        html_trace!("append_subrender: {self}");
+        html_trace!("append_subrender other: {other}");
 
         self.flush_wrapping()?;
+        html_trace!("append_subrender self after flush: {self}");
         let tag = self.ann_stack.clone();
         self.lines.extend(
             other
