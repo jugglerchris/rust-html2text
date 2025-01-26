@@ -820,7 +820,8 @@ full screen width
 
 #[test]
 fn test_nested_ul() {
-    test_html(br"
+    test_html(
+        br"
     <ul>
       <li>Item 1</li>
       <li>Item 2
@@ -833,17 +834,20 @@ fn test_nested_ul() {
         </li>
       </ul>
     </ul>",
-    r#"* Item 1
+        r#"* Item 1
 * Item 2
   * SubItem 2.1
   * SubItem 2.2
     * Sub Item 2.2.1
-"#, 80);
+"#,
+        80,
+    );
 }
 
 #[test]
 fn test_nested_ol() {
-    test_html(br"
+    test_html(
+        br"
     <ol>
       <li>Item 1</li>
       <li>Item 2
@@ -856,12 +860,14 @@ fn test_nested_ol() {
         </li>
       </ol>
     </ol>",
-    r#"1. Item 1
+        r#"1. Item 1
 2. Item 2
    1. SubItem 2.1
    2. SubItem 2.2
       1. Sub Item 2.2.1
-"#, 80);
+"#,
+        80,
+    );
 }
 
 #[test]
