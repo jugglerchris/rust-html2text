@@ -32,6 +32,12 @@ pub(crate) enum SelectorComponent {
     },
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum PseudoElement {
+    Before,
+    After,
+}
+
 impl std::fmt::Display for SelectorComponent {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
@@ -46,16 +52,22 @@ impl std::fmt::Display for SelectorComponent {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub(crate) struct Selector {
     // List of components, right first so we match from the leaf.
     components: Vec<SelectorComponent>,
+    pseudo_element: Option<PseudoElement>,
 }
 
 impl std::fmt::Display for Selector {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         for comp in self.components.iter().rev() {
             comp.fmt(f)?;
+        }
+        match self.pseudo_element {
+            Some(PseudoElement::Before) => write!(f, "::before")?,
+            Some(PseudoElement::After) => write!(f, "::after")?,
+            None => (),
         }
         Ok(())
     }
@@ -199,11 +211,18 @@ pub(crate) enum Display {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct PseudoContent {
+    /// content: "foo"
+    pub(crate) text: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum Style {
     Colour(Colour),
     BgColour(Colour),
     Display(Display),
     WhiteSpace(WhiteSpace),
+    Content(PseudoContent),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -221,6 +240,7 @@ impl std::fmt::Display for StyleDecl {
             #[cfg(feature = "css_ext")]
             Style::Display(Display::ExtRawDom) => write!(f, "display: x-raw-dom")?,
             Style::WhiteSpace(_) => todo!(),
+            Style::Content(_) => todo!(),
         }
         match self.importance {
             Importance::Default => (),
@@ -343,11 +363,18 @@ fn styles_from_properties(decls: &[parser::Declaration]) -> Vec<StyleDecl> {
                     style: Style::WhiteSpace(*value),
                     importance: decl.important,
                 });
-            } /*
-              _ => {
-                  html_trace_quiet!("CSS: Unhandled property {:?}", decl);
-              }
-              */
+            }
+            parser::Decl::Content { text } => {
+                styles.push(StyleDecl {
+                    style: Style::Content(PseudoContent { text: text.clone() }),
+                    importance: decl.important,
+                });
+            }
+            /*
+            _ => {
+                html_trace_quiet!("CSS: Unhandled property {:?}", decl);
+            }
+            */
         }
     }
     // If the height is set to zero and overflow hidden, treat as display: none
@@ -406,11 +433,11 @@ impl StyleData {
 
     pub(crate) fn computed_style(
         &self,
-        parent_style: ComputedStyle,
+        parent_style: &ComputedStyle,
         handle: &Handle,
         use_doc_css: bool,
     ) -> ComputedStyle {
-        let mut result = parent_style;
+        let mut result = parent_style.inherit();
 
         for (origin, ruleset) in [
             (StyleOrigin::Agent, &self.agent_rules),
@@ -425,6 +452,7 @@ impl StyleData {
                             style.importance == Importance::Important,
                             origin,
                             rule.selector.specificity(),
+                            rule.selector.pseudo_element.as_ref(),
                             style,
                         );
                     }
@@ -445,6 +473,7 @@ impl StyleData {
                                 false,
                                 StyleOrigin::Author,
                                 Specificity::inline(),
+                                None,
                                 &style,
                             );
                         }
@@ -455,6 +484,7 @@ impl StyleData {
                                 false,
                                 StyleOrigin::Author,
                                 Specificity::inline(),
+                                None,
                                 &StyleDecl {
                                     style: Style::Colour(colour.into()),
                                     importance: Importance::Default,
@@ -468,6 +498,7 @@ impl StyleData {
                                 false,
                                 StyleOrigin::Author,
                                 Specificity::inline(),
+                                None,
                                 &StyleDecl {
                                     style: Style::BgColour(colour.into()),
                                     importance: Importance::Default,
@@ -487,8 +518,20 @@ impl StyleData {
         important: bool,
         origin: StyleOrigin,
         specificity: Specificity,
+        pseudo_selectors: Option<&PseudoElement>,
         style: &StyleDecl,
     ) {
+        let result_target = match pseudo_selectors {
+            None => result,
+            Some(PseudoElement::Before) => {
+                // TODO: ideally we should inherit from the parent; however we haven't finished
+                // computing the parent yet.
+                result.content_before.get_or_insert_default()
+            }
+            Some(PseudoElement::After) => {
+                result.content_after.get_or_insert_default()
+            }
+        };
         // The increasing priority is:
         // * agent
         // * user
@@ -501,25 +544,30 @@ impl StyleData {
         // never afterwards.
         match style.style {
             Style::Colour(col) => {
-                result
+                result_target
                     .colour
                     .maybe_update(important, origin, specificity, col);
             }
             Style::BgColour(col) => {
-                result
+                result_target
                     .bg_colour
                     .maybe_update(important, origin, specificity, col);
             }
             Style::Display(disp) => {
                 // We don't have a "not DisplayNone" - we might need to fix this.
-                result
+                result_target
                     .display
                     .maybe_update(important, origin, specificity, disp);
             }
             Style::WhiteSpace(ws) => {
-                result
+                result_target
                     .white_space
                     .maybe_update(important, origin, specificity, ws);
+            }
+            Style::Content(ref content) => {
+                result_target
+                    .content
+                    .maybe_update(important, origin, specificity, content.clone());
             }
         }
     }

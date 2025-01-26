@@ -2820,4 +2820,22 @@ at  line  breaks
             20,
         );
     }
+
+    #[test]
+    fn test_before_after() {
+        test_html_coloured(br#"
+        <style>
+          span.bracketed::before {
+              content: "[";
+          }
+          span.bracketed::after {
+              content: "]";
+          }
+        </style>
+        <body>
+        <p>Hello <span class="bracketed">world</span>!</p>
+        </body>"#,
+        r#"Hello [world]!
+"#, 80);
+    }
 }

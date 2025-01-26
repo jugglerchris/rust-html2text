@@ -92,6 +92,9 @@ pub(crate) enum Decl {
     WhiteSpace {
         value: WhiteSpace,
     },
+    Content {
+        text: String,
+    },
     Unknown {
         name: PropertyName,
         //        value: Vec<Token>,
@@ -167,7 +170,7 @@ pub(crate) struct Declaration {
     pub important: Importance,
 }
 
-use super::{Selector, SelectorComponent, WhiteSpace};
+use super::{PseudoElement, Selector, SelectorComponent, WhiteSpace};
 
 #[derive(Debug, PartialEq)]
 pub(crate) struct RuleSet {
@@ -485,6 +488,13 @@ pub(crate) fn parse_declaration(text: &str) -> IResult<&str, Option<Declaration>
                 Decl::Unknown { name: prop }
             }
         }
+        "content" => {
+            if let Ok(value) = parse_content(&value) {
+                Decl::Content { text: value }
+            } else {
+                Decl::Unknown { name: prop }
+            }
+        }
         _ => Decl::Unknown {
             name: prop,
             //            value: /*value*/"".into(),
@@ -768,6 +778,19 @@ fn parse_white_space(
     Ok(WhiteSpace::Normal)
 }
 
+// Parse content - currently only support a single string.
+fn parse_content(value: &RawValue) -> Result<String, nom::Err<nom::error::Error<&'static str>>> {
+    let mut result = String::new();
+    for tok in &value.tokens {
+        if let Token::String(word) = tok {
+            result.push_str(word);
+        } else {
+            return Err(empty_fail());
+        }
+    }
+    Ok(result)
+}
+
 pub(crate) fn parse_rules(text: &str) -> IResult<&str, Vec<Declaration>> {
     separated_list0(
         tuple((tag(";"), skip_optional_whitespace)),
@@ -856,6 +879,7 @@ fn parse_nth_child_args(text: &str) -> IResult<&str, SelectorComponent> {
 
     let sel = Selector {
         components: vec![SelectorComponent::Star],
+        ..Default::default()
     };
     Ok((rest, SelectorComponent::NthChild { a, b, sel }))
 }
@@ -913,6 +937,12 @@ fn parse_selector_without_element(text: &str) -> IResult<&str, Vec<SelectorCompo
     many1(parse_simple_selector_component)(text)
 }
 
+pub(crate) fn parse_pseudo_element(text: &str) -> IResult<&str, Option<PseudoElement>> {
+    opt(alt((
+        map(tag("::before"), |_| PseudoElement::Before),
+        map(tag("::after"), |_| PseudoElement::After))))(text)
+}
+
 pub(crate) fn parse_selector(text: &str) -> IResult<&str, Selector> {
     let (rest, mut components) = alt((
         parse_selector_with_element,
@@ -928,7 +958,9 @@ pub(crate) fn parse_selector(text: &str) -> IResult<&str, Selector> {
     if let Some(&SelectorComponent::CombDescendant) = components.last() {
         components.pop();
     }
-    Ok((rest, Selector { components }))
+
+    let (rest, pseudo_element) = parse_pseudo_element(rest)?;
+    Ok((rest, Selector { components, pseudo_element }))
 }
 
 fn parse_ruleset(text: &str) -> IResult<&str, RuleSet> {
@@ -1043,8 +1075,7 @@ pub(crate) fn parse_stylesheet(text: &str) -> IResult<&str, Vec<RuleSet>> {
 #[cfg(test)]
 mod test {
     use crate::css::{
-        parser::{Height, Importance, LengthUnit, RuleSet, Selector},
-        SelectorComponent,
+        parser::{Height, Importance, LengthUnit, RuleSet, Selector}, PseudoElement, SelectorComponent
     };
 
     use super::{Colour, Decl, Declaration, Overflow, PropertyName};
@@ -1170,6 +1201,7 @@ mod test {
                 vec![RuleSet {
                     selectors: vec![Selector {
                         components: vec![SelectorComponent::Element("foo".into()),],
+                        ..Default::default()
                     },],
                     declarations: vec![Declaration {
                         data: Decl::Color {
@@ -1198,6 +1230,7 @@ mod test {
                 vec![RuleSet {
                     selectors: vec![Selector {
                         components: vec![SelectorComponent::Class("foo".into()),],
+                        ..Default::default()
                     },],
                     declarations: vec![
                         Declaration {
@@ -1248,6 +1281,7 @@ mod test {
                 vec![RuleSet {
                     selectors: vec![Selector {
                         components: vec![SelectorComponent::Class("foo".into()),],
+                        ..Default::default()
                     },],
                     declarations: vec![
                         Declaration {
@@ -1321,6 +1355,7 @@ mod test {
                                 SelectorComponent::CombDescendant,
                                 SelectorComponent::Class("foo".into()),
                             ],
+                            ..Default::default()
                         },],
                         declarations: vec![Declaration {
                             data: Decl::Unknown {
@@ -1339,6 +1374,7 @@ mod test {
                                 SelectorComponent::CombDescendant,
                                 SelectorComponent::Class("foo".into()),
                             ],
+                            ..Default::default()
                         },],
                         declarations: vec![Declaration {
                             data: Decl::Color {
@@ -1347,6 +1383,126 @@ mod test {
                             important: Importance::Default,
                         },],
                     }
+                ]
+            ))
+        );
+    }
+
+    #[test]
+    fn test_parse_comma_selector() {
+        assert_eq!(
+            super::parse_stylesheet(
+                "
+.foo a, p  { color: #112233; }
+            "
+            ),
+            Ok((
+                "",
+                vec![
+                    RuleSet {
+                        selectors: vec![
+                            Selector {
+                                components: vec![
+                                    SelectorComponent::Element("a".into()),
+                                    SelectorComponent::CombDescendant,
+                                    SelectorComponent::Class("foo".into()),
+                                ],
+                                ..Default::default()
+                            },
+                            Selector {
+                                components: vec![
+                                    SelectorComponent::Element("p".into()),
+                                ],
+                                ..Default::default()
+                            },
+                        ],
+                        declarations: vec![Declaration {
+                            data: Decl::Color {
+                                value: Colour::Rgb(0x11, 0x22, 0x33)
+                            },
+                            important: Importance::Default,
+                        },],
+                    },
+                ]
+            ))
+        );
+    }
+
+    #[test]
+    fn test_parse_before_after() {
+        assert_eq!(
+            super::parse_stylesheet(
+                "
+.foo a::before, p::after  { color: #112233; }
+            "
+            ),
+            Ok((
+                "",
+                vec![
+                    RuleSet {
+                        selectors: vec![
+                            Selector {
+                                components: vec![
+                                    SelectorComponent::Element("a".into()),
+                                    SelectorComponent::CombDescendant,
+                                    SelectorComponent::Class("foo".into()),
+                                ],
+                                pseudo_element: Some(PseudoElement::Before),
+                            },
+                            Selector {
+                                components: vec![
+                                    SelectorComponent::Element("p".into()),
+                                ],
+                                pseudo_element: Some(PseudoElement::After),
+                            },
+                        ],
+                        declarations: vec![Declaration {
+                            data: Decl::Color {
+                                value: Colour::Rgb(0x11, 0x22, 0x33)
+                            },
+                            important: Importance::Default,
+                        },],
+                    },
+                ]
+            ))
+        );
+    }
+
+    #[test]
+    fn test_parse_content() {
+        assert_eq!(
+            super::parse_stylesheet(
+                r#"
+.foo a::before, p::after  { content: "blah*#"; }
+            "#
+            ),
+            Ok((
+                "",
+                vec![
+                    RuleSet {
+                        selectors: vec![
+                            Selector {
+                                components: vec![
+                                    SelectorComponent::Element("a".into()),
+                                    SelectorComponent::CombDescendant,
+                                    SelectorComponent::Class("foo".into()),
+                                ],
+                                pseudo_element: Some(PseudoElement::Before),
+                            },
+                            Selector {
+                                components: vec![
+                                    SelectorComponent::Element("p".into()),
+                                ],
+                                pseudo_element: Some(PseudoElement::After),
+                            },
+                        ],
+                        declarations: vec![Declaration {
+                            data: Decl::Content {
+                                text: "blah*#".into()
+                            },
+                            important: Importance::Default,
+                        },],
+                    },
                 ]
             ))
         );
@@ -1405,7 +1561,8 @@ mod test {
                         a: 2,
                         b: 0,
                         sel: sel_all.clone()
-                    }]
+                    }],
+                    ..Default::default()
                 }
             )
         );
@@ -1418,7 +1575,8 @@ mod test {
                         a: 2,
                         b: 1,
                         sel: sel_all.clone()
-                    }]
+                    }],
+                    ..Default::default()
                 }
             )
         );
@@ -1431,7 +1589,8 @@ mod test {
                         a: 0,
                         b: 17,
                         sel: sel_all.clone()
-                    }]
+                    }],
+                    ..Default::default()
                 }
             )
         );
@@ -1444,7 +1603,8 @@ mod test {
                         a: 17,
                         b: 0,
                         sel: sel_all.clone()
-                    }]
+                    }],
+                    ..Default::default()
                 }
             )
         );
@@ -1457,7 +1617,8 @@ mod test {
                         a: 10,
                         b: -1,
                         sel: sel_all.clone()
-                    }]
+                    }],
+                    ..Default::default()
                 }
             )
         );
@@ -1470,7 +1631,8 @@ mod test {
                         a: 10,
                         b: 9,
                         sel: sel_all.clone()
-                    }]
+                    }],
+                    ..Default::default()
                 }
             )
         );
@@ -1483,7 +1645,8 @@ mod test {
                         a: -1,
                         b: 3,
                         sel: sel_all.clone()
-                    }]
+                    }],
+                    ..Default::default()
                 }
             )
         );
@@ -1496,7 +1659,8 @@ mod test {
                         a: 1,
                         b: 0,
                         sel: sel_all.clone()
-                    }]
+                    }],
+                    ..Default::default()
                 }
             )
         );
@@ -1509,7 +1673,8 @@ mod test {
                         a: 1,
                         b: 0,
                         sel: sel_all.clone()
-                    }]
+                    }],
+                    ..Default::default()
                 }
             )
         );
@@ -1522,7 +1687,8 @@ mod test {
                         a: -1,
                         b: 0,
                         sel: sel_all.clone()
-                    }]
+                    }],
+                    ..Default::default()
                 }
             )
         );

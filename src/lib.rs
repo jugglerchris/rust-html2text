@@ -210,7 +210,7 @@ pub(crate) struct WithSpec<T> {
     specificity: Specificity,
     important: bool,
 }
-impl<T: Copy + Clone> WithSpec<T> {
+impl<T: Clone> WithSpec<T> {
     pub(crate) fn maybe_update(
         &mut self,
         important: bool,
@@ -249,12 +249,12 @@ impl<T: Copy + Clone> WithSpec<T> {
         self.important = important;
     }
 
-    pub fn val(&self) -> Option<T> {
-        self.val
+    pub fn val(&self) -> Option<&T> {
+        self.val.as_ref()
     }
 }
 
-impl<T: Copy + Clone> Default for WithSpec<T> {
+impl<T> Default for WithSpec<T> {
     fn default() -> Self {
         WithSpec {
             val: None,
@@ -265,7 +265,7 @@ impl<T: Copy + Clone> Default for WithSpec<T> {
     }
 }
 
-#[derive(Debug, Copy, Clone, Default)]
+#[derive(Debug, Clone, Default)]
 pub(crate) struct ComputedStyle {
     #[cfg(feature = "css")]
     /// The computed foreground colour, if any
@@ -278,9 +278,24 @@ pub(crate) struct ComputedStyle {
     pub(crate) display: WithSpec<css::Display>,
     /// The CSS white-space property
     pub(crate) white_space: WithSpec<WhiteSpace>,
+    /// The CSS content property
+    pub(crate) content: WithSpec<css::PseudoContent>,
+
+    /// The CSS content property for ::before
+    pub(crate) content_before: Option<Box<ComputedStyle>>,
+    /// The CSS content property for ::after
+    pub(crate) content_after: Option<Box<ComputedStyle>>,
 
     /// A non-CSS flag indicating we're inside a <pre>.
     pub(crate) internal_pre: bool,
+}
+
+impl ComputedStyle {
+    /// Return the style data inherited by children.
+    pub(crate) fn inherit(self: &Self) -> Self {
+        // TODO: clear fields that shouldn't be inherited
+        self.clone()
+    }
 }
 
 /// Errors from reading or rendering HTML
@@ -426,7 +441,7 @@ impl RenderTableRow {
             // Skip any zero-width columns
             if col_width > 0 {
                 cell.col_width = Some(col_width + cell.colspan - 1);
-                let style = cell.style;
+                let style = cell.style.clone();
                 result.push(RenderNode::new_styled(
                     RenderNodeInfo::TableCell(cell),
                     style,
@@ -514,7 +529,7 @@ impl RenderTable {
             .into_iter()
             .map(|mut tr| {
                 tr.col_sizes = Some(col_sizes.clone());
-                let style = tr.style;
+                let style = tr.style.clone();
                 RenderNode::new_styled(RenderNodeInfo::TableRow(tr, vert), style)
             })
             .collect()
@@ -1155,12 +1170,13 @@ fn tr_to_render_tree<'a, T: Write>(
                 }
             })
             .collect();
+        let style = computed.clone();
         Some(RenderNode::new_styled(
             RenderNodeInfo::TableRow(
                 RenderTableRow {
                     cells,
                     col_sizes: None,
-                    style: computed,
+                    style,
                 },
                 false,
             ),
@@ -1185,13 +1201,14 @@ fn td_to_render_tree<'a, T: Write>(
         }
     }
     pending(input, move |_, children| {
+        let style = computed.clone();
         Some(RenderNode::new_styled(
             RenderNodeInfo::TableCell(RenderTableCell {
                 colspan,
                 content: children,
                 size_estimate: Cell::new(None),
                 col_width: None,
-                style: computed,
+                style,
             }),
             computed,
         ))
@@ -1384,7 +1401,7 @@ fn pending<F>(
     f: F,
 ) -> TreeMapResult<'static, HtmlContext, RenderInput, RenderNode>
 where
-    F: Fn(&mut HtmlContext, Vec<RenderNode>) -> Option<RenderNode> + 'static,
+    F: FnOnce(&mut HtmlContext, Vec<RenderNode>) -> Option<RenderNode> + 'static,
 {
     TreeMapResult::PendingChildren {
         children: input.children(),
@@ -1399,7 +1416,7 @@ fn pending_noempty<F>(
     f: F,
 ) -> TreeMapResult<'static, HtmlContext, RenderInput, RenderNode>
 where
-    F: Fn(&mut HtmlContext, Vec<RenderNode>) -> Option<RenderNode> + 'static,
+    F: FnOnce(&mut HtmlContext, Vec<RenderNode>) -> Option<RenderNode> + 'static,
 {
     let handle = &input.handle;
     let style = &input.parent_style;
@@ -1425,11 +1442,17 @@ where
     }
 }
 
-/// Prepend a FragmentStart (or analogous) marker to an existing
+#[derive(Copy, Clone, Eq, PartialEq, Debug)]
+enum ChildPosition {
+    Start,
+    End,
+}
+
+/// Prepend or append a FragmentStart (or analogous) marker to an existing
 /// RenderNode.
-fn prepend_marker(prefix: RenderNode, mut orig: RenderNode) -> RenderNode {
+fn insert_child(new_child: RenderNode, mut orig: RenderNode, position: ChildPosition) -> RenderNode {
     use RenderNodeInfo::*;
-    html_trace!("prepend_marker({:?}, {:?})", prefix, orig);
+    html_trace!("insert_child({:?}, {:?}, {:?})", new_child, orig, position);
 
     match orig.info {
         // For block elements such as Block and Div, we need to insert
@@ -1449,7 +1472,10 @@ fn prepend_marker(prefix: RenderNode, mut orig: RenderNode) -> RenderNode {
             content: ref mut children,
             ..
         }) => {
-            children.insert(0, prefix);
+            match position {
+                ChildPosition::Start => children.insert(0, new_child),
+                ChildPosition::End => children.push(new_child)
+            }
             // Now return orig, but we do that outside the match so
             // that we've given back the borrowed ref 'children'.
         }
@@ -1459,7 +1485,10 @@ fn prepend_marker(prefix: RenderNode, mut orig: RenderNode) -> RenderNode {
             // If the row is empty, then there isn't really anything
             // to attach the fragment start to.
             if let Some(cell) = rrow.cells.first_mut() {
-                cell.content.insert(0, prefix);
+                match position {
+                    ChildPosition::Start => cell.content.insert(0, new_child),
+                    ChildPosition::End => cell.content.push(new_child)
+                }
             }
         }
 
@@ -1468,20 +1497,26 @@ fn prepend_marker(prefix: RenderNode, mut orig: RenderNode) -> RenderNode {
             // to attach the fragment start to.
             if let Some(rrow) = rows.first_mut() {
                 if let Some(cell) = rrow.cells.first_mut() {
-                    cell.content.insert(0, prefix);
+                    match position {
+                        ChildPosition::Start => cell.content.insert(0, new_child),
+                        ChildPosition::End => cell.content.push(new_child)
+                    }
                 }
             }
         }
 
         // For anything else, just make a new Container with the
-        // prefix node and the original one.
+        // new_child node and the original one.
         _ => {
-            let result = RenderNode::new(Container(vec![prefix, orig]));
-            html_trace!("prepend_marker() -> {:?}", result);
+            let result = match position {
+                ChildPosition::Start => RenderNode::new(Container(vec![new_child, orig])),
+                ChildPosition::End => RenderNode::new(Container(vec![orig, new_child])),
+            };
+            html_trace!("insert_child() -> {:?}", result);
             return result;
         }
     }
-    html_trace!("prepend_marker() -> {:?}", &orig);
+    html_trace!("insert_child() -> {:?}", &orig);
     orig
 }
 
@@ -1514,7 +1549,7 @@ fn process_dom_node<T: Write>(
                 let computed =
                     context
                         .style_data
-                        .computed_style(**parent_style, handle, context.use_doc_css);
+                        .computed_style(&*parent_style, handle, context.use_doc_css);
                 match computed.display.val() {
                     Some(css::Display::None) => return Ok(Nothing),
                     #[cfg(feature = "css_ext")]
@@ -1537,8 +1572,10 @@ fn process_dom_node<T: Write>(
                 }
                 computed
             };
+            let computed_before = computed.content_before.clone();
+            let computed_after = computed.content_after.clone();
             #[cfg(not(feature = "css"))]
-            let computed = **parent_style;
+            let computed = parent_style.inherit();
 
             let result = match name.expanded() {
                 expanded_name!(html "html") | expanded_name!(html "body") => {
@@ -1724,12 +1761,54 @@ fn process_dom_node<T: Write>(
                 }
             }
 
+            let result = if computed_before.is_some() || computed_after.is_some() {
+                let wrap_nodes = move |mut node: RenderNode| {
+                    if let Some(ref content) = computed_before {
+                        if let Some(ref pseudo_content) = content.content.val() {
+                            node = insert_child(RenderNode::new(Text(pseudo_content.text.clone())), node, ChildPosition::Start);
+                        }
+                    }
+                    if let Some(ref content) = computed_after {
+                        if let Some(ref pseudo_content) = content.content.val() {
+                            node = insert_child(RenderNode::new(Text(pseudo_content.text.clone())), node, ChildPosition::End);
+                        }
+                    }
+                    node
+                };
+                // Insert extra content nodes
+                match result {
+                    Finished(node) => {
+                        Finished(wrap_nodes(node))
+                    }
+                    // Do we need to wrap a Nothing?
+                    Nothing => Nothing,
+                    PendingChildren {
+                        children,
+                        cons,
+                        prefn,
+                        postfn,
+                    } => PendingChildren {
+                        children,
+                        prefn,
+                        postfn,
+                        cons: Box::new(move |ctx, ch| {
+                            match cons(ctx, ch)? {
+                                None => Ok(None),
+                                Some(node) => Ok(Some(wrap_nodes(node))),
+                            }
+                        }),
+                    },
+                }
+            } else {
+                result
+            };
+
             let Some(fragname) = fragment else {
                 return Ok(result);
             };
             match result {
                 Finished(node) => {
-                    Finished(prepend_marker(RenderNode::new(FragStart(fragname)), node))
+                    Finished(insert_child(RenderNode::new(FragStart(fragname)), node, ChildPosition::Start))
                 }
                 Nothing => Finished(RenderNode::new(FragStart(fragname))),
                 PendingChildren {
@@ -1745,7 +1824,7 @@ fn process_dom_node<T: Write>(
                         let fragnode = RenderNode::new(FragStart(fragname));
                         match cons(ctx, ch)? {
                             None => Ok(Some(fragnode)),
-                            Some(node) => Ok(Some(prepend_marker(fragnode, node))),
+                            Some(node) => Ok(Some(insert_child(fragnode, node, ChildPosition::Start))),
                         }
                     }),
                 },
@@ -1824,17 +1903,17 @@ impl PushedStyleInfo {
         let mut result: PushedStyleInfo = Default::default();
         #[cfg(feature = "css")]
         if let Some(col) = style.colour.val() {
-            render.push_colour(col);
+            render.push_colour(col.clone());
             result.colour = true;
         }
         #[cfg(feature = "css")]
         if let Some(col) = style.bg_colour.val() {
-            render.push_bgcolour(col);
+            render.push_bgcolour(col.clone());
             result.bgcolour = true;
         }
         if let Some(ws) = style.white_space.val() {
             if let WhiteSpace::Pre | WhiteSpace::PreWrap = ws {
-                render.push_ws(ws);
+                render.push_ws(ws.clone());
                 result.white_space = true;
             }
         }
