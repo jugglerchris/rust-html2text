@@ -823,6 +823,29 @@ full screen width
 }
 
 #[test]
+fn test_nested_list() {
+    test_html(br"
+    <ul>
+      <li>Item 1</li>
+      <li>Item 2
+      <ul>
+        <li>SubItem 2.1</li>
+        <li>SubItem 2.2
+          <ul>
+            <li>Sub Item 2.2.1</li>
+          </ul>
+        </li>
+      </ul>
+    </ul>",
+    r#"* Item 1
+* Item 2
+  * SubItem 2.1
+  * SubItem 2.2
+    * Sub Item 2.2.1
+"#, 80);
+}
+
+#[test]
 fn test_wrap_word_boundaries() {
     test_html(br#"Hello there boo"#, "Hello there boo\n", 20);
     test_html(br#"Hello there boo"#, "Hello there boo\n", 15);
