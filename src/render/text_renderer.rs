@@ -1351,11 +1351,8 @@ impl<D: TextDecorator> Renderer for SubRenderer<D> {
         I: Iterator<Item = &'a str>,
     {
         use self::TaggedLineElement::Str;
-        html_trace!("append_subrender: {self}");
-        html_trace!("append_subrender other: {other}");
 
         self.flush_wrapping()?;
-        html_trace!("append_subrender self after flush: {self}");
         let tag = self.ann_stack.clone();
         self.lines.extend(
             other
