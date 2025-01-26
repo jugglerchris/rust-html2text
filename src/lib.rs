@@ -1981,8 +1981,6 @@ fn do_render_node<T: Write, D: TextDecorator>(
             })
         }
         Ul(items) => {
-            renderer.start_block()?;
-
             let prefix = renderer.unordered_item_prefix();
             let prefix_len = prefix.len();
 
@@ -2013,8 +2011,6 @@ fn do_render_node<T: Write, D: TextDecorator>(
             }
         }
         Ol(start, items) => {
-            renderer.start_block()?;
-
             let num_items = items.len();
 
             // The prefix width could be at either end if the start is negative.
