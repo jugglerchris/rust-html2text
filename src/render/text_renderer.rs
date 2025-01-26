@@ -1865,7 +1865,10 @@ impl TextDecorator for TrivialDecorator {
 /// A decorator to generate rich text (styled) rather than
 /// pure text output.
 #[derive(Clone, Debug)]
-pub struct RichDecorator {}
+pub struct RichDecorator {
+    // Don't output decorations around '*bold*' text.
+    skip_decorations: bool,
+}
 
 /// Annotation type for "rich" text.  Text is associated with a set of
 /// these.
@@ -1896,10 +1899,20 @@ pub enum RichAnnotation {
 }
 
 impl RichDecorator {
-    /// Create a new `RichDecorator`.
+    /// Create a new `RichDecorator` with the default settings.
     #[allow(clippy::new_without_default)]
     pub fn new() -> RichDecorator {
-        RichDecorator {}
+        RichDecorator {
+            skip_decorations: false,
+        }
+    }
+
+    /// Create a new `RichDecorator` which doesn't add decorations
+    /// when terminal formatting can be used.
+    pub fn new_undecorated() -> RichDecorator {
+        RichDecorator {
+            skip_decorations: true,
+        }
     }
 }
 
@@ -1923,11 +1936,19 @@ impl TextDecorator for RichDecorator {
     }
 
     fn decorate_strong_start(&self) -> (String, Self::Annotation) {
-        ("*".to_string(), RichAnnotation::Strong)
+        if self.skip_decorations {
+            ("".to_string(), RichAnnotation::Strong)
+        } else {
+            ("*".to_string(), RichAnnotation::Strong)
+        }
     }
 
     fn decorate_strong_end(&self) -> String {
-        "*".to_string()
+        if self.skip_decorations {
+            "".to_string()
+        } else {
+            "*".to_string()
+        }
     }
 
     fn decorate_strikeout_start(&self) -> (String, Self::Annotation) {
@@ -1939,11 +1960,19 @@ impl TextDecorator for RichDecorator {
     }
 
     fn decorate_code_start(&self) -> (String, Self::Annotation) {
-        ("`".to_string(), RichAnnotation::Code)
+        if self.skip_decorations {
+            ("".to_string(), RichAnnotation::Code)
+        } else {
+            ("`".to_string(), RichAnnotation::Code)
+        }
     }
 
     fn decorate_code_end(&self) -> String {
-        "`".to_string()
+        if self.skip_decorations {
+            "".to_string()
+        } else {
+            "`".to_string()
+        }
     }
 
     fn decorate_preformat_first(&self) -> Self::Annotation {
@@ -1979,7 +2008,7 @@ impl TextDecorator for RichDecorator {
     }
 
     fn make_subblock_decorator(&self) -> Self {
-        RichDecorator::new()
+        self.clone()
     }
 
     fn push_colour(&mut self, colour: Colour) -> Option<Self::Annotation> {
