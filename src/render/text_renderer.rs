@@ -1733,19 +1733,19 @@ impl TextDecorator for PlainDecorator {
     }
 
     fn decorate_em_start(&self) -> (String, Self::Annotation) {
-        ("*".to_string(), ())
+        ("".to_string(), ())
     }
 
     fn decorate_em_end(&self) -> String {
-        "*".to_string()
+        "".to_string()
     }
 
     fn decorate_strong_start(&self) -> (String, Self::Annotation) {
-        ("**".to_string(), ())
+        ("".to_string(), ())
     }
 
     fn decorate_strong_end(&self) -> String {
-        "**".to_string()
+        "".to_string()
     }
 
     fn decorate_strikeout_start(&self) -> (String, Self::Annotation) {
@@ -1757,11 +1757,11 @@ impl TextDecorator for PlainDecorator {
     }
 
     fn decorate_code_start(&self) -> (String, Self::Annotation) {
-        ("`".to_string(), ())
+        ("".to_string(), ())
     }
 
     fn decorate_code_end(&self) -> String {
-        "`".to_string()
+        "".to_string()
     }
 
     fn decorate_preformat_first(&self) -> Self::Annotation {}

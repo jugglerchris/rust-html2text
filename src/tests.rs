@@ -2823,7 +2823,8 @@ at  line  breaks
 
     #[test]
     fn test_before_after() {
-        test_html_coloured(br#"
+        test_html_coloured(
+            br#"
         <style>
           span.bracketed::before {
               content: "[";
@@ -2835,7 +2836,9 @@ at  line  breaks
         <body>
         <p>Hello <span class="bracketed">world</span>!</p>
         </body>"#,
-        r#"Hello [world]!
-"#, 80);
+            r#"Hello [world]!
+"#,
+            80,
+        );
     }
 }

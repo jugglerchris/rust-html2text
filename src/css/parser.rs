@@ -170,7 +170,9 @@ pub(crate) struct Declaration {
     pub important: Importance,
 }
 
-use super::{PseudoElement, Selector, SelectorComponent, WhiteSpace};
+use crate::css::styles_from_properties;
+
+use super::{types::Importance, PseudoElement, Selector, SelectorComponent, StyleDecl, WhiteSpace};
 
 #[derive(Debug, PartialEq)]
 pub(crate) struct RuleSet {
@@ -411,12 +413,6 @@ fn parse_faulty_color(
         return Ok(Colour::Rgb(r, g, b));
     }
     Err(e)
-}
-
-#[derive(Copy, Clone, PartialEq, Eq, Debug)]
-pub(crate) enum Importance {
-    Default,
-    Important,
 }
 
 pub(crate) fn parse_declaration(text: &str) -> IResult<&str, Option<Declaration>> {
@@ -940,7 +936,8 @@ fn parse_selector_without_element(text: &str) -> IResult<&str, Vec<SelectorCompo
 pub(crate) fn parse_pseudo_element(text: &str) -> IResult<&str, Option<PseudoElement>> {
     opt(alt((
         map(tag("::before"), |_| PseudoElement::Before),
-        map(tag("::after"), |_| PseudoElement::After))))(text)
+        map(tag("::after"), |_| PseudoElement::After),
+    )))(text)
 }
 
 pub(crate) fn parse_selector(text: &str) -> IResult<&str, Selector> {
@@ -960,7 +957,13 @@ pub(crate) fn parse_selector(text: &str) -> IResult<&str, Selector> {
     }
 
     let (rest, pseudo_element) = parse_pseudo_element(rest)?;
-    Ok((rest, Selector { components, pseudo_element }))
+    Ok((
+        rest,
+        Selector {
+            components,
+            pseudo_element,
+        },
+    ))
 }
 
 fn parse_ruleset(text: &str) -> IResult<&str, RuleSet> {
@@ -1072,10 +1075,20 @@ pub(crate) fn parse_stylesheet(text: &str) -> IResult<&str, Vec<RuleSet>> {
     Ok((rest, items.into_iter().flatten().collect()))
 }
 
+pub(crate) fn parse_style_attribute(text: &str) -> crate::Result<Vec<StyleDecl>> {
+    html_trace_quiet!("Parsing inline style: {text}");
+    let (_rest, decls) = parse_rules(text).map_err(|_| crate::Error::CssParseError)?;
+
+    let styles = styles_from_properties(&decls);
+    html_trace_quiet!("Parsed inline style: {:?}", styles);
+    Ok(styles)
+}
+
 #[cfg(test)]
 mod test {
     use crate::css::{
-        parser::{Height, Importance, LengthUnit, RuleSet, Selector}, PseudoElement, SelectorComponent
+        parser::{Height, Importance, LengthUnit, RuleSet, Selector},
+        PseudoElement, SelectorComponent,
     };
 
     use super::{Colour, Decl, Declaration, Overflow, PropertyName};
@@ -1398,32 +1411,28 @@ mod test {
             ),
             Ok((
                 "",
-                vec![
-                    RuleSet {
-                        selectors: vec![
-                            Selector {
-                                components: vec![
-                                    SelectorComponent::Element("a".into()),
-                                    SelectorComponent::CombDescendant,
-                                    SelectorComponent::Class("foo".into()),
-                                ],
-                                ..Default::default()
-                            },
-                            Selector {
-                                components: vec![
-                                    SelectorComponent::Element("p".into()),
-                                ],
-                                ..Default::default()
-                            },
-                        ],
-                        declarations: vec![Declaration {
-                            data: Decl::Color {
-                                value: Colour::Rgb(0x11, 0x22, 0x33)
-                            },
-                            important: Importance::Default,
-                        },],
-                    },
-                ]
+                vec![RuleSet {
+                    selectors: vec![
+                        Selector {
+                            components: vec![
+                                SelectorComponent::Element("a".into()),
+                                SelectorComponent::CombDescendant,
+                                SelectorComponent::Class("foo".into()),
+                            ],
+                            ..Default::default()
+                        },
+                        Selector {
+                            components: vec![SelectorComponent::Element("p".into()),],
+                            ..Default::default()
+                        },
+                    ],
+                    declarations: vec![Declaration {
+                        data: Decl::Color {
+                            value: Colour::Rgb(0x11, 0x22, 0x33)
+                        },
+                        important: Importance::Default,
+                    },],
+                },]
             ))
         );
     }
@@ -1438,32 +1447,28 @@ mod test {
             ),
             Ok((
                 "",
-                vec![
-                    RuleSet {
-                        selectors: vec![
-                            Selector {
-                                components: vec![
-                                    SelectorComponent::Element("a".into()),
-                                    SelectorComponent::CombDescendant,
-                                    SelectorComponent::Class("foo".into()),
-                                ],
-                                pseudo_element: Some(PseudoElement::Before),
-                            },
-                            Selector {
-                                components: vec![
-                                    SelectorComponent::Element("p".into()),
-                                ],
-                                pseudo_element: Some(PseudoElement::After),
-                            },
-                        ],
-                        declarations: vec![Declaration {
-                            data: Decl::Color {
-                                value: Colour::Rgb(0x11, 0x22, 0x33)
-                            },
-                            important: Importance::Default,
-                        },],
-                    },
-                ]
+                vec![RuleSet {
+                    selectors: vec![
+                        Selector {
+                            components: vec![
+                                SelectorComponent::Element("a".into()),
+                                SelectorComponent::CombDescendant,
+                                SelectorComponent::Class("foo".into()),
+                            ],
+                            pseudo_element: Some(PseudoElement::Before),
+                        },
+                        Selector {
+                            components: vec![SelectorComponent::Element("p".into()),],
+                            pseudo_element: Some(PseudoElement::After),
+                        },
+                    ],
+                    declarations: vec![Declaration {
+                        data: Decl::Color {
+                            value: Colour::Rgb(0x11, 0x22, 0x33)
+                        },
+                        important: Importance::Default,
+                    },],
+                },]
             ))
         );
     }
@@ -1478,32 +1483,28 @@ mod test {
             ),
             Ok((
                 "",
-                vec![
-                    RuleSet {
-                        selectors: vec![
-                            Selector {
-                                components: vec![
-                                    SelectorComponent::Element("a".into()),
-                                    SelectorComponent::CombDescendant,
-                                    SelectorComponent::Class("foo".into()),
-                                ],
-                                pseudo_element: Some(PseudoElement::Before),
-                            },
-                            Selector {
-                                components: vec![
-                                    SelectorComponent::Element("p".into()),
-                                ],
-                                pseudo_element: Some(PseudoElement::After),
-                            },
-                        ],
-                        declarations: vec![Declaration {
-                            data: Decl::Content {
-                                text: "blah*#".into()
-                            },
-                            important: Importance::Default,
-                        },],
-                    },
-                ]
+                vec![RuleSet {
+                    selectors: vec![
+                        Selector {
+                            components: vec![
+                                SelectorComponent::Element("a".into()),
+                                SelectorComponent::CombDescendant,
+                                SelectorComponent::Class("foo".into()),
+                            ],
+                            pseudo_element: Some(PseudoElement::Before),
+                        },
+                        Selector {
+                            components: vec![SelectorComponent::Element("p".into()),],
+                            pseudo_element: Some(PseudoElement::After),
+                        },
+                    ],
+                    declarations: vec![Declaration {
+                        data: Decl::Content {
+                            text: "blah*#".into()
+                        },
+                        important: Importance::Default,
+                    },],
+                },]
             ))
         );
     }
