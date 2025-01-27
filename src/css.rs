@@ -549,9 +549,9 @@ impl StyleData {
             Some(PseudoElement::Before) => {
                 // TODO: ideally we should inherit from the parent; however we haven't finished
                 // computing the parent yet.
-                result.content_before.get_or_insert_default()
+                result.content_before.get_or_insert_with(Default::default)
             }
-            Some(PseudoElement::After) => result.content_after.get_or_insert_default(),
+            Some(PseudoElement::After) => result.content_after.get_or_insert_with(Default::default),
         };
         // The increasing priority is:
         // * agent
