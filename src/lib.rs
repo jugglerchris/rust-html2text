@@ -2381,7 +2381,8 @@ pub mod config {
     use std::io;
 
     use super::Error;
-    use crate::css::StyleData;
+    use crate::css::types::Importance;
+    use crate::css::{Ruleset, Selector, SelectorComponent, Style, StyleData};
     use crate::{
         css::{PseudoContent, PseudoElement, StyleDecl},
         render::text_renderer::{
@@ -2599,70 +2600,38 @@ pub mod config {
             self.wrap_links = false;
             self
         }
+
+        /// Make a simple "contains" type rule for an element.
+        fn make_surround_rule(element: &str, after: bool, content: &str) -> Ruleset {
+            Ruleset {
+                selector: Selector {
+                    components: vec![SelectorComponent::Element(element.into())],
+                    pseudo_element: Some(if after {
+                        PseudoElement::After
+                    } else {
+                        PseudoElement::Before
+                    }),
+                },
+                styles: vec![StyleDecl {
+                    style: Style::Content(PseudoContent {
+                        text: content.into(),
+                    }),
+                    importance: Importance::Default,
+                }],
+            }
+        }
+
         /// Decorate <em> etc. similarly to markdown
         pub fn do_decorate(mut self) -> Self {
-            use crate::css::{types::Importance, Ruleset, Selector, SelectorComponent, Style};
             self.style.add_agent_rules(&[
-                Ruleset {
-                    selector: Selector {
-                        components: vec![SelectorComponent::Element("em".into())],
-                        pseudo_element: Some(PseudoElement::Before),
-                    },
-                    styles: vec![StyleDecl {
-                        style: Style::Content(PseudoContent { text: "*".into() }),
-                        importance: Importance::Default,
-                    }],
-                },
-                Ruleset {
-                    selector: Selector {
-                        components: vec![SelectorComponent::Element("em".into())],
-                        pseudo_element: Some(PseudoElement::After),
-                    },
-                    styles: vec![StyleDecl {
-                        style: Style::Content(PseudoContent { text: "*".into() }),
-                        importance: Importance::Default,
-                    }],
-                },
-                Ruleset {
-                    selector: Selector {
-                        components: vec![SelectorComponent::Element("dt".into())],
-                        pseudo_element: Some(PseudoElement::Before),
-                    },
-                    styles: vec![StyleDecl {
-                        style: Style::Content(PseudoContent { text: "*".into() }),
-                        importance: Importance::Default,
-                    }],
-                },
-                Ruleset {
-                    selector: Selector {
-                        components: vec![SelectorComponent::Element("dt".into())],
-                        pseudo_element: Some(PseudoElement::After),
-                    },
-                    styles: vec![StyleDecl {
-                        style: Style::Content(PseudoContent { text: "*".into() }),
-                        importance: Importance::Default,
-                    }],
-                },
-                Ruleset {
-                    selector: Selector {
-                        components: vec![SelectorComponent::Element("strong".into())],
-                        pseudo_element: Some(PseudoElement::Before),
-                    },
-                    styles: vec![StyleDecl {
-                        style: Style::Content(PseudoContent { text: "**".into() }),
-                        importance: Importance::Default,
-                    }],
-                },
-                Ruleset {
-                    selector: Selector {
-                        components: vec![SelectorComponent::Element("strong".into())],
-                        pseudo_element: Some(PseudoElement::After),
-                    },
-                    styles: vec![StyleDecl {
-                        style: Style::Content(PseudoContent { text: "**".into() }),
-                        importance: Importance::Default,
-                    }],
-                },
+                Self::make_surround_rule("em", false, "*"),
+                Self::make_surround_rule("em", true, "*"),
+                Self::make_surround_rule("dt", false, "*"),
+                Self::make_surround_rule("dt", true, "*"),
+                Self::make_surround_rule("strong", false, "**"),
+                Self::make_surround_rule("strong", true, "**"),
+                Self::make_surround_rule("code", false, "`"),
+                Self::make_surround_rule("code", true, "`"),
             ]);
             self
         }
