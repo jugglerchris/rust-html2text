@@ -296,7 +296,7 @@ mod top {
                             }
                         }
                     }
-                    Key::Char(' ') | Key::PageDown => {
+                    Key::Char(' ') | Key::PageDown | Key::Ctrl('f') => {
                         // Ideally, move both the cursor and the top
                         // visible line down by a whole page
                         doc_y += height;
@@ -309,17 +309,17 @@ mod top {
                         // will take care of the rest of the special
                         // cases.
                     }
-                    Key::PageUp => {
+                    Key::PageUp | Key::Ctrl('b') => {
                         // Ideally, move both the cursor and the top
                         // visible line up by a whole page. But bound
                         // both at zero.
                         doc_y = std::cmp::max(doc_y, height) - height;
                         top_y = std::cmp::max(top_y, height) - height;
                     }
-                    Key::Home => {
+                    Key::Home | Key::Char('g') => {
                         doc_y = 0;
                     }
-                    Key::End => {
+                    Key::End | Key::Char('G') => {
                         doc_y = max_y;
                     }
                     Key::Char('\t') => {}

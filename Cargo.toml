@@ -42,6 +42,7 @@ path = "examples/html2text.rs"
 env_logger = "0.11.6"
 argparse = "0.2.2"
 log = "0.4.20"
+yansi = { version = "1.0.1", features = ["hyperlink"] }
 
 [target.'cfg(unix)'.dev-dependencies]
 termion = "4.0"
