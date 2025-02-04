@@ -163,8 +163,6 @@ struct Flags {
     wrap_width: Option<usize>,
     #[allow(unused)]
     use_colour: bool,
-    #[allow(unused)]
-    no_decorate: bool,
     #[cfg(feature = "css")]
     use_css: bool,
     #[cfg(feature = "css")]
@@ -187,7 +185,6 @@ fn main() {
         width: 80,
         wrap_width: None,
         use_colour: false,
-        no_decorate: false,
         #[cfg(feature = "css")]
         use_css: false,
         #[cfg(feature = "css")]
@@ -233,12 +230,6 @@ fn main() {
             &["--colour"],
             StoreTrue,
             "Use ANSI terminal colours",
-        );
-        #[cfg(unix)]
-        ap.refer(&mut flags.no_decorate).add_option(
-            &["--no-decorate"],
-            StoreTrue,
-            "Skip decorations (with --colour)",
         );
         #[cfg(feature = "css")]
         ap.refer(&mut flags.use_css)
