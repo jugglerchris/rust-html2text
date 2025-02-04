@@ -1892,10 +1892,7 @@ impl TextDecorator for TrivialDecorator {
 /// A decorator to generate rich text (styled) rather than
 /// pure text output.
 #[derive(Clone, Debug)]
-pub struct RichDecorator {
-    // Don't output decorations around '*bold*' text.
-    skip_decorations: bool,
-}
+pub struct RichDecorator {}
 
 /// Annotation type for "rich" text.  Text is associated with a set of
 /// these.
@@ -1929,17 +1926,7 @@ impl RichDecorator {
     /// Create a new `RichDecorator` with the default settings.
     #[allow(clippy::new_without_default)]
     pub fn new() -> RichDecorator {
-        RichDecorator {
-            skip_decorations: false,
-        }
-    }
-
-    /// Create a new `RichDecorator` which doesn't add decorations
-    /// when terminal formatting can be used.
-    pub fn new_undecorated() -> RichDecorator {
-        RichDecorator {
-            skip_decorations: true,
-        }
+        RichDecorator {}
     }
 }
 
@@ -1963,19 +1950,11 @@ impl TextDecorator for RichDecorator {
     }
 
     fn decorate_strong_start(&self) -> (String, Self::Annotation) {
-        if self.skip_decorations {
-            ("".to_string(), RichAnnotation::Strong)
-        } else {
-            ("*".to_string(), RichAnnotation::Strong)
-        }
+        ("".to_string(), RichAnnotation::Strong)
     }
 
     fn decorate_strong_end(&self) -> String {
-        if self.skip_decorations {
-            "".to_string()
-        } else {
-            "*".to_string()
-        }
+        "".to_string()
     }
 
     fn decorate_strikeout_start(&self) -> (String, Self::Annotation) {
@@ -1987,19 +1966,11 @@ impl TextDecorator for RichDecorator {
     }
 
     fn decorate_code_start(&self) -> (String, Self::Annotation) {
-        if self.skip_decorations {
-            ("".to_string(), RichAnnotation::Code)
-        } else {
-            ("`".to_string(), RichAnnotation::Code)
-        }
+        ("".to_string(), RichAnnotation::Code)
     }
 
     fn decorate_code_end(&self) -> String {
-        if self.skip_decorations {
-            "".to_string()
-        } else {
-            "`".to_string()
-        }
+        "".to_string()
     }
 
     fn decorate_preformat_first(&self) -> Self::Annotation {

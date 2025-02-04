@@ -109,11 +109,7 @@ where
     #[cfg(unix)]
     {
         if flags.use_colour {
-            let conf = if flags.no_decorate {
-                config::rich_no_decorate()
-            } else {
-                config::rich()
-            };
+            let conf = config::rich();
             let conf = update_config(conf, &flags);
             #[cfg(feature = "css")]
             let use_css_colours = !flags.ignore_css_colours;
