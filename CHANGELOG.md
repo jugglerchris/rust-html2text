@@ -14,8 +14,8 @@ Possible log types:
 ### 0.14.0
 
 - [changed] Various small refactors (thanks sftse)
-- [added] New `config::rich_no_decorate`, to use annotations without '\*' markers around 
-  bold text etc.
+- [changed] `Config::rich()` no longer includes decorations around `<em>` etc. - 
+  use `Config::rich().do_decorate()` to get the old behaviour.
 
 ### 0.13.6
 

@@ -60,14 +60,13 @@ extern crate html5ever;
 #[macro_use]
 mod macros;
 
-#[cfg(feature = "css")]
 pub mod css;
 pub mod render;
 
 use render::text_renderer::{
     RenderLine, RenderOptions, RichAnnotation, SubRenderer, TaggedLine, TextRenderer,
 };
-use render::{Renderer, TextDecorator};
+use render::{Renderer, TextDecorator, TrivialDecorator};
 
 use html5ever::driver::ParseOpts;
 use html5ever::parse_document;
@@ -210,7 +209,7 @@ pub(crate) struct WithSpec<T> {
     specificity: Specificity,
     important: bool,
 }
-impl<T: Copy + Clone> WithSpec<T> {
+impl<T: Clone> WithSpec<T> {
     pub(crate) fn maybe_update(
         &mut self,
         important: bool,
@@ -249,12 +248,12 @@ impl<T: Copy + Clone> WithSpec<T> {
         self.important = important;
     }
 
-    pub fn val(&self) -> Option<T> {
-        self.val
+    pub fn val(&self) -> Option<&T> {
+        self.val.as_ref()
     }
 }
 
-impl<T: Copy + Clone> Default for WithSpec<T> {
+impl<T> Default for WithSpec<T> {
     fn default() -> Self {
         WithSpec {
             val: None,
@@ -265,7 +264,7 @@ impl<T: Copy + Clone> Default for WithSpec<T> {
     }
 }
 
-#[derive(Debug, Copy, Clone, Default)]
+#[derive(Debug, Clone, Default)]
 pub(crate) struct ComputedStyle {
     #[cfg(feature = "css")]
     /// The computed foreground colour, if any
@@ -278,9 +277,24 @@ pub(crate) struct ComputedStyle {
     pub(crate) display: WithSpec<css::Display>,
     /// The CSS white-space property
     pub(crate) white_space: WithSpec<WhiteSpace>,
+    /// The CSS content property
+    pub(crate) content: WithSpec<css::PseudoContent>,
+
+    /// The CSS content property for ::before
+    pub(crate) content_before: Option<Box<ComputedStyle>>,
+    /// The CSS content property for ::after
+    pub(crate) content_after: Option<Box<ComputedStyle>>,
 
     /// A non-CSS flag indicating we're inside a <pre>.
     pub(crate) internal_pre: bool,
+}
+
+impl ComputedStyle {
+    /// Return the style data inherited by children.
+    pub(crate) fn inherit(self: &Self) -> Self {
+        // TODO: clear fields that shouldn't be inherited
+        self.clone()
+    }
 }
 
 /// Errors from reading or rendering HTML
@@ -426,7 +440,7 @@ impl RenderTableRow {
             // Skip any zero-width columns
             if col_width > 0 {
                 cell.col_width = Some(col_width + cell.colspan - 1);
-                let style = cell.style;
+                let style = cell.style.clone();
                 result.push(RenderNode::new_styled(
                     RenderNodeInfo::TableCell(cell),
                     style,
@@ -514,7 +528,7 @@ impl RenderTable {
             .into_iter()
             .map(|mut tr| {
                 tr.col_sizes = Some(col_sizes.clone());
-                let style = tr.style;
+                let style = tr.style.clone();
                 RenderNode::new_styled(RenderNodeInfo::TableRow(tr, vert), style)
             })
             .collect()
@@ -593,7 +607,7 @@ enum RenderNodeInfo {
     Ol(i64, Vec<RenderNode>),
     /// A description list (containing Dt or Dd)
     Dl(Vec<RenderNode>),
-    /// A term (from a `<dl>`)
+    /// A term (from a `<dt>`)
     Dt(Vec<RenderNode>),
     /// A definition (from a `<dl>`)
     Dd(Vec<RenderNode>),
@@ -1013,51 +1027,6 @@ fn precalc_size_estimate<'a, D: TextDecorator>(
     }
 }
 
-/// Make a Vec of RenderNodes from the children of a node.
-fn children_to_render_nodes<T: Write>(
-    handle: Handle,
-    err_out: &mut T,
-    context: &mut HtmlContext,
-) -> Result<Vec<RenderNode>> {
-    /* process children, but don't add anything */
-    handle
-        .children
-        .borrow()
-        .iter()
-        .flat_map(|ch| dom_to_render_tree_with_context(ch.clone(), err_out, context).transpose())
-        .collect()
-}
-
-/// Make a Vec of DtElements from the `<dt>` and `<dd>` children of a node.
-fn desc_list_children_to_render_nodes<T: Write>(
-    handle: Handle,
-    err_out: &mut T,
-    context: &mut HtmlContext,
-) -> Result<Vec<RenderNode>> {
-    let mut children = Vec::new();
-
-    for child in handle.children.borrow().iter() {
-        match child.data {
-            Element { ref name, .. } => match name.expanded() {
-                expanded_name!(html "dt") => {
-                    let dt_children = children_to_render_nodes(child.clone(), err_out, context)?;
-                    children.push(RenderNode::new(RenderNodeInfo::Dt(dt_children)));
-                }
-                expanded_name!(html "dd") => {
-                    let dd_children = children_to_render_nodes(child.clone(), err_out, context)?;
-                    children.push(RenderNode::new(RenderNodeInfo::Dd(dd_children)));
-                }
-                _ => {}
-            },
-            Comment { .. } => {}
-            _ => {
-                html_trace!("Unhandled in list: {:?}\n", child);
-            }
-        }
-    }
-    Ok(children)
-}
-
 /// Convert a table into a RenderNode
 fn table_to_render_tree<'a, T: Write>(
     input: RenderInput,
@@ -1155,12 +1124,13 @@ fn tr_to_render_tree<'a, T: Write>(
                 }
             })
             .collect();
+        let style = computed.clone();
         Some(RenderNode::new_styled(
             RenderNodeInfo::TableRow(
                 RenderTableRow {
                     cells,
                     col_sizes: None,
-                    style: computed,
+                    style,
                 },
                 false,
             ),
@@ -1185,13 +1155,14 @@ fn td_to_render_tree<'a, T: Write>(
         }
     }
     pending(input, move |_, children| {
+        let style = computed.clone();
         Some(RenderNode::new_styled(
             RenderNodeInfo::TableCell(RenderTableCell {
                 colspan,
                 content: children,
                 size_estimate: Cell::new(None),
                 col_width: None,
-                style: computed,
+                style,
             }),
             computed,
         ))
@@ -1308,7 +1279,6 @@ where
 
 #[derive(Debug, PartialEq, Eq)]
 struct HtmlContext {
-    #[cfg(feature = "css")]
     style_data: css::StyleData,
     #[cfg(feature = "css")]
     use_doc_css: bool,
@@ -1351,7 +1321,7 @@ fn dom_to_render_tree_with_context<T: Write>(
     html_trace!("### dom_to_render_tree: HTML: {:?}", handle);
     #[cfg(feature = "css")]
     if context.use_doc_css {
-        let mut doc_style_data = css::dom_to_stylesheet(handle.clone(), err_out)?;
+        let mut doc_style_data = css::dom_extract::dom_to_stylesheet(handle.clone(), err_out)?;
         doc_style_data.merge(std::mem::take(&mut context.style_data));
         context.style_data = doc_style_data;
     }
@@ -1375,7 +1345,7 @@ fn dom_to_render_tree_with_context<T: Write>(
 /// the DOM document.
 pub fn dom_to_parsed_style(dom: &RcDom) -> Result<String> {
     let handle = dom.document.clone();
-    let doc_style_data = css::dom_to_stylesheet(handle, &mut std::io::sink())?;
+    let doc_style_data = css::dom_extract::dom_to_stylesheet(handle, &mut std::io::sink())?;
     Ok(doc_style_data.to_string())
 }
 
@@ -1384,7 +1354,7 @@ fn pending<F>(
     f: F,
 ) -> TreeMapResult<'static, HtmlContext, RenderInput, RenderNode>
 where
-    F: Fn(&mut HtmlContext, Vec<RenderNode>) -> Option<RenderNode> + 'static,
+    F: FnOnce(&mut HtmlContext, Vec<RenderNode>) -> Option<RenderNode> + 'static,
 {
     TreeMapResult::PendingChildren {
         children: input.children(),
@@ -1399,7 +1369,7 @@ fn pending_noempty<F>(
     f: F,
 ) -> TreeMapResult<'static, HtmlContext, RenderInput, RenderNode>
 where
-    F: Fn(&mut HtmlContext, Vec<RenderNode>) -> Option<RenderNode> + 'static,
+    F: FnOnce(&mut HtmlContext, Vec<RenderNode>) -> Option<RenderNode> + 'static,
 {
     let handle = &input.handle;
     let style = &input.parent_style;
@@ -1425,11 +1395,21 @@ where
     }
 }
 
-/// Prepend a FragmentStart (or analogous) marker to an existing
+#[derive(Copy, Clone, Eq, PartialEq, Debug)]
+enum ChildPosition {
+    Start,
+    End,
+}
+
+/// Prepend or append a FragmentStart (or analogous) marker to an existing
 /// RenderNode.
-fn prepend_marker(prefix: RenderNode, mut orig: RenderNode) -> RenderNode {
+fn insert_child(
+    new_child: RenderNode,
+    mut orig: RenderNode,
+    position: ChildPosition,
+) -> RenderNode {
     use RenderNodeInfo::*;
-    html_trace!("prepend_marker({:?}, {:?})", prefix, orig);
+    html_trace!("insert_child({:?}, {:?}, {:?})", new_child, orig, position);
 
     match orig.info {
         // For block elements such as Block and Div, we need to insert
@@ -1442,6 +1422,9 @@ fn prepend_marker(prefix: RenderNode, mut orig: RenderNode) -> RenderNode {
         // less pointlessly nested.
         Block(ref mut children)
         | ListItem(ref mut children)
+        | Dd(ref mut children)
+        | Dt(ref mut children)
+        | Dl(ref mut children)
         | Div(ref mut children)
         | BlockQuote(ref mut children)
         | Container(ref mut children)
@@ -1449,7 +1432,10 @@ fn prepend_marker(prefix: RenderNode, mut orig: RenderNode) -> RenderNode {
             content: ref mut children,
             ..
         }) => {
-            children.insert(0, prefix);
+            match position {
+                ChildPosition::Start => children.insert(0, new_child),
+                ChildPosition::End => children.push(new_child),
+            }
             // Now return orig, but we do that outside the match so
             // that we've given back the borrowed ref 'children'.
         }
@@ -1459,7 +1445,10 @@ fn prepend_marker(prefix: RenderNode, mut orig: RenderNode) -> RenderNode {
             // If the row is empty, then there isn't really anything
             // to attach the fragment start to.
             if let Some(cell) = rrow.cells.first_mut() {
-                cell.content.insert(0, prefix);
+                match position {
+                    ChildPosition::Start => cell.content.insert(0, new_child),
+                    ChildPosition::End => cell.content.push(new_child),
+                }
             }
         }
 
@@ -1468,20 +1457,26 @@ fn prepend_marker(prefix: RenderNode, mut orig: RenderNode) -> RenderNode {
             // to attach the fragment start to.
             if let Some(rrow) = rows.first_mut() {
                 if let Some(cell) = rrow.cells.first_mut() {
-                    cell.content.insert(0, prefix);
+                    match position {
+                        ChildPosition::Start => cell.content.insert(0, new_child),
+                        ChildPosition::End => cell.content.push(new_child),
+                    }
                 }
             }
         }
 
         // For anything else, just make a new Container with the
-        // prefix node and the original one.
+        // new_child node and the original one.
         _ => {
-            let result = RenderNode::new(Container(vec![prefix, orig]));
-            html_trace!("prepend_marker() -> {:?}", result);
+            let result = match position {
+                ChildPosition::Start => RenderNode::new(Container(vec![new_child, orig])),
+                ChildPosition::End => RenderNode::new(Container(vec![orig, new_child])),
+            };
+            html_trace!("insert_child() -> {:?}", result);
             return result;
         }
     }
-    html_trace!("prepend_marker() -> {:?}", &orig);
+    html_trace!("insert_child() -> {:?}", &orig);
     orig
 }
 
@@ -1505,21 +1500,26 @@ fn process_dom_node<T: Write>(
             let mut frag_from_name_attr = false;
 
             let RenderInput {
-                ref handle,
+                handle: ref _handle,
                 ref parent_style,
             } = input;
 
             #[cfg(feature = "css")]
+            let use_doc_css = context.use_doc_css;
+            #[cfg(not(feature = "css"))]
+            let use_doc_css = false;
+
             let computed = {
                 let computed =
                     context
                         .style_data
-                        .computed_style(**parent_style, handle, context.use_doc_css);
+                        .computed_style(&*parent_style, _handle, use_doc_css);
+                #[cfg(feature = "css")]
                 match computed.display.val() {
                     Some(css::Display::None) => return Ok(Nothing),
                     #[cfg(feature = "css_ext")]
                     Some(css::Display::ExtRawDom) => {
-                        let result_text = RcDom::node_as_dom_string(handle);
+                        let result_text = RcDom::node_as_dom_string(_handle);
                         let mut computed = computed;
                         computed.white_space.maybe_update(
                             false,
@@ -1537,8 +1537,9 @@ fn process_dom_node<T: Write>(
                 }
                 computed
             };
-            #[cfg(not(feature = "css"))]
-            let computed = **parent_style;
+
+            let computed_before = computed.content_before.clone();
+            let computed_after = computed.content_after.clone();
 
             let result = match name.expanded() {
                 expanded_name!(html "html") | expanded_name!(html "body") => {
@@ -1701,14 +1702,25 @@ fn process_dom_node<T: Write>(
                         Some(RenderNode::new_styled(Ol(start, cs), computed))
                     })
                 }
-                expanded_name!(html "dl") => Finished(RenderNode::new_styled(
-                    Dl(desc_list_children_to_render_nodes(
-                        handle.clone(),
-                        err_out,
-                        context,
-                    )?),
-                    computed,
-                )),
+                expanded_name!(html "dl") => {
+                    pending_noempty(input, move |_, cs| {
+                        // There can be extra nodes which aren't Dt or Dd (like whitespace text
+                        // nodes).  We need to filter those out to avoid messing up the rendering.
+                        let cs = cs
+                            .into_iter()
+                            .filter(|n| {
+                                matches!(n.info, RenderNodeInfo::Dt(..) | RenderNodeInfo::Dd(..))
+                            })
+                            .collect();
+                        Some(RenderNode::new_styled(Dl(cs), computed))
+                    })
+                }
+                expanded_name!(html "dt") => pending(input, move |_, cs| {
+                    Some(RenderNode::new_styled(Dt(cs), computed))
+                }),
+                expanded_name!(html "dd") => pending(input, move |_, cs| {
+                    Some(RenderNode::new_styled(Dd(cs), computed))
+                }),
                 _ => {
                     html_trace!("Unhandled element: {:?}\n", name.local);
                     pending_noempty(input, move |_, cs| {
@@ -1726,13 +1738,61 @@ fn process_dom_node<T: Write>(
                 }
             }
 
+            let result = if computed_before.is_some() || computed_after.is_some() {
+                let wrap_nodes = move |mut node: RenderNode| {
+                    if let Some(ref content) = computed_before {
+                        if let Some(ref pseudo_content) = content.content.val() {
+                            node = insert_child(
+                                RenderNode::new(Text(pseudo_content.text.clone())),
+                                node,
+                                ChildPosition::Start,
+                            );
+                        }
+                    }
+                    if let Some(ref content) = computed_after {
+                        if let Some(ref pseudo_content) = content.content.val() {
+                            node = insert_child(
+                                RenderNode::new(Text(pseudo_content.text.clone())),
+                                node,
+                                ChildPosition::End,
+                            );
+                        }
+                    }
+                    node
+                };
+                // Insert extra content nodes
+                match result {
+                    Finished(node) => Finished(wrap_nodes(node)),
+                    // Do we need to wrap a Nothing?
+                    Nothing => Nothing,
+                    PendingChildren {
+                        children,
+                        cons,
+                        prefn,
+                        postfn,
+                    } => PendingChildren {
+                        children,
+                        prefn,
+                        postfn,
+                        cons: Box::new(move |ctx, ch| match cons(ctx, ch)? {
+                            None => Ok(None),
+                            Some(node) => Ok(Some(wrap_nodes(node))),
+                        }),
+                    },
+                }
+            } else {
+                result
+            };
+
             let Some(fragname) = fragment else {
                 return Ok(result);
             };
             match result {
-                Finished(node) => {
-                    Finished(prepend_marker(RenderNode::new(FragStart(fragname)), node))
-                }
+                Finished(node) => Finished(insert_child(
+                    RenderNode::new(FragStart(fragname)),
+                    node,
+                    ChildPosition::Start,
+                )),
                 Nothing => Finished(RenderNode::new(FragStart(fragname))),
                 PendingChildren {
                     children,
@@ -1747,7 +1807,9 @@ fn process_dom_node<T: Write>(
                         let fragnode = RenderNode::new(FragStart(fragname));
                         match cons(ctx, ch)? {
                             None => Ok(Some(fragnode)),
-                            Some(node) => Ok(Some(prepend_marker(fragnode, node))),
+                            Some(node) => {
+                                Ok(Some(insert_child(fragnode, node, ChildPosition::Start)))
+                            }
                         }
                     }),
                 },
@@ -1826,17 +1888,17 @@ impl PushedStyleInfo {
         let mut result: PushedStyleInfo = Default::default();
         #[cfg(feature = "css")]
         if let Some(col) = style.colour.val() {
-            render.push_colour(col);
+            render.push_colour(col.clone());
             result.colour = true;
         }
         #[cfg(feature = "css")]
         if let Some(col) = style.bg_colour.val() {
-            render.push_bgcolour(col);
+            render.push_bgcolour(col.clone());
             result.bgcolour = true;
         }
         if let Some(ws) = style.white_space.val() {
             if let WhiteSpace::Pre | WhiteSpace::PreWrap = ws {
-                render.push_ws(ws);
+                render.push_ws(ws.clone());
                 result.white_space = true;
             }
         }
@@ -2321,9 +2383,10 @@ pub mod config {
     use std::io;
 
     use super::Error;
-    #[cfg(feature = "css")]
-    use crate::css::StyleData;
+    use crate::css::types::Importance;
+    use crate::css::{Ruleset, Selector, SelectorComponent, Style, StyleData};
     use crate::{
+        css::{PseudoContent, PseudoElement, StyleDecl},
         render::text_renderer::{
             PlainDecorator, RichAnnotation, RichDecorator, TaggedLine, TextDecorator,
         },
@@ -2336,7 +2399,6 @@ pub mod config {
 
         max_wrap_width: Option<usize>,
 
-        #[cfg(feature = "css")]
         style: StyleData,
         #[cfg(feature = "css")]
         use_doc_css: bool,
@@ -2354,7 +2416,6 @@ pub mod config {
         /// Make the HtmlContext from self.
         pub(crate) fn make_context(&self) -> HtmlContext {
             HtmlContext {
-                #[cfg(feature = "css")]
                 style_data: self.style.clone(),
                 #[cfg(feature = "css")]
                 use_doc_css: self.use_doc_css,
@@ -2541,6 +2602,41 @@ pub mod config {
             self.wrap_links = false;
             self
         }
+
+        /// Make a simple "contains" type rule for an element.
+        fn make_surround_rule(element: &str, after: bool, content: &str) -> Ruleset {
+            Ruleset {
+                selector: Selector {
+                    components: vec![SelectorComponent::Element(element.into())],
+                    pseudo_element: Some(if after {
+                        PseudoElement::After
+                    } else {
+                        PseudoElement::Before
+                    }),
+                },
+                styles: vec![StyleDecl {
+                    style: Style::Content(PseudoContent {
+                        text: content.into(),
+                    }),
+                    importance: Importance::Default,
+                }],
+            }
+        }
+
+        /// Decorate <em> etc. similarly to markdown
+        pub fn do_decorate(mut self) -> Self {
+            self.style.add_agent_rules(&[
+                Self::make_surround_rule("em", false, "*"),
+                Self::make_surround_rule("em", true, "*"),
+                Self::make_surround_rule("dt", false, "*"),
+                Self::make_surround_rule("dt", true, "*"),
+                Self::make_surround_rule("strong", false, "**"),
+                Self::make_surround_rule("strong", true, "**"),
+                Self::make_surround_rule("code", false, "`"),
+                Self::make_surround_rule("code", true, "`"),
+            ]);
+            self
+        }
     }
 
     impl Config<RichDecorator> {
@@ -2588,13 +2684,13 @@ pub mod config {
         with_decorator(RichDecorator::new())
     }
 
-    /// Return a Config initialized with a `RichDecorator` and decoration disabled.
-    pub fn rich_no_decorate() -> Config<RichDecorator> {
-        with_decorator(RichDecorator::new_undecorated())
+    /// Return a Config initialized with a `PlainDecorator`.
+    pub fn plain() -> Config<PlainDecorator> {
+        with_decorator(PlainDecorator::new()).do_decorate()
     }
 
     /// Return a Config initialized with a `PlainDecorator`.
-    pub fn plain() -> Config<PlainDecorator> {
+    pub fn plain_no_decorate() -> Config<PlainDecorator> {
         with_decorator(PlainDecorator::new())
     }
 
@@ -2602,7 +2698,6 @@ pub mod config {
     pub fn with_decorator<D: TextDecorator>(decorator: D) -> Config<D> {
         Config {
             decorator,
-            #[cfg(feature = "css")]
             style: Default::default(),
             #[cfg(feature = "css")]
             use_doc_css: false,
@@ -2681,7 +2776,7 @@ impl<D: TextDecorator> RenderedText<D> {
 
 /// Reads and parses HTML from `input` and prepares a render tree.
 pub fn parse(input: impl io::Read) -> Result<RenderTree> {
-    let cfg = config::plain();
+    let cfg = config::with_decorator(TrivialDecorator::new());
     cfg.do_parse(&mut cfg.make_context(), input)
 }
 

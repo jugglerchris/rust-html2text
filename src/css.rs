@@ -1,22 +1,28 @@
 //! Some basic CSS support.
 use std::ops::Deref;
-use std::{io::Write, rc::Rc};
+use std::rc::Rc;
 
+#[cfg(feature = "css")]
 mod parser;
+pub(crate) mod types;
+
+#[cfg(feature = "css")]
+use crate::{Colour, Result, WhiteSpace};
+#[cfg(feature = "css")]
+use parser::parse_style_attribute;
+
+use types::Importance;
 
 use crate::{
-    css::parser::parse_rules,
     markup5ever_rcdom::{
         Handle,
         NodeData::{self, Comment, Document, Element},
     },
-    tree_map_reduce, Colour, ComputedStyle, Result, Specificity, StyleOrigin, TreeMapResult,
-    WhiteSpace,
+    ComputedStyle, Specificity, StyleOrigin,
 };
 
-use self::parser::Importance;
-
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[allow(unused)]
 pub(crate) enum SelectorComponent {
     Class(String),
     Element(String),
@@ -30,6 +36,12 @@ pub(crate) enum SelectorComponent {
         b: i32,
         sel: Selector,
     },
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum PseudoElement {
+    Before,
+    After,
 }
 
 impl std::fmt::Display for SelectorComponent {
@@ -46,16 +58,22 @@ impl std::fmt::Display for SelectorComponent {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub(crate) struct Selector {
     // List of components, right first so we match from the leaf.
-    components: Vec<SelectorComponent>,
+    pub(crate) components: Vec<SelectorComponent>,
+    pub(crate) pseudo_element: Option<PseudoElement>,
 }
 
 impl std::fmt::Display for Selector {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         for comp in self.components.iter().rev() {
             comp.fmt(f)?;
+        }
+        match self.pseudo_element {
+            Some(PseudoElement::Before) => write!(f, "::before")?,
+            Some(PseudoElement::After) => write!(f, "::after")?,
+            None => (),
         }
         Ok(())
     }
@@ -189,6 +207,7 @@ impl Selector {
     }
 }
 
+#[cfg(feature = "css")]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Display {
     /// display: none
@@ -199,28 +218,48 @@ pub(crate) enum Display {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct PseudoContent {
+    /// content: "foo"
+    pub(crate) text: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum Style {
+    #[cfg(feature = "css")]
     Colour(Colour),
+    #[cfg(feature = "css")]
     BgColour(Colour),
+    #[cfg(feature = "css")]
     Display(Display),
+    #[cfg(feature = "css")]
     WhiteSpace(WhiteSpace),
+    Content(PseudoContent),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct StyleDecl {
-    style: Style,
-    importance: Importance,
+    pub(crate) style: Style,
+    pub(crate) importance: Importance,
 }
 
 impl std::fmt::Display for StyleDecl {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self.style {
+        match &self.style {
+            #[cfg(feature = "css")]
             Style::Colour(col) => write!(f, "color: {}", col)?,
+            #[cfg(feature = "css")]
             Style::BgColour(col) => write!(f, "background-color: {}", col)?,
+            #[cfg(feature = "css")]
             Style::Display(Display::None) => write!(f, "display: none")?,
             #[cfg(feature = "css_ext")]
             Style::Display(Display::ExtRawDom) => write!(f, "display: x-raw-dom")?,
-            Style::WhiteSpace(_) => todo!(),
+            #[cfg(feature = "css")]
+            Style::WhiteSpace(ws) => match ws {
+                WhiteSpace::Normal => write!(f, "white-space: normal")?,
+                WhiteSpace::Pre => write!(f, "white-space: pre")?,
+                WhiteSpace::PreWrap => write!(f, "white-space: pre-wrap")?,
+            },
+            Style::Content(content) => write!(f, "content: \"{}\"", content.text)?,
         }
         match self.importance {
             Importance::Default => (),
@@ -231,9 +270,9 @@ impl std::fmt::Display for StyleDecl {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-struct Ruleset {
-    selector: Selector,
-    styles: Vec<StyleDecl>,
+pub(crate) struct Ruleset {
+    pub(crate) selector: Selector,
+    pub(crate) styles: Vec<StyleDecl>,
 }
 
 impl std::fmt::Display for Ruleset {
@@ -255,15 +294,7 @@ pub(crate) struct StyleData {
     author_rules: Vec<Ruleset>,
 }
 
-pub(crate) fn parse_style_attribute(text: &str) -> Result<Vec<StyleDecl>> {
-    html_trace_quiet!("Parsing inline style: {text}");
-    let (_rest, decls) = parse_rules(text).map_err(|_| crate::Error::CssParseError)?;
-
-    let styles = styles_from_properties(&decls);
-    html_trace_quiet!("Parsed inline style: {:?}", styles);
-    Ok(styles)
-}
-
+#[cfg(feature = "css")]
 fn styles_from_properties(decls: &[parser::Declaration]) -> Vec<StyleDecl> {
     let mut styles = Vec::new();
     html_trace_quiet!("styles:from_properties2: {decls:?}");
@@ -343,6 +374,12 @@ fn styles_from_properties(decls: &[parser::Declaration]) -> Vec<StyleDecl> {
                     style: Style::WhiteSpace(*value),
                     importance: decl.important,
                 });
+            }
+            parser::Decl::Content { text } => {
+                styles.push(StyleDecl {
+                    style: Style::Content(PseudoContent { text: text.clone() }),
+                    importance: decl.important,
+                });
             } /*
               _ => {
                   html_trace_quiet!("CSS: Unhandled property {:?}", decl);
@@ -361,6 +398,7 @@ fn styles_from_properties(decls: &[parser::Declaration]) -> Vec<StyleDecl> {
 }
 
 impl StyleData {
+    #[cfg(feature = "css")]
     /// Add some CSS source to be included.  The source will be parsed
     /// and the relevant and supported features extracted.
     fn do_add_css(css: &str, rules: &mut Vec<Ruleset>) -> Result<()> {
@@ -381,21 +419,32 @@ impl StyleData {
         }
         Ok(())
     }
+
+    pub(crate) fn add_agent_rules(&mut self, rules: &[Ruleset]) {
+        for rule in rules {
+            self.agent_rules.push(rule.clone());
+        }
+    }
+
+    #[cfg(feature = "css")]
     /// Add some CSS source to be included as part of the user agent ("browser") CSS rules.
     pub fn add_agent_css(&mut self, css: &str) -> Result<()> {
         Self::do_add_css(css, &mut self.agent_rules)
     }
 
+    #[cfg(feature = "css")]
     /// Add some CSS source to be included as part of the user CSS rules.
     pub fn add_user_css(&mut self, css: &str) -> Result<()> {
         Self::do_add_css(css, &mut self.user_rules)
     }
 
+    #[cfg(feature = "css")]
     /// Add some CSS source to be included as part of the document/author CSS rules.
     pub fn add_author_css(&mut self, css: &str) -> Result<()> {
         Self::do_add_css(css, &mut self.author_rules)
     }
 
+    #[cfg(feature = "css")]
     /// Merge style data from other into this one.
     /// Data on other takes precedence.
     pub fn merge(&mut self, other: Self) {
@@ -406,11 +455,11 @@ impl StyleData {
 
     pub(crate) fn computed_style(
         &self,
-        parent_style: ComputedStyle,
+        parent_style: &ComputedStyle,
         handle: &Handle,
-        use_doc_css: bool,
+        _use_doc_css: bool,
     ) -> ComputedStyle {
-        let mut result = parent_style;
+        let mut result = parent_style.inherit();
 
         for (origin, ruleset) in [
             (StyleOrigin::Agent, &self.agent_rules),
@@ -425,6 +474,7 @@ impl StyleData {
                             style.importance == Importance::Important,
                             origin,
                             rule.selector.specificity(),
+                            rule.selector.pseudo_element.as_ref(),
                             style,
                         );
                     }
@@ -432,7 +482,8 @@ impl StyleData {
             }
         }
 
-        if use_doc_css {
+        #[cfg(feature = "css")]
+        if _use_doc_css {
             // Now look for a style attribute
             if let Element { attrs, .. } = &handle.data {
                 let borrowed = attrs.borrow();
@@ -445,6 +496,7 @@ impl StyleData {
                                 false,
                                 StyleOrigin::Author,
                                 Specificity::inline(),
+                                None,
                                 &style,
                             );
                         }
@@ -455,6 +507,7 @@ impl StyleData {
                                 false,
                                 StyleOrigin::Author,
                                 Specificity::inline(),
+                                None,
                                 &StyleDecl {
                                     style: Style::Colour(colour.into()),
                                     importance: Importance::Default,
@@ -468,6 +521,7 @@ impl StyleData {
                                 false,
                                 StyleOrigin::Author,
                                 Specificity::inline(),
+                                None,
                                 &StyleDecl {
                                     style: Style::BgColour(colour.into()),
                                     importance: Importance::Default,
@@ -487,8 +541,18 @@ impl StyleData {
         important: bool,
         origin: StyleOrigin,
         specificity: Specificity,
+        pseudo_selectors: Option<&PseudoElement>,
         style: &StyleDecl,
     ) {
+        let result_target = match pseudo_selectors {
+            None => result,
+            Some(PseudoElement::Before) => {
+                // TODO: ideally we should inherit from the parent; however we haven't finished
+                // computing the parent yet.
+                result.content_before.get_or_insert_with(Default::default)
+            }
+            Some(PseudoElement::After) => result.content_after.get_or_insert_with(Default::default),
+        };
         // The increasing priority is:
         // * agent
         // * user
@@ -500,26 +564,35 @@ impl StyleData {
         // replace the value if we haven't yet seen an !important rule, and
         // never afterwards.
         match style.style {
+            #[cfg(feature = "css")]
             Style::Colour(col) => {
-                result
+                result_target
                     .colour
                     .maybe_update(important, origin, specificity, col);
             }
+            #[cfg(feature = "css")]
             Style::BgColour(col) => {
-                result
+                result_target
                     .bg_colour
                     .maybe_update(important, origin, specificity, col);
             }
+            #[cfg(feature = "css")]
             Style::Display(disp) => {
                 // We don't have a "not DisplayNone" - we might need to fix this.
-                result
+                result_target
                     .display
                     .maybe_update(important, origin, specificity, disp);
             }
+            #[cfg(feature = "css")]
             Style::WhiteSpace(ws) => {
-                result
+                result_target
                     .white_space
                     .maybe_update(important, origin, specificity, ws);
+            }
+            Style::Content(ref content) => {
+                result_target
+                    .content
+                    .maybe_update(important, origin, specificity, content.clone());
             }
         }
     }
@@ -549,82 +622,101 @@ impl std::fmt::Display for StyleData {
     }
 }
 
-fn pending<F>(handle: Handle, f: F) -> TreeMapResult<'static, (), Handle, Vec<String>>
-where
-    F: Fn(&mut (), Vec<Vec<String>>) -> Result<Option<Vec<String>>> + 'static,
-{
-    TreeMapResult::PendingChildren {
-        children: handle.children.borrow().clone(),
-        cons: Box::new(f),
-        prefn: None,
-        postfn: None,
-    }
-}
+#[cfg(feature = "css")]
+pub(crate) mod dom_extract {
+    use std::io::Write;
 
-fn combine_vecs(vecs: Vec<Vec<String>>) -> Vec<String> {
-    let mut it = vecs.into_iter();
-    let first = it.next();
-    match first {
-        None => Vec::new(),
-        Some(mut first) => {
-            for v in it {
-                first.extend(v.into_iter());
-            }
-            first
+    use crate::{
+        markup5ever_rcdom::{
+            Handle,
+            NodeData::{self, Comment, Document, Element},
+        },
+        tree_map_reduce, Result, TreeMapResult,
+    };
+
+    use super::StyleData;
+
+    fn pending<F>(handle: Handle, f: F) -> TreeMapResult<'static, (), Handle, Vec<String>>
+    where
+        F: Fn(&mut (), Vec<Vec<String>>) -> Result<Option<Vec<String>>> + 'static,
+    {
+        TreeMapResult::PendingChildren {
+            children: handle.children.borrow().clone(),
+            cons: Box::new(f),
+            prefn: None,
+            postfn: None,
         }
     }
-}
 
-fn extract_style_nodes<T: Write>(
-    handle: Handle,
-    _err_out: &mut T,
-) -> TreeMapResult<'static, (), Handle, Vec<String>> {
-    use TreeMapResult::*;
-
-    match handle.clone().data {
-        Document => pending(handle, |&mut (), cs| Ok(Some(combine_vecs(cs)))),
-        Comment { .. } => Nothing,
-        Element { ref name, .. } => {
-            match name.expanded() {
-                expanded_name!(html "style") => {
-                    let mut result = String::new();
-                    // Assume just a flat text node
-                    for child in handle.children.borrow().iter() {
-                        if let NodeData::Text { ref contents } = child.data {
-                            result += &contents.borrow();
-                        }
-                    }
-                    Finished(vec![result])
+    fn combine_vecs(vecs: Vec<Vec<String>>) -> Vec<String> {
+        let mut it = vecs.into_iter();
+        let first = it.next();
+        match first {
+            None => Vec::new(),
+            Some(mut first) => {
+                for v in it {
+                    first.extend(v.into_iter());
                 }
-                _ => pending(handle, |_, cs| Ok(Some(combine_vecs(cs)))),
+                first
             }
         }
-        NodeData::Text {
-            contents: ref _tstr,
-        } => Nothing,
-        _ => {
-            // NodeData doesn't have a Debug impl.
-            Nothing
+    }
+
+    fn extract_style_nodes<T: Write>(
+        handle: Handle,
+        _err_out: &mut T,
+    ) -> TreeMapResult<'static, (), Handle, Vec<String>> {
+        use TreeMapResult::*;
+
+        match handle.clone().data {
+            Document => pending(handle, |&mut (), cs| Ok(Some(combine_vecs(cs)))),
+            Comment { .. } => Nothing,
+            Element { ref name, .. } => {
+                match name.expanded() {
+                    expanded_name!(html "style") => {
+                        let mut result = String::new();
+                        // Assume just a flat text node
+                        for child in handle.children.borrow().iter() {
+                            if let NodeData::Text { ref contents } = child.data {
+                                result += &contents.borrow();
+                            }
+                        }
+                        Finished(vec![result])
+                    }
+                    _ => pending(handle, |_, cs| Ok(Some(combine_vecs(cs)))),
+                }
+            }
+            NodeData::Text {
+                contents: ref _tstr,
+            } => Nothing,
+            _ => {
+                // NodeData doesn't have a Debug impl.
+                Nothing
+            }
         }
+    }
+
+    /// Extract stylesheet data from document.
+    pub(crate) fn dom_to_stylesheet<T: Write>(
+        handle: Handle,
+        err_out: &mut T,
+    ) -> Result<StyleData> {
+        let styles = tree_map_reduce(&mut (), handle, |_, handle| {
+            Ok(extract_style_nodes(handle, err_out))
+        })?;
+
+        let mut result = StyleData::default();
+        if let Some(styles) = styles {
+            for css in styles {
+                // Ignore CSS parse errors.
+                let _ = result.add_author_css(&css);
+            }
+        }
+        Ok(result)
     }
 }
 
-/// Extract stylesheet data from document.
-pub(crate) fn dom_to_stylesheet<T: Write>(handle: Handle, err_out: &mut T) -> Result<StyleData> {
-    let styles = tree_map_reduce(&mut (), handle, |_, handle| {
-        Ok(extract_style_nodes(handle, err_out))
-    })?;
-
-    let mut result = StyleData::default();
-    if let Some(styles) = styles {
-        for css in styles {
-            // Ignore CSS parse errors.
-            let _ = result.add_author_css(&css);
-        }
-    }
-    Ok(result)
-}
-
+#[cfg(feature = "css")]
 #[cfg(test)]
 mod tests {
     use crate::Specificity;

@@ -1435,14 +1435,14 @@ fn test_read_rich() {
         .render_to_lines(parse(html).unwrap(), 80)
         .unwrap();
     let tag = vec![RichAnnotation::Strong];
-    let line = TaggedLine::from_string("*bold*".to_owned(), &tag);
+    let line = TaggedLine::from_string("bold".to_owned(), &tag);
     assert_eq!(vec![line], lines);
 }
 
 #[test]
 fn test_read_rich_nodecorate() {
     let html: &[u8] = b"<strong>bold</strong>";
-    let lines = config::rich_no_decorate()
+    let lines = config::rich()
         .render_to_lines(parse(html).unwrap(), 80)
         .unwrap();
     let tag = vec![RichAnnotation::Strong];
@@ -2818,6 +2818,27 @@ at  line  breaks
 * Ten
 "#,
             20,
+        );
+    }
+
+    #[test]
+    fn test_before_after() {
+        test_html_coloured(
+            br#"
+        <style>
+          span.bracketed::before {
+              content: "[";
+          }
+          span.bracketed::after {
+              content: "]";
+          }
+        </style>
+        <body>
+        <p>Hello <span class="bracketed">world</span>!</p>
+        </body>"#,
+            r#"Hello [world]!
+"#,
+            80,
         );
     }
 }
