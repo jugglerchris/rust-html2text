@@ -1635,7 +1635,9 @@ fn process_dom_node<T: Write>(
                 expanded_name!(html "h1")
                 | expanded_name!(html "h2")
                 | expanded_name!(html "h3")
-                | expanded_name!(html "h4") => {
+                | expanded_name!(html "h4")
+                | expanded_name!(html "h5")
+                | expanded_name!(html "h6") => {
                     let level: usize = name.local[1..].parse().unwrap();
                     pending(input, move |_, cs| {
                         Some(RenderNode::new_styled(Header(level, cs), computed))
