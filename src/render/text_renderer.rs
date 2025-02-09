@@ -769,10 +769,11 @@ pub trait TextDecorator {
     /// The urls are in the correct order for footnotes; if footnote references were
     /// not included then this list will be empty.
     fn finalise(&mut self, urls: Vec<String>) -> Vec<TaggedLine<Self::Annotation>> {
-        urls
-            .into_iter()
+        urls.into_iter()
             .enumerate()
-            .map(|(idx, s)| TaggedLine::from_string(format!("[{}]: {}", idx + 1, s), &Default::default()))
+            .map(|(idx, s)| {
+                TaggedLine::from_string(format!("[{}]: {}", idx + 1, s), &Default::default())
+            })
             .collect()
     }
 }

@@ -727,7 +727,7 @@ fn test_links_footnotes() {
         r"Hello, [world]
 ",
         80,
-        |conf| conf.link_footnotes(false)
+        |conf| conf.link_footnotes(false),
     );
 }
 
@@ -743,7 +743,7 @@ fn test_links_footnotes_trivial() {
 [1]: http://www.example.com/
 ",
         80,
-        |conf| conf.link_footnotes(true)
+        |conf| conf.link_footnotes(true),
     );
 
     // But by default doesn't
@@ -754,7 +754,7 @@ fn test_links_footnotes_trivial() {
         r"Hello, world
 ",
         80,
-        |conf| conf
+        |conf| conf,
     );
 }
 
@@ -770,7 +770,7 @@ fn test_links_footnotes_rich() {
 [1]: http://www.example.com/
 ",
         80,
-        |conf| conf.link_footnotes(true)
+        |conf| conf.link_footnotes(true),
     );
 
     // But by default doesn't
@@ -780,7 +780,7 @@ fn test_links_footnotes_rich() {
         r"Hello, world
 ",
         80,
-        |conf| conf
+        |conf| conf,
     );
 }
 
