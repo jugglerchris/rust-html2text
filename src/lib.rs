@@ -291,7 +291,7 @@ pub(crate) struct ComputedStyle {
 
 impl ComputedStyle {
     /// Return the style data inherited by children.
-    pub(crate) fn inherit(self: &Self) -> Self {
+    pub(crate) fn inherit(&self) -> Self {
         // TODO: clear fields that shouldn't be inherited
         self.clone()
     }
@@ -1290,6 +1290,7 @@ struct HtmlContext {
     raw: bool,
     draw_borders: bool,
     wrap_links: bool,
+    include_link_footnotes: bool,
 }
 
 // Input to render tree conversion.
@@ -1513,7 +1514,7 @@ fn process_dom_node<T: Write>(
                 let computed =
                     context
                         .style_data
-                        .computed_style(&*parent_style, _handle, use_doc_css);
+                        .computed_style(parent_style, _handle, use_doc_css);
                 #[cfg(feature = "css")]
                 match computed.display.val() {
                     Some(css::Display::None) => return Ok(Nothing),
@@ -1741,7 +1742,7 @@ fn process_dom_node<T: Write>(
             let result = if computed_before.is_some() || computed_after.is_some() {
                 let wrap_nodes = move |mut node: RenderNode| {
                     if let Some(ref content) = computed_before {
-                        if let Some(ref pseudo_content) = content.content.val() {
+                        if let Some(pseudo_content) = content.content.val() {
                             node = insert_child(
                                 RenderNode::new(Text(pseudo_content.text.clone())),
                                 node,
@@ -1750,7 +1751,7 @@ fn process_dom_node<T: Write>(
                         }
                     }
                     if let Some(ref content) = computed_after {
-                        if let Some(ref pseudo_content) = content.content.val() {
+                        if let Some(pseudo_content) = content.content.val() {
                             node = insert_child(
                                 RenderNode::new(Text(pseudo_content.text.clone())),
                                 node,
@@ -1888,17 +1889,17 @@ impl PushedStyleInfo {
         let mut result: PushedStyleInfo = Default::default();
         #[cfg(feature = "css")]
         if let Some(col) = style.colour.val() {
-            render.push_colour(col.clone());
+            render.push_colour(*col);
             result.colour = true;
         }
         #[cfg(feature = "css")]
         if let Some(col) = style.bg_colour.val() {
-            render.push_bgcolour(col.clone());
+            render.push_bgcolour(*col);
             result.bgcolour = true;
         }
         if let Some(ws) = style.white_space.val() {
             if let WhiteSpace::Pre | WhiteSpace::PreWrap = ws {
-                render.push_ws(ws.clone());
+                render.push_ws(*ws);
                 result.white_space = true;
             }
         }
@@ -2410,6 +2411,7 @@ pub mod config {
         raw: bool,
         draw_borders: bool,
         wrap_links: bool,
+        include_link_footnotes: bool,
     }
 
     impl<D: TextDecorator> Config<D> {
@@ -2427,6 +2429,7 @@ pub mod config {
                 raw: self.raw,
                 draw_borders: self.draw_borders,
                 wrap_links: self.wrap_links,
+                include_link_footnotes: self.include_link_footnotes,
             }
         }
         /// Parse with context.
@@ -2637,6 +2640,12 @@ pub mod config {
             ]);
             self
         }
+
+        /// Add footnotes for hyperlinks
+        pub fn link_footnotes(mut self, include_footnotes: bool) -> Self {
+            self.include_link_footnotes = include_footnotes;
+            self
+        }
     }
 
     impl Config<RichDecorator> {
@@ -2686,7 +2695,9 @@ pub mod config {
 
     /// Return a Config initialized with a `PlainDecorator`.
     pub fn plain() -> Config<PlainDecorator> {
-        with_decorator(PlainDecorator::new()).do_decorate()
+        with_decorator(PlainDecorator::new())
+            .do_decorate()
+            .link_footnotes(true)
     }
 
     /// Return a Config initialized with a `PlainDecorator`.
@@ -2708,6 +2719,7 @@ pub mod config {
             raw: false,
             draw_borders: true,
             wrap_links: true,
+            include_link_footnotes: false,
         }
     }
 }
@@ -2744,6 +2756,7 @@ impl RenderTree {
             raw: context.raw,
             draw_borders: context.draw_borders,
             wrap_links: context.wrap_links,
+            include_link_footnotes: context.include_link_footnotes,
         };
         let test_decorator = decorator.make_subblock_decorator();
         let builder = SubRenderer::new(width, render_options, decorator);

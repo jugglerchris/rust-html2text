@@ -2,9 +2,7 @@ use crate::config::Config;
 use crate::render::text_renderer::PlainDecorator;
 use crate::{config, Error};
 
-#[cfg(feature = "css")]
-use super::render::text_renderer::RichDecorator;
-use super::render::text_renderer::{RichAnnotation, TaggedLine, TrivialDecorator};
+use super::render::text_renderer::{RichAnnotation, RichDecorator, TaggedLine, TrivialDecorator};
 use super::{from_read, from_read_with_decorator, parse, TextDecorator};
 
 /// Like assert_eq!(), but prints out the results normally as well
@@ -704,6 +702,84 @@ fn test_link_wrap() {
 ple.com/
 ",
         10,
+    );
+}
+
+#[test]
+fn test_links_footnotes() {
+    // Default plain includes footnotes
+    test_html(
+        br#"
+       <p>Hello, <a href="http://www.example.com/">world</a></p>"#,
+        r"Hello, [world][1]
+
+[1]: http://www.example.com/
+",
+        80,
+    );
+
+    // Can disable footnotes
+    test_html_conf(
+        br#"
+       <p>Hello, <a href="http://www.example.com/">world</a></p>"#,
+        r"Hello, [world]
+",
+        80,
+        |conf| conf.link_footnotes(false),
+    );
+}
+
+#[test]
+fn test_links_footnotes_trivial() {
+    // Trivial decorate does footnotes if enabled
+    test_html_conf_dec(
+        TrivialDecorator::new(),
+        br#"
+       <p>Hello, <a href="http://www.example.com/">world</a></p>"#,
+        r"Hello, world[1]
+
+[1]: http://www.example.com/
+",
+        80,
+        |conf| conf.link_footnotes(true),
+    );
+
+    // But by default doesn't
+    test_html_conf_dec(
+        TrivialDecorator::new(),
+        br#"
+       <p>Hello, <a href="http://www.example.com/">world</a></p>"#,
+        r"Hello, world
+",
+        80,
+        |conf| conf,
+    );
+}
+
+#[test]
+fn test_links_footnotes_rich() {
+    // Rich decorator  does include footnotes if enabled
+    test_html_conf_dec(
+        RichDecorator::new(),
+        br#"
+       <p>Hello, <a href="http://www.example.com/">world</a></p>"#,
+        r"Hello, world[1]
+
+[1]: http://www.example.com/
+",
+        80,
+        |conf| conf.link_footnotes(true),
+    );
+
+    // But by default doesn't
+    test_html_conf_dec(
+        RichDecorator::new(),
+        br#"
+       <p>Hello, <a href="http://www.example.com/">world</a></p>"#,
+        r"Hello, world
+",
+        80,
+        |conf| conf,
     );
 }
 

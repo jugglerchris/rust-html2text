@@ -9,11 +9,9 @@ use crate::WhiteSpace;
 use super::Renderer;
 use super::Result;
 use super::TooNarrow;
-use std::cell::Cell;
 use std::mem;
 use std::ops::Deref;
 use std::ops::DerefMut;
-use std::rc::Rc;
 use std::vec;
 use std::{collections::LinkedList, fmt::Debug};
 use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
@@ -56,6 +54,16 @@ impl<D: TextDecorator> TextRenderer<D> {
     pub fn start_link(&mut self, target: &str) -> Result<()> {
         self.links.push(target.to_string());
         self.subrender.last_mut().unwrap().start_link(target)?;
+        Ok(())
+    }
+
+    pub fn end_link(&mut self) -> Result<()> {
+        self.subrender.last_mut().unwrap().end_link()?;
+
+        if self.options.include_link_footnotes {
+            let footnote_num = self.links.len();
+            self.add_inline_text(&format!("[{}]", footnote_num))?;
+        }
         Ok(())
     }
 
@@ -506,8 +514,8 @@ impl<T: Clone + Eq + Debug + Default> WrappedBlock<T> {
         Ok(())
     }
 
-    /// Consume self and return a vector of lines.
     /*
+    /// Consume self and return a vector of lines.
     pub fn into_untagged_lines(mut self) -> Vec<String> {
         self.flush();
 
@@ -757,9 +765,17 @@ pub trait TextDecorator {
         "}".into()
     }
 
-    /// Finish with a document, and return extra lines (eg footnotes)
-    /// to add to the rendered text.
-    fn finalise(&mut self, links: Vec<String>) -> Vec<TaggedLine<Self::Annotation>>;
+    /// Finish with a document, and return extra lines to add to the rendered text.
+    /// The urls are in the correct order for footnotes; if footnote references were
+    /// not included then this list will be empty.
+    fn finalise(&mut self, urls: Vec<String>) -> Vec<TaggedLine<Self::Annotation>> {
+        urls.into_iter()
+            .enumerate()
+            .map(|(idx, s)| {
+                TaggedLine::from_string(format!("[{}]: {}", idx + 1, s), &Default::default())
+            })
+            .collect()
+    }
 }
 
 /// A space on a horizontal row.
@@ -1029,6 +1045,9 @@ pub(crate) struct RenderOptions {
 
     /// Whether to wrap links as normal text
     pub wrap_links: bool,
+
+    /// Whether to include footnotes for hyperlinks
+    pub include_link_footnotes: bool,
 }
 
 impl Default for RenderOptions {
@@ -1040,6 +1059,7 @@ impl Default for RenderOptions {
             raw: false,
             draw_borders: true,
             wrap_links: true,
+            include_link_footnotes: false,
         }
     }
 }
@@ -1065,7 +1085,11 @@ fn get_wrapping_or_insert<'w, D: TextDecorator>(
 impl<D: TextDecorator> SubRenderer<D> {
     /// Render links as lines
     pub fn finalise(&mut self, links: Vec<String>) -> Vec<TaggedLine<D::Annotation>> {
-        self.decorator.finalise(links)
+        if self.options.include_link_footnotes {
+            self.decorator.finalise(links)
+        } else {
+            self.decorator.finalise(Vec::new())
+        }
     }
 
     /// Construct a new empty SubRenderer.
@@ -1706,17 +1730,13 @@ impl<D: TextDecorator> Renderer for SubRenderer<D> {
 /// A decorator for use with `SubRenderer` which outputs plain UTF-8 text
 /// with no annotations.  Markup is rendered as text characters or footnotes.
 #[derive(Clone, Debug)]
-pub struct PlainDecorator {
-    nlinks: Rc<Cell<usize>>,
-}
+pub struct PlainDecorator {}
 
 impl PlainDecorator {
     /// Create a new `PlainDecorator`.
     #[allow(clippy::new_without_default)]
     pub fn new() -> PlainDecorator {
-        PlainDecorator {
-            nlinks: Rc::new(Cell::new(0)),
-        }
+        PlainDecorator {}
     }
 }
 
@@ -1724,12 +1744,11 @@ impl TextDecorator for PlainDecorator {
     type Annotation = ();
 
     fn decorate_link_start(&mut self, _url: &str) -> (String, Self::Annotation) {
-        self.nlinks.set(self.nlinks.get() + 1);
         ("[".to_string(), ())
     }
 
     fn decorate_link_end(&mut self) -> String {
-        format!("][{}]", self.nlinks.get())
+        "]".to_string()
     }
 
     fn decorate_em_start(&self) -> (String, Self::Annotation) {
@@ -1785,14 +1804,6 @@ impl TextDecorator for PlainDecorator {
 
     fn ordered_item_prefix(&self, i: i64) -> String {
         format!("{}. ", i)
-    }
-
-    fn finalise(&mut self, links: Vec<String>) -> Vec<TaggedLine<()>> {
-        links
-            .into_iter()
-            .enumerate()
-            .map(|(idx, s)| TaggedLine::from_string(format!("[{}]: {}", idx + 1, s), &()))
-            .collect()
     }
 
     fn make_subblock_decorator(&self) -> Self {
@@ -1878,10 +1889,6 @@ impl TextDecorator for TrivialDecorator {
 
     fn ordered_item_prefix(&self, _i: i64) -> String {
         "".to_string()
-    }
-
-    fn finalise(&mut self, _links: Vec<String>) -> Vec<TaggedLine<()>> {
-        Vec::new()
     }
 
     fn make_subblock_decorator(&self) -> Self {
@@ -1999,10 +2006,6 @@ impl TextDecorator for RichDecorator {
 
     fn ordered_item_prefix(&self, i: i64) -> String {
         format!("{}. ", i)
-    }
-
-    fn finalise(&mut self, _links: Vec<String>) -> Vec<TaggedLine<RichAnnotation>> {
-        Vec::new()
     }
 
     fn make_subblock_decorator(&self) -> Self {
