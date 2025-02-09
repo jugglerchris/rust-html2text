@@ -514,8 +514,8 @@ impl<T: Clone + Eq + Debug + Default> WrappedBlock<T> {
         Ok(())
     }
 
-    /// Consume self and return a vector of lines.
     /*
+    /// Consume self and return a vector of lines.
     pub fn into_untagged_lines(mut self) -> Vec<String> {
         self.flush();
 
