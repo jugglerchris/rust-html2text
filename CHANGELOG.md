@@ -21,8 +21,11 @@ Possible log types:
   used for simple decorations.  With CSS enabled, this allows for customising
   the display of `<em>foo</em>` without writing a decorator.
 - [added] Add support for `<h5>` and `<h6>` (thanks noahbaculi)
-- [changed] Footnotes for links are now handled outside of the decorators, so can be
-  enabled or disabled with `Config::link_footnotes(true/false)`.
+- [changed] Link footnotes are now configurable independently of the decorator, and on
+  by default for `config::plain()` but can be enabled or disabled with
+  `config.link_footnotes(true/false)`.  The footnote references (e.g. `[1]`) are added
+  in the main renderer, and the actual footnotes are written in a default implementation
+  of `TextDecorator::finalise()` so can be customised.
 
 ### 0.13.6
 
