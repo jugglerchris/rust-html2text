@@ -1718,15 +1718,13 @@ impl<D: TextDecorator> Renderer for SubRenderer<D> {
 /// A decorator for use with `SubRenderer` which outputs plain UTF-8 text
 /// with no annotations.  Markup is rendered as text characters or footnotes.
 #[derive(Clone, Debug)]
-pub struct PlainDecorator {
-}
+pub struct PlainDecorator {}
 
 impl PlainDecorator {
     /// Create a new `PlainDecorator`.
     #[allow(clippy::new_without_default)]
     pub fn new() -> PlainDecorator {
-        PlainDecorator {
-        }
+        PlainDecorator {}
     }
 }
 
