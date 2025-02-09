@@ -2,9 +2,7 @@ use crate::config::Config;
 use crate::render::text_renderer::PlainDecorator;
 use crate::{config, Error};
 
-#[cfg(feature = "css")]
-use super::render::text_renderer::RichDecorator;
-use super::render::text_renderer::{RichAnnotation, TaggedLine, TrivialDecorator};
+use super::render::text_renderer::{RichDecorator, RichAnnotation, TaggedLine, TrivialDecorator};
 use super::{from_read, from_read_with_decorator, parse, TextDecorator};
 
 /// Like assert_eq!(), but prints out the results normally as well
@@ -760,9 +758,9 @@ fn test_links_footnotes_trivial() {
 
 #[test]
 fn test_links_footnotes_rich() {
-    // Rich decorator (used for coloured) does include footnotes
-    // if enabled
-    test_html_coloured_conf(
+    // Rich decorator  does include footnotes if enabled
+    test_html_conf_dec(
+        RichDecorator::new(),
         br#"
        <p>Hello, <a href="http://www.example.com/">world</a></p>"#,
         r"Hello, world[1]
@@ -774,7 +772,8 @@ fn test_links_footnotes_rich() {
     );
 
     // But by default doesn't
-    test_html_coloured_conf(
+    test_html_conf_dec(
+        RichDecorator::new(),
         br#"
        <p>Hello, <a href="http://www.example.com/">world</a></p>"#,
         r"Hello, world
