@@ -9,11 +9,9 @@ use crate::WhiteSpace;
 use super::Renderer;
 use super::Result;
 use super::TooNarrow;
-use std::cell::Cell;
 use std::mem;
 use std::ops::Deref;
 use std::ops::DerefMut;
-use std::rc::Rc;
 use std::vec;
 use std::{collections::LinkedList, fmt::Debug};
 use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
@@ -56,6 +54,16 @@ impl<D: TextDecorator> TextRenderer<D> {
     pub fn start_link(&mut self, target: &str) -> Result<()> {
         self.links.push(target.to_string());
         self.subrender.last_mut().unwrap().start_link(target)?;
+        Ok(())
+    }
+
+    pub fn end_link(&mut self) -> Result<()> {
+        self.subrender.last_mut().unwrap().end_link()?;
+
+        if self.options.include_link_footnotes {
+            let footnote_num = self.links.len();
+            self.add_inline_text(&format!("[{}]", footnote_num))?;
+        }
         Ok(())
     }
 
@@ -1029,6 +1037,9 @@ pub(crate) struct RenderOptions {
 
     /// Whether to wrap links as normal text
     pub wrap_links: bool,
+
+    /// Whether to include footnotes for hyperlinks
+    pub include_link_footnotes: bool,
 }
 
 impl Default for RenderOptions {
@@ -1040,6 +1051,7 @@ impl Default for RenderOptions {
             raw: false,
             draw_borders: true,
             wrap_links: true,
+            include_link_footnotes: false,
         }
     }
 }
@@ -1707,7 +1719,6 @@ impl<D: TextDecorator> Renderer for SubRenderer<D> {
 /// with no annotations.  Markup is rendered as text characters or footnotes.
 #[derive(Clone, Debug)]
 pub struct PlainDecorator {
-    nlinks: Rc<Cell<usize>>,
 }
 
 impl PlainDecorator {
@@ -1715,7 +1726,6 @@ impl PlainDecorator {
     #[allow(clippy::new_without_default)]
     pub fn new() -> PlainDecorator {
         PlainDecorator {
-            nlinks: Rc::new(Cell::new(0)),
         }
     }
 }
@@ -1724,12 +1734,11 @@ impl TextDecorator for PlainDecorator {
     type Annotation = ();
 
     fn decorate_link_start(&mut self, _url: &str) -> (String, Self::Annotation) {
-        self.nlinks.set(self.nlinks.get() + 1);
         ("[".to_string(), ())
     }
 
     fn decorate_link_end(&mut self) -> String {
-        format!("][{}]", self.nlinks.get())
+        "]".to_string()
     }
 
     fn decorate_em_start(&self) -> (String, Self::Annotation) {

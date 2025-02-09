@@ -1290,6 +1290,7 @@ struct HtmlContext {
     raw: bool,
     draw_borders: bool,
     wrap_links: bool,
+    include_link_footnotes: bool,
 }
 
 // Input to render tree conversion.
@@ -2410,6 +2411,7 @@ pub mod config {
         raw: bool,
         draw_borders: bool,
         wrap_links: bool,
+        include_link_footnotes: bool,
     }
 
     impl<D: TextDecorator> Config<D> {
@@ -2427,6 +2429,7 @@ pub mod config {
                 raw: self.raw,
                 draw_borders: self.draw_borders,
                 wrap_links: self.wrap_links,
+                include_link_footnotes: self.include_link_footnotes,
             }
         }
         /// Parse with context.
@@ -2637,6 +2640,12 @@ pub mod config {
             ]);
             self
         }
+
+        /// Add footnotes for hyperlinks
+        pub fn link_footnotes(mut self, include_footnotes: bool) -> Self {
+            self.include_link_footnotes = include_footnotes;
+            self
+        }
     }
 
     impl Config<RichDecorator> {
@@ -2686,7 +2695,9 @@ pub mod config {
 
     /// Return a Config initialized with a `PlainDecorator`.
     pub fn plain() -> Config<PlainDecorator> {
-        with_decorator(PlainDecorator::new()).do_decorate()
+        with_decorator(PlainDecorator::new())
+            .do_decorate()
+            .link_footnotes(true)
     }
 
     /// Return a Config initialized with a `PlainDecorator`.
@@ -2708,6 +2719,7 @@ pub mod config {
             raw: false,
             draw_borders: true,
             wrap_links: true,
+            include_link_footnotes: false,
         }
     }
 }
@@ -2744,6 +2756,7 @@ impl RenderTree {
             raw: context.raw,
             draw_borders: context.draw_borders,
             wrap_links: context.wrap_links,
+            include_link_footnotes: context.include_link_footnotes,
         };
         let test_decorator = decorator.make_subblock_decorator();
         let builder = SubRenderer::new(width, render_options, decorator);
