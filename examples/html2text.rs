@@ -99,6 +99,15 @@ fn update_config<T: TextDecorator>(mut config: Config<T>, flags: &Flags) -> Conf
     if flags.use_css {
         config = config.use_doc_css();
     }
+    match (flags.link_footnotes, flags.no_link_footnotes) {
+        (true, true) => {
+            eprintln!("Error: can't specify both --link-footnotes and --no-link-footnotes");
+            std::process::exit(1);
+        }
+        (true, false) => config = config.link_footnotes(true),
+        (false, true) => config = config.link_footnotes(false),
+        (false, false) => {}
+    };
     config
 }
 
@@ -173,6 +182,8 @@ struct Flags {
     show_render: bool,
     #[cfg(feature = "css")]
     show_css: bool,
+    link_footnotes: bool,
+    no_link_footnotes: bool,
 }
 
 fn main() {
@@ -195,6 +206,8 @@ fn main() {
         show_render: false,
         #[cfg(feature = "css")]
         show_css: false,
+        link_footnotes: false,
+        no_link_footnotes: false,
     };
     let mut literal: bool = false;
 
@@ -224,6 +237,16 @@ fn main() {
             &["-L", "--literal"],
             StoreTrue,
             "Output only literal text (no decorations)",
+        );
+        ap.refer(&mut flags.link_footnotes).add_option(
+            &["--link-footnotes"],
+            StoreTrue,
+            "Enable link footnotes",
+        );
+        ap.refer(&mut flags.no_link_footnotes).add_option(
+            &["--no-link-footnotes"],
+            StoreTrue,
+            "Enable link footnotes",
         );
         #[cfg(unix)]
         ap.refer(&mut flags.use_colour).add_option(

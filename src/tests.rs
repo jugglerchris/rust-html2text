@@ -708,6 +708,83 @@ ple.com/
 }
 
 #[test]
+fn test_links_footnotes() {
+    // Default plain includes footnotes
+    test_html(
+        br#"
+       <p>Hello, <a href="http://www.example.com/">world</a></p>"#,
+        r"Hello, [world][1]
+
+[1]: http://www.example.com/
+",
+        80,
+    );
+
+    // Can disable footnotes
+    test_html_conf(
+        br#"
+       <p>Hello, <a href="http://www.example.com/">world</a></p>"#,
+        r"Hello, [world]
+",
+        80,
+        |conf| conf.link_footnotes(false)
+    );
+}
+
+#[test]
+fn test_links_footnotes_trivial() {
+    // Trivial decorate does footnotes if enabled
+    test_html_conf_dec(
+        TrivialDecorator::new(),
+        br#"
+       <p>Hello, <a href="http://www.example.com/">world</a></p>"#,
+        r"Hello, world[1]
+
+[1]: http://www.example.com/
+",
+        80,
+        |conf| conf.link_footnotes(true)
+    );
+
+    // But by default doesn't
+    test_html_conf_dec(
+        TrivialDecorator::new(),
+        br#"
+       <p>Hello, <a href="http://www.example.com/">world</a></p>"#,
+        r"Hello, world
+",
+        80,
+        |conf| conf
+    );
+}
+
+#[test]
+fn test_links_footnotes_rich() {
+    // Rich decorator (used for coloured) does include footnotes
+    // if enabled
+    test_html_coloured_conf(
+        br#"
+       <p>Hello, <a href="http://www.example.com/">world</a></p>"#,
+        r"Hello, world[1]
+
+[1]: http://www.example.com/
+",
+        80,
+        |conf| conf.link_footnotes(true)
+    );
+
+    // But by default doesn't
+    test_html_coloured_conf(
+        br#"
+       <p>Hello, <a href="http://www.example.com/">world</a></p>"#,
+        r"Hello, world
+",
+        80,
+        |conf| conf
+    );
+}
+
+#[test]
 fn test_wrap() {
     test_html(
         br"<p>Hello, world.  Superlongwordreally</p>",

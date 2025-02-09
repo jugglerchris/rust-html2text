@@ -765,9 +765,16 @@ pub trait TextDecorator {
         "}".into()
     }
 
-    /// Finish with a document, and return extra lines (eg footnotes)
-    /// to add to the rendered text.
-    fn finalise(&mut self, links: Vec<String>) -> Vec<TaggedLine<Self::Annotation>>;
+    /// Finish with a document, and return extra lines to add to the rendered text.
+    /// The urls are in the correct order for footnotes; if footnote references were
+    /// not included then this list will be empty.
+    fn finalise(&mut self, urls: Vec<String>) -> Vec<TaggedLine<Self::Annotation>> {
+        urls
+            .into_iter()
+            .enumerate()
+            .map(|(idx, s)| TaggedLine::from_string(format!("[{}]: {}", idx + 1, s), &Default::default()))
+            .collect()
+    }
 }
 
 /// A space on a horizontal row.
@@ -1077,7 +1084,11 @@ fn get_wrapping_or_insert<'w, D: TextDecorator>(
 impl<D: TextDecorator> SubRenderer<D> {
     /// Render links as lines
     pub fn finalise(&mut self, links: Vec<String>) -> Vec<TaggedLine<D::Annotation>> {
-        self.decorator.finalise(links)
+        if self.options.include_link_footnotes {
+            self.decorator.finalise(links)
+        } else {
+            self.decorator.finalise(Vec::new())
+        }
     }
 
     /// Construct a new empty SubRenderer.
@@ -1794,14 +1805,6 @@ impl TextDecorator for PlainDecorator {
         format!("{}. ", i)
     }
 
-    fn finalise(&mut self, links: Vec<String>) -> Vec<TaggedLine<()>> {
-        links
-            .into_iter()
-            .enumerate()
-            .map(|(idx, s)| TaggedLine::from_string(format!("[{}]: {}", idx + 1, s), &()))
-            .collect()
-    }
-
     fn make_subblock_decorator(&self) -> Self {
         self.clone()
     }
@@ -1885,10 +1888,6 @@ impl TextDecorator for TrivialDecorator {
 
     fn ordered_item_prefix(&self, _i: i64) -> String {
         "".to_string()
-    }
-
-    fn finalise(&mut self, _links: Vec<String>) -> Vec<TaggedLine<()>> {
-        Vec::new()
     }
 
     fn make_subblock_decorator(&self) -> Self {
@@ -2006,10 +2005,6 @@ impl TextDecorator for RichDecorator {
 
     fn ordered_item_prefix(&self, i: i64) -> String {
         format!("{}. ", i)
-    }
-
-    fn finalise(&mut self, _links: Vec<String>) -> Vec<TaggedLine<RichAnnotation>> {
-        Vec::new()
     }
 
     fn make_subblock_decorator(&self) -> Self {
