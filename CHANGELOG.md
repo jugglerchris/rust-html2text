@@ -16,6 +16,13 @@ Possible log types:
 - [changed] Various small refactors (thanks sftse)
 - [changed] `Config::rich()` no longer includes decorations around `<em>` etc. - 
   use `Config::rich().do_decorate()` to get the old behaviour.
+- [fixed] Remove unnecessary empty lines at the start of lists (thanks russellbanks)
+- [added] New CSS support: `::before`/`::after` and `content: "string"`, which is now
+  used for simple decorations.  With CSS enabled, this allows for customising
+  the display of `<em>foo</em>` without writing a decorator.
+- [added] Add support for `<h5>` and `<h6>` (thanks noahbaculi)
+- [changed] Footnotes for links are now handled outside of the decorators, so can be
+  enabled or disabled with `Config::link_footnotes(true/false)`.
 
 ### 0.13.6
 
