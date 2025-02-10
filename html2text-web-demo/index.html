@@ -15,14 +15,31 @@ div#main, div#lib {
 <script>
 function update_html() {
     const text = document.getElementById("input_html").value;
-    wasmBindings.format_html(text);
+    const css = document.getElementById("conf_css").checked;
+    const colour = document.getElementById("conf_colour").checked;
+
+    let conf = wasmBindings.Config.new();
+    console.log("CSS:", css);
+    if (css) {
+        conf.use_css();
+    }
+    if (colour) {
+        conf.use_colour();
+    }
+
+    wasmBindings.format_html(conf, text);
 }
 </script>
     </head>
     <body>
         <h1>Lib</h1>
+        <input type="checkbox" id="conf_css">CSS</input>
+        <br>
+        <input type="checkbox" id="conf_colour">Colour</input>
+        <br>
         <textarea id="input_html"></textarea>
-        <button onclick="update_html()">But</button>
+        <br>
+        <button onclick="update_html()">Update</button>
         <div id="lib"></div>
     </body>
 </html>
