@@ -1,4 +1,3 @@
-use std::io;
 use wasm_bindgen::prelude::wasm_bindgen;
 
 use ratzilla::ratatui::{
@@ -8,33 +7,19 @@ use ratzilla::ratatui::{
 };
 use ratzilla::{DomBackend, WebRenderer};
 
-#[wasm_bindgen(start)]
-fn run() {
-    let backend = DomBackend::new().unwrap();
-    let terminal = Terminal::new(backend).unwrap();
-
-    terminal.draw_web(move |f| {
-        f.render_widget(
-            Paragraph::new(format!("Hello, world!"))
-            .block(
-                Block::bordered().title("Hi")
-                .border_style(Color::Yellow)
-            ),
-            f.area());
-    });
-}
-
 #[wasm_bindgen]
 pub fn format_html(input: &str) {
-    let backend = DomBackend::new().unwrap();
+    let backend = DomBackend::new_by_id("lib").unwrap();
     let terminal = Terminal::new(backend).unwrap();
 
-    let input_s = input.to_string();
+    let mut inp = input.to_string();
     terminal.draw_web(move |f| {
+        let area = f.area();
+        let output = html2text::from_read(inp.as_bytes(), area.width as usize).unwrap();
         f.render_widget(
-            Paragraph::new(input_s.clone())
+            Paragraph::new(output)
             .block(
-                Block::bordered().title("Hi")
+                Block::bordered().title("Foo")
                 .border_style(Color::Yellow)
             ),
             f.area());
