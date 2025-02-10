@@ -1,0 +1,12 @@
+[package]
+name = "html2text-web-demo"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+html2text = { path = "..", features = ["css"] }
+ratzilla = "0.0.1"
+wasm-bindgen = "0.2.100"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
