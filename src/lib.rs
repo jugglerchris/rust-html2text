@@ -1291,6 +1291,7 @@ struct HtmlContext {
     draw_borders: bool,
     wrap_links: bool,
     include_link_footnotes: bool,
+    use_unicode_strikeout: bool,
 }
 
 // Input to render tree conversion.
@@ -2412,6 +2413,7 @@ pub mod config {
         draw_borders: bool,
         wrap_links: bool,
         include_link_footnotes: bool,
+        use_unicode_strikeout: bool,
     }
 
     impl<D: TextDecorator> Config<D> {
@@ -2430,6 +2432,7 @@ pub mod config {
                 draw_borders: self.draw_borders,
                 wrap_links: self.wrap_links,
                 include_link_footnotes: self.include_link_footnotes,
+                use_unicode_strikeout: self.use_unicode_strikeout,
             }
         }
         /// Parse with context.
@@ -2606,6 +2609,12 @@ pub mod config {
             self
         }
 
+        /// Select whether to use Unicode combining characters to strike out text.
+        pub fn unicode_strikeout(mut self, use_unicode: bool) -> Self {
+            self.use_unicode_strikeout = use_unicode;
+            self
+        }
+
         /// Make a simple "contains" type rule for an element.
         fn make_surround_rule(element: &str, after: bool, content: &str) -> Ruleset {
             Ruleset {
@@ -2720,6 +2729,7 @@ pub mod config {
             draw_borders: true,
             wrap_links: true,
             include_link_footnotes: false,
+            use_unicode_strikeout: true,
         }
     }
 }
@@ -2757,6 +2767,7 @@ impl RenderTree {
             draw_borders: context.draw_borders,
             wrap_links: context.wrap_links,
             include_link_footnotes: context.include_link_footnotes,
+            use_unicode_strikeout: context.use_unicode_strikeout,
         };
         let test_decorator = decorator.make_subblock_decorator();
         let builder = SubRenderer::new(width, render_options, decorator);
