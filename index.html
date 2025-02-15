@@ -37,7 +37,7 @@ window.addEventListener("TrunkApplicationStarted", update_html);
 </script>
     <link rel="modulepreload" href="/rust-html2text/html2text-web-demo-4995fe3e9786cf4c.js" crossorigin="anonymous" integrity="sha384-+s3sx/z90Hha/wXMdKsFj9IWBfcP16AFYBmqZphRiofvnLTlM5kbABXh+oYFVdei"><link rel="preload" href="/rust-html2text/html2text-web-demo-4995fe3e9786cf4c_bg.wasm" crossorigin="anonymous" integrity="sha384-Tn3CYfDYbWDOeVwuaHouXiltOCdC3UMJl7hOQZ4HkD80V+CGpQ6zCvsHhJ66UmxZ" as="fetch" type="application/wasm"></head>
     <body>
-        <h1>Lib</h1>
+        <h1>Html2text demo</h1>
         <input type="checkbox" id="conf_css" checked=true onchange="update_html()">CSS</input>
         <br>
         <input type="checkbox" id="conf_colour" checked=true onchange="update_html()">Colour</input>
@@ -56,7 +56,14 @@ window.addEventListener("TrunkApplicationStarted", update_html);
     &lt;li&gt;&lt;s&gt;Item two&lt/s&gt&lt;/li&gt;
     &lt;li class="green"&gt;Item three&lt;/li&gt;
   &lt;/ol&gt;
-&lt;/body&gt;&lt;/html&gt;</textarea>
+&lt;/body&gt;&lt;/html&gt;
+
+&lt;table&gt;
+    &lt;tr&gt;&lt;th&gt;Heading 1&lt;/th&gt;&lt;th&gt;Heading 2&lt;/th&gt;&lt;th&gt;Heading 3&lt;/th&gt;&lt;/tr&gt;
+    &lt;tr&gt;&lt;td&gt;Data 1&lt;/td&gt;&lt;td&gt;Data 2&lt;/td&gt;&lt;td&gt;Data 3&lt;/td&gt;&lt;/tr&gt;
+    &lt;tr&gt;&lt;td colspan=3&gt;Hello there&lt;/td&gt;&lt;/tr&gt;
+&lt;/table&gt;
+        </textarea>
         <br>
         <button onclick="update_html()">Update</button>
         <div id="lib"></div>
