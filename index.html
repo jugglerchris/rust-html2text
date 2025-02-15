@@ -34,7 +34,7 @@ function update_html() {
     wasmBindings.format_html(conf, text);
 }
 </script>
-    <link rel="modulepreload" href="/html2text-web-demo-4995fe3e9786cf4c.js" crossorigin="anonymous" integrity="sha384-+s3sx/z90Hha/wXMdKsFj9IWBfcP16AFYBmqZphRiofvnLTlM5kbABXh+oYFVdei"><link rel="preload" href="/html2text-web-demo-4995fe3e9786cf4c_bg.wasm" crossorigin="anonymous" integrity="sha384-Tn3CYfDYbWDOeVwuaHouXiltOCdC3UMJl7hOQZ4HkD80V+CGpQ6zCvsHhJ66UmxZ" as="fetch" type="application/wasm"></head>
+    <link rel="modulepreload" href="/rust-html2text/html2text-web-demo-4995fe3e9786cf4c.js" crossorigin="anonymous" integrity="sha384-+s3sx/z90Hha/wXMdKsFj9IWBfcP16AFYBmqZphRiofvnLTlM5kbABXh+oYFVdei"><link rel="preload" href="/rust-html2text/html2text-web-demo-4995fe3e9786cf4c_bg.wasm" crossorigin="anonymous" integrity="sha384-Tn3CYfDYbWDOeVwuaHouXiltOCdC3UMJl7hOQZ4HkD80V+CGpQ6zCvsHhJ66UmxZ" as="fetch" type="application/wasm"></head>
     <body>
         <h1>Lib</h1>
         <input type="checkbox" id="conf_css" checked=true onchange="update_html()">CSS</input>
@@ -61,8 +61,8 @@ function update_html() {
         <div id="lib"></div>
     
 <script type="module">
-import init, * as bindings from '/html2text-web-demo-4995fe3e9786cf4c.js';
-const wasm = await init({ module_or_path: '/html2text-web-demo-4995fe3e9786cf4c_bg.wasm' });
+import init, * as bindings from '/rust-html2text/html2text-web-demo-4995fe3e9786cf4c.js';
+const wasm = await init({ module_or_path: '/rust-html2text/html2text-web-demo-4995fe3e9786cf4c_bg.wasm' });
 
 
 window.wasmBindings = bindings;
