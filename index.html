@@ -1,0 +1,74 @@
+<!doctype html>
+<html>
+    <head>
+<style>
+body {
+    margin: 0;
+}
+pre {
+    margin: 0;
+}
+div#main, div#lib {
+    background-color: black;
+}
+textarea#input_html {
+    width: 100%;
+    height: 300px;
+}
+</style>
+<script>
+function update_html() {
+    const text = document.getElementById("input_html").value;
+    const css = document.getElementById("conf_css").checked;
+    const colour = document.getElementById("conf_colour").checked;
+
+    let conf = wasmBindings.Config.new();
+    console.log("CSS:", css);
+    if (css) {
+        conf.use_css();
+    }
+    if (colour) {
+        conf.use_colour();
+    }
+
+    wasmBindings.format_html(conf, text);
+}
+</script>
+    <link rel="modulepreload" href="/html2text-web-demo-4995fe3e9786cf4c.js" crossorigin="anonymous" integrity="sha384-+s3sx/z90Hha/wXMdKsFj9IWBfcP16AFYBmqZphRiofvnLTlM5kbABXh+oYFVdei"><link rel="preload" href="/html2text-web-demo-4995fe3e9786cf4c_bg.wasm" crossorigin="anonymous" integrity="sha384-Tn3CYfDYbWDOeVwuaHouXiltOCdC3UMJl7hOQZ4HkD80V+CGpQ6zCvsHhJ66UmxZ" as="fetch" type="application/wasm"></head>
+    <body>
+        <h1>Lib</h1>
+        <input type="checkbox" id="conf_css" checked=true onchange="update_html()">CSS</input>
+        <br>
+        <input type="checkbox" id="conf_colour" checked=true onchange="update_html()">Colour</input>
+        <br>
+        <textarea id="input_html" onchange="update_html()" oninput="update_html()">&lt;html&gt;
+&lt;style&gt;
+.green {
+    color: #4f4;
+}
+&lt;/style&gt;
+&lt;body&gt;
+  &lt;h1&gt;Hi there&lt;/h1&gt;
+  &lt;p&gt;This is some simple text&lt;/p&gt;
+  &lt;ol&gt;
+    &lt;li&gt;Item one&lt;/li&gt;
+    &lt;li&gt;&lt;s&gt;Item two&lt/s&gt&lt;/li&gt;
+    &lt;li class="green"&gt;Item three&lt;/li&gt;
+  &lt;/ol&gt;
+&lt;/body&gt;&lt;/html&gt;</textarea>
+        <br>
+        <button onclick="update_html()">Update</button>
+        <div id="lib"></div>
+    
+<script type="module">
+import init, * as bindings from '/html2text-web-demo-4995fe3e9786cf4c.js';
+const wasm = await init({ module_or_path: '/html2text-web-demo-4995fe3e9786cf4c_bg.wasm' });
+
+
+window.wasmBindings = bindings;
+
+
+dispatchEvent(new CustomEvent("TrunkApplicationStarted", {detail: {wasm}}));
+
+</script></body>
+</html>
