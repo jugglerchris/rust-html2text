@@ -3,7 +3,7 @@ use wasm_bindgen::prelude::wasm_bindgen;
 use ratzilla::ratatui::{
     style::{Color, Style, Stylize},
     text::{Text, Line, Span},
-    widgets::Paragraph,
+    widgets::{Block, Paragraph},
     Frame,
     Terminal,
 };
@@ -41,6 +41,7 @@ impl Config {
             conf
         };
         conf
+            .unicode_strikeout(false)
     }
 }
 
@@ -49,7 +50,7 @@ fn do_render_colour(f: &mut Frame, config: &Config, input: &[u8]) {
 
     let conf = config.update_conf(html2text::config::rich());
 
-    let lines = conf.lines_from_read(input, area.width as usize).unwrap();
+    let lines = conf.lines_from_read(input, area.width as usize - 2).unwrap();
     let mut out = Text::default();
     for line in lines {
         let mut term_line = Line::default();
@@ -83,17 +84,17 @@ fn do_render_colour(f: &mut Frame, config: &Config, input: &[u8]) {
         out.push_line(term_line);
     }
     f.render_widget(
-        Paragraph::new(out),
+        Paragraph::new(out).block(Block::bordered().title("HTML").border_style(Color::Yellow)),
         f.area());
 }
 
 #[wasm_bindgen]
 pub fn format_html(config: Config, input: &str) {
     let backend = DomBackend::new_by_id("lib").unwrap();
-    let terminal = Terminal::new(backend).unwrap();
+    let mut terminal = Terminal::new(backend).unwrap();
 
     let inp = input.to_string();
-    terminal.draw_web(move |f| {
+    terminal.draw(move |f| {
         if config.colour {
             do_render_colour(f, &config, inp.as_bytes());
         } else {
