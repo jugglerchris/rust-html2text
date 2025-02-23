@@ -59,7 +59,7 @@ fn do_render_colour(f: &mut Frame, config: &Config, input: &[u8]) {
             let mut style = Style::new();
             for attr in &piece.tag {
                 use html2text::render::RichAnnotation::*;
-                match dbg!(attr) {
+                match attr {
                     Default | Link(_) | Image(_) | Code | Preformat(_) => {}
                     Emphasis => {
                         style = style.italic();
