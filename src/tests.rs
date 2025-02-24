@@ -1,5 +1,6 @@
 use crate::config::Config;
-use crate::render::text_renderer::PlainDecorator;
+use crate::render::text_renderer::{PlainDecorator, TaggedString};
+use crate::render::TaggedLineElement;
 use crate::{config, Error};
 
 use super::render::text_renderer::{RichAnnotation, RichDecorator, TaggedLine, TrivialDecorator};
@@ -2220,6 +2221,57 @@ foo
 fn test_issue_187() {
     let html = br#"<div><table><tbody><tr><td><div><table><tbody><tr><td><div><pre>na na na na na na na na na na na na na na na</p></div></td></tr>/<tbody></table></div></td></tr>/<tbody></table></div>"#;
     let _ = crate::config::plain().string_from_read(&html[..], 17);
+}
+
+fn get_lines(html: &[u8], width: usize)
+    -> Vec<TaggedLine<Vec<()>>> {
+    config::plain()
+        .lines_from_read(html, width).unwrap()
+}
+
+#[test]
+fn frag_simple() {
+    use TaggedLineElement::*;
+    assert_eq!(
+        get_lines(br#"<p id="my_id">Hi</p>"#, 10).into_iter().map(
+            |line| line.into_iter().collect::<Vec<_>>())
+            .collect::<Vec<_>>(),
+        vec![
+           vec![
+               FragmentStart("my_id".into()),
+               Str(TaggedString {
+                   s: "Hi".into(),
+                   tag: Default::default(),
+                   })
+           ],
+        ]);
+}
+
+#[test]
+fn frag_list() {
+    use TaggedLineElement::*;
+    assert_eq!(
+        get_lines(br#"<ul id="my_id">
+            <li>One</li>
+            <li>Two</li>
+        </ul>"#, 10).into_iter().map(
+            |line| line.into_iter().collect::<Vec<_>>())
+            .collect::<Vec<_>>(),
+        vec![
+           vec![
+               FragmentStart("my_id".into()),
+               Str(TaggedString {
+                   s: "* One".into(),
+                   tag: Default::default(),
+                   })
+           ],
+           vec![
+               Str(TaggedString {
+                   s: "* Two".into(),
+                   tag: Default::default(),
+                   })
+           ],
+        ]);
 }
 
 #[cfg(feature = "css")]

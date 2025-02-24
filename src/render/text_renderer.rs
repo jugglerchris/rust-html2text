@@ -320,6 +320,17 @@ impl<T: Debug + Eq + PartialEq + Clone + Default> TaggedLine<T> {
     }
 }
 
+impl<T> IntoIterator for TaggedLine<T> {
+    type Item = TaggedLineElement<T>;
+    type IntoIter = <Vec<TaggedLineElement<T>> as IntoIterator>::IntoIter;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.v.into_iter()
+    }
+
+
+}
+
 /// A type to build up wrapped text, allowing extra metadata for
 /// spans.
 #[derive(Debug, Clone)]
