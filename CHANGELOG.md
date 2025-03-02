@@ -11,6 +11,12 @@ Possible log types:
 
 ### Latest
 
+### 0.14.1
+
+- [fixed] An issue with `FragmentStart`s being lost (thanks toiletbril)
+- [fixed] An infinite loop if tabs inside `<pre>` wrapped past the width
+  (thanks nshp)
+
 ### 0.14.0
 
 - [changed] Various small refactors (thanks sftse)
