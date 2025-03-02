@@ -2223,55 +2223,56 @@ fn test_issue_187() {
     let _ = crate::config::plain().string_from_read(&html[..], 17);
 }
 
-fn get_lines(html: &[u8], width: usize)
-    -> Vec<TaggedLine<Vec<()>>> {
-    config::plain()
-        .lines_from_read(html, width).unwrap()
+fn get_lines(html: &[u8], width: usize) -> Vec<TaggedLine<Vec<()>>> {
+    config::plain().lines_from_read(html, width).unwrap()
 }
 
 #[test]
 fn frag_simple() {
     use TaggedLineElement::*;
     assert_eq!(
-        get_lines(br#"<p id="my_id">Hi</p>"#, 10).into_iter().map(
-            |line| line.into_iter().collect::<Vec<_>>())
+        get_lines(br#"<p id="my_id">Hi</p>"#, 10)
+            .into_iter()
+            .map(|line| line.into_iter().collect::<Vec<_>>())
             .collect::<Vec<_>>(),
-        vec![
-           vec![
-               FragmentStart("my_id".into()),
-               Str(TaggedString {
-                   s: "Hi".into(),
-                   tag: Default::default(),
-                   })
-           ],
-        ]);
+        vec![vec![
+            FragmentStart("my_id".into()),
+            Str(TaggedString {
+                s: "Hi".into(),
+                tag: Default::default(),
+            })
+        ],]
+    );
 }
 
 #[test]
 fn frag_list() {
     use TaggedLineElement::*;
     assert_eq!(
-        get_lines(br#"<ul id="my_id">
+        get_lines(
+            br#"<ul id="my_id">
             <li>One</li>
             <li>Two</li>
-        </ul>"#, 10).into_iter().map(
-            |line| line.into_iter().collect::<Vec<_>>())
-            .collect::<Vec<_>>(),
+        </ul>"#,
+            10
+        )
+        .into_iter()
+        .map(|line| line.into_iter().collect::<Vec<_>>())
+        .collect::<Vec<_>>(),
         vec![
-           vec![
-               FragmentStart("my_id".into()),
-               Str(TaggedString {
-                   s: "* One".into(),
-                   tag: Default::default(),
-                   })
-           ],
-           vec![
-               Str(TaggedString {
-                   s: "* Two".into(),
-                   tag: Default::default(),
-                   })
-           ],
-        ]);
+            vec![
+                FragmentStart("my_id".into()),
+                Str(TaggedString {
+                    s: "* One".into(),
+                    tag: Default::default(),
+                })
+            ],
+            vec![Str(TaggedString {
+                s: "* Two".into(),
+                tag: Default::default(),
+            })],
+        ]
+    );
 }
 
 #[cfg(feature = "css")]

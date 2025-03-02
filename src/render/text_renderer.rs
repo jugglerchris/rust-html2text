@@ -233,6 +233,14 @@ impl<T: Debug + Eq + PartialEq + Clone + Default> TaggedLine<T> {
         use self::TaggedLineElement::Str;
 
         self.len += UnicodeWidthStr::width(ts.s.as_str());
+
+        if let Some(Str(ts1)) = self.v.get_mut(0) {
+            if ts1.tag == ts.tag {
+                // Combine into one TaggedString
+                ts1.s.insert_str(0, &ts.s);
+                return;
+            }
+        }
         self.v.insert(0, Str(ts));
     }
 
@@ -327,8 +335,6 @@ impl<T> IntoIterator for TaggedLine<T> {
     fn into_iter(self) -> Self::IntoIter {
         self.v.into_iter()
     }
-
-
 }
 
 /// A type to build up wrapped text, allowing extra metadata for
@@ -541,6 +547,15 @@ impl<T: Clone + Eq + Debug + Default> WrappedBlock<T> {
         result
     }
     */
+
+    /// If there are any pending fragment starts, return them.
+    pub fn take_trailing_fragments(&mut self) -> Vec<TaggedLineElement<T>> {
+        if self.word.is_empty() {
+            std::mem::take(&mut self.word).v
+        } else {
+            Default::default()
+        }
+    }
 
     /// Consume self and return vector of lines including annotations.
     pub fn into_lines(mut self) -> Result<Vec<TaggedLine<T>>> {
@@ -975,7 +990,10 @@ pub(crate) struct SubRenderer<D: TextDecorator> {
     width: usize,
     /// Rendering options
     pub options: RenderOptions,
+    /// The currently generated lines
     lines: LinkedList<RenderLine<Vec<D::Annotation>>>,
+    /// FragmentStart items which have not yet been output.
+    pending_frags: Vec<TaggedLineElement<Vec<D::Annotation>>>,
     /// True at the end of a block, meaning we should add
     /// a blank line if any other text is added.
     at_block_end: bool,
@@ -1117,14 +1135,47 @@ impl<D: TextDecorator> SubRenderer<D> {
             ws_stack: Vec::new(),
             pre_depth: 0,
             text_filter_stack: Vec::new(),
+            pending_frags: Default::default(),
+        }
+    }
+
+    /// Append a line to the output.
+    /// Any pending fragments will be prepended to a non-border line.
+    fn add_line(&mut self, line: RenderLine<Vec<D::Annotation>>) {
+        if !self.pending_frags.is_empty() {
+            match line {
+                RenderLine::Text(tagged_line) => {
+                    let mut tl = TaggedLine::new();
+                    for frag in std::mem::take(&mut self.pending_frags) {
+                        tl.push(frag);
+                    }
+                    for part in tagged_line.into_iter() {
+                        tl.push(part);
+                    }
+                    self.lines.push_back(RenderLine::Text(tl));
+                    return;
+                }
+                RenderLine::Line(..) => (),
+            }
+        }
+        self.lines.push_back(line);
+    }
+
+    /// Append multiple lines to the output
+    /// Any pending fragments will be prepended to a non-border line.
+    fn extend_lines(&mut self, lines: impl IntoIterator<Item = RenderLine<Vec<D::Annotation>>>) {
+        for line in lines {
+            self.add_line(line);
         }
     }
 
     /// Flushes the current wrapped block into the lines.
     fn flush_wrapping(&mut self) -> Result<()> {
-        if let Some(w) = self.wrapping.take() {
-            self.lines
-                .extend(w.into_lines()?.into_iter().map(RenderLine::Text))
+        if let Some(mut w) = self.wrapping.take() {
+            let frags = w.take_trailing_fragments();
+            self.extend_lines(w.into_lines()?.into_iter().map(RenderLine::Text));
+
+            self.pending_frags.extend(frags);
         }
         Ok(())
     }
@@ -1187,7 +1238,7 @@ impl<D: TextDecorator> SubRenderer<D> {
                                 buf = String::new();
                             }
 
-                            self.lines.push_back(RenderLine::Text(wrapped_line));
+                            self.add_line(RenderLine::Text(wrapped_line));
                             wrapped_line = TaggedLine::new();
                             pos = 0;
                         }
@@ -1203,7 +1254,7 @@ impl<D: TextDecorator> SubRenderer<D> {
                     pos += width;
                 }
             }
-            self.lines.push_back(RenderLine::Text(wrapped_line));
+            self.add_line(RenderLine::Text(wrapped_line));
         }
     }
 
@@ -1215,7 +1266,7 @@ impl<D: TextDecorator> SubRenderer<D> {
 
     fn add_horizontal_line(&mut self, line: BorderHoriz<Vec<D::Annotation>>) -> Result<()> {
         self.flush_wrapping()?;
-        self.lines.push_back(RenderLine::Line(line));
+        self.add_line(RenderLine::Line(line));
         Ok(())
     }
 
@@ -1249,7 +1300,7 @@ impl<D: TextDecorator> Renderer for SubRenderer<D> {
     fn add_empty_line(&mut self) -> Result<()> {
         html_trace!("add_empty_line()");
         self.flush_all()?;
-        self.lines.push_back(RenderLine::Text(TaggedLine::new()));
+        self.add_line(RenderLine::Text(TaggedLine::new()));
         html_trace_quiet!("add_empty_line: at_block_end <- false");
         self.at_block_end = false;
         html_trace_quiet!("add_empty_line: new lines: {:?}", self.lines);
@@ -1297,7 +1348,7 @@ impl<D: TextDecorator> Renderer for SubRenderer<D> {
 
     fn add_horizontal_border(&mut self) -> Result<()> {
         self.flush_wrapping()?;
-        self.lines.push_back(RenderLine::Line(BorderHoriz::new(
+        self.add_line(RenderLine::Line(BorderHoriz::new(
             self.width,
             self.ann_stack.clone(),
         )));
@@ -1306,7 +1357,7 @@ impl<D: TextDecorator> Renderer for SubRenderer<D> {
 
     fn add_horizontal_border_width(&mut self, width: usize) -> Result<()> {
         self.flush_wrapping()?;
-        self.lines.push_back(RenderLine::Line(BorderHoriz::new(
+        self.add_line(RenderLine::Line(BorderHoriz::new(
             width,
             self.ann_stack.clone(),
         )));
@@ -1389,7 +1440,8 @@ impl<D: TextDecorator> Renderer for SubRenderer<D> {
 
         self.flush_wrapping()?;
         let tag = self.ann_stack.clone();
-        self.lines.extend(
+
+        self.extend_lines(
             other
                 .into_lines()?
                 .into_iter()
@@ -1418,6 +1470,7 @@ impl<D: TextDecorator> Renderer for SubRenderer<D> {
                     }
                 }),
         );
+
         Ok(())
     }
 
@@ -1556,11 +1609,11 @@ impl<D: TextDecorator> Renderer for SubRenderer<D> {
                     );
                 }
             }
-            self.lines.push_back(RenderLine::Text(line));
+            self.add_line(RenderLine::Text(line));
             line = TaggedLine::new();
         }
         if self.options.draw_borders {
-            self.lines.push_back(RenderLine::Line(next_border));
+            self.add_line(RenderLine::Line(next_border));
         }
         Ok(())
     }
