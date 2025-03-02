@@ -615,6 +615,7 @@ impl<T: Clone + Eq + Debug + Default> WrappedBlock<T> {
                             while pos % tab_stop != 0 || !at_least_one_space {
                                 if pos >= self.width {
                                     self.flush_line();
+                                    pos = 0;
                                 } else {
                                     self.line.push_char(' ', tag);
                                     pos += 1;

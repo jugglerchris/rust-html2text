@@ -653,6 +653,7 @@ Hello
         20,
     );
 }
+
 #[test]
 fn test_link() {
     test_html(
@@ -1217,6 +1218,151 @@ fn test_pre_tab() {
     test_html(b"<pre>Helloo\tworld</pre>", "Helloo  world\n", 40);
     test_html(b"<pre>Hellooo\tworld</pre>", "Hellooo world\n", 40);
     test_html(b"<pre>Helloooo\tworld</pre>", "Helloooo        world\n", 40);
+}
+
+#[test]
+fn test_pre_tab2() {
+    // Note hard tab characters below.
+    test_html(br#"<pre>	t0
+x	t1
+xx	t2
+xxx	t3
+xxxx	t4
+xxxxx	t5
+xxxxxx	t6
+xxxxxxx	t7
+xxxxxxxx	t8
+xxxxxxxxx	t9</pre>"#,
+    r"        t0
+x       t1
+xx      t2
+xxx     t3
+xxxx    t4
+xxxxx   t5
+xxxxxx  t6
+xxxxxxx t7
+xxxxxxxx        t8
+xxxxxxxxx       t9
+", 40);
+}
+
+// Check for edge cases hitting the width
+#[test]
+fn test_pre_tab3() {
+    // Note hard tab characters below.
+    test_html(br#"<pre>	t
+x	t
+xx	t
+xxx	t
+xxxx	t
+xxxxx	t
+xxxxxx	t
+xxxxxxx	t
+xxxxxxxx	t
+xxxxxxxxx	t</pre>"#,
+    r"        t
+x       t
+xx      t
+xxx     t
+xxxx    t
+xxxxx   t
+xxxxxx  t
+xxxxxxx t
+xxxxxxxx  
+t
+xxxxxxxxx 
+t
+", 10);
+    test_html(br#"<pre>	t
+x	t
+xx	t
+xxx	t
+xxxx	t
+xxxxx	t
+xxxxxx	t
+xxxxxxx	t
+xxxxxxxx	t
+xxxxxxxxx	t</pre>"#,
+    r"        t
+x       t
+xx      t
+xxx     t
+xxxx    t
+xxxxx   t
+xxxxxx  t
+xxxxxxx t
+xxxxxxxx 
+t
+xxxxxxxxx
+        t
+", 9);
+    test_html(br#"<pre>	t
+x	t
+xx	t
+xxx	t
+xxxx	t
+xxxxx	t
+xxxxxx	t
+xxxxxxx	t
+xxxxxxxx	t
+xxxxxxxxx	t</pre>"#,
+    r"        
+t
+x       
+t
+xx      
+t
+xxx     
+t
+xxxx    
+t
+xxxxx   
+t
+xxxxxx  
+t
+xxxxxxx 
+t
+xxxxxxxx
+        
+t
+xxxxxxxx
+x       
+t
+", 8);
+    test_html(br#"<pre>	t
+x	t
+xx	t
+xxx	t
+xxxx	t
+xxxxx	t
+xxxxxx	t
+xxxxxxx	t
+xxxxxxxx	t
+xxxxxxxxx	t</pre>"#,
+    r"       
+t
+x      
+t
+xx     
+t
+xxx    
+t
+xxxx   
+t
+xxxxx  
+t
+xxxxxx 
+t
+xxxxxxx
+       
+t
+xxxxxxx
+x      
+t
+xxxxxxx
+xx     
+t
+", 7);
 }
 
 #[test]
