@@ -36,7 +36,6 @@
 //! [tree structure]: https://en.wikipedia.org/wiki/Tree_(data_structure)
 //! [dom wiki]: https://en.wikipedia.org/wiki/Document_Object_Model
 
-extern crate markup5ever;
 extern crate tendril;
 
 use std::borrow::Cow;
@@ -50,14 +49,14 @@ use std::rc::{Rc, Weak};
 use html5ever::interface::ElemName;
 use tendril::StrTendril;
 
-use markup5ever::interface::tree_builder;
-use markup5ever::interface::tree_builder::{ElementFlags, NodeOrText, QuirksMode, TreeSink};
-use markup5ever::serialize::TraversalScope;
-use markup5ever::serialize::TraversalScope::{ChildrenOnly, IncludeNode};
-use markup5ever::serialize::{Serialize, Serializer};
-use markup5ever::Attribute;
-use markup5ever::ExpandedName;
-use markup5ever::QualName;
+use html5ever::interface::tree_builder;
+use html5ever::interface::tree_builder::{ElementFlags, NodeOrText, QuirksMode, TreeSink};
+use html5ever::serialize::TraversalScope;
+use html5ever::serialize::TraversalScope::{ChildrenOnly, IncludeNode};
+use html5ever::serialize::{Serialize, Serializer};
+use html5ever::Attribute;
+use html5ever::ExpandedName;
+use html5ever::QualName;
 
 /// The different kinds of nodes in the DOM.
 #[derive(Debug)]
