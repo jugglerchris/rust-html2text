@@ -11,6 +11,11 @@ Possible log types:
 
 ### Latest
 
+### 0.14.1
+
+- [fixed] A build error from incompatible versions of markup5ever due to an
+  upstream update (thanks anna-hope)
+
 ### 0.14.0
 
 - [changed] Various small refactors (thanks sftse)
