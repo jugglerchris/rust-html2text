@@ -11,6 +11,11 @@ Possible log types:
 
 ### Latest
 
+### 0.14.2
+
+- [fixed] An issue with multiple verions of markup5ever being included.
+  (thanks anna-hope)
+
 ### 0.14.1
 
 - [fixed] An issue with `FragmentStart`s being lost (thanks toiletbril)

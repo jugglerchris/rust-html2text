@@ -1,6 +1,6 @@
 [package]
 name = "html2text"
-version = "0.14.1"
+version = "0.14.2"
 authors = ["Chris Emerson <github@mail.nosreme.org>"]
 description = "Render HTML as plain text."
 repository = "https://github.com/jugglerchris/rust-html2text/"
@@ -15,7 +15,6 @@ license = "MIT"
 
 [dependencies]
 html5ever = "0.29.0"
-markup5ever = "0.14.0"
 tendril = "0.4"
 unicode-width = "0.2"
 backtrace = { version = "0.3", optional=true }
