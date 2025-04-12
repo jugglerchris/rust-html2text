@@ -11,6 +11,10 @@ Possible log types:
 
 ### Latest
 
+### 0.14.3
+
+- [changed] Updated dependencies, including html5ever 0.31.
+
 ### 0.14.2
 
 - [fixed] An issue with multiple verions of markup5ever being included.
