@@ -1,0 +1,10 @@
+lsi: false
+safe: true
+source: .
+incremental: false
+gist:
+  noscript: false
+
+theme: minima
+
+github_username: jugglerchris
