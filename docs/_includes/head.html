@@ -9,8 +9,8 @@
     {%- include google-analytics.html -%}
   {%- endif -%}
   {%- if page.h2t_wasm -%}
-  <link rel=modulepreload src="/assets/html2text-web-demo.js">
-  <link rel=preload src="/assets/html2text-web-demo-bg.wasm" as="fetch" type="application/wasm" crossorigin="">
+  <link rel=modulepreload src="{{"/assets/html2text-web-demo.js" | relative_url }}">
+  <link rel=preload src="{{"/assets/html2text-web-demo-bg.wasm" | relative_url }}" as="fetch" type="application/wasm" crossorigin="">
   <link rel="stylesheet" href="{{ "/assets/demo.css" | relative_url }}">
   {%- endif -%}
   {%- if page.h2t_js -%}
