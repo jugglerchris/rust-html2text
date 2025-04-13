@@ -39,8 +39,8 @@ h2t_js: "/assets/demo-main.js"
 <div id="lib"></div>
 
 <script type="module">
-import init, * as bindings from '/assets/html2text-web-demo.js';
-const wasm = await init({ module_or_path: '/assets/html2text-web-demo_bg.wasm' });
+import init, * as bindings from '/rust-html2text/assets/html2text-web-demo.js';
+const wasm = await init({ module_or_path: '/rust-html2text/assets/html2text-web-demo_bg.wasm' });
 
 window.wasmBindings = bindings;
 
