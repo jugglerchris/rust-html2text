@@ -1,2 +1,10 @@
+trunk-version = "^0.21.7"
+
 [build]
 public_url = "/rust-html2text/"
+release = true
+filehash = false
+inject_scripts = true #false
+offline = false #true
+frozen = true
+minify = "on_release"

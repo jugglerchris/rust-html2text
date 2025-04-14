@@ -9,7 +9,7 @@ use ratzilla::ratatui::{
 };
 
 use html2text::render::TextDecorator;
-use ratzilla::{DomBackend, WebRenderer};
+use ratzilla::DomBackend;
 
 #[wasm_bindgen]
 pub struct Config {
@@ -107,5 +107,5 @@ pub fn format_html(config: Config, input: &str) {
                 Paragraph::new(output),
                 f.area());
         }
-    });
+    }).unwrap();
 }
