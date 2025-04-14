@@ -26,11 +26,6 @@ jobs:
         uses: actions/checkout@v4
       - name: Setup Pages
         uses: actions/configure-pages@v5
-      - name: Build with Jekyll
-        uses: actions/jekyll-build-pages@v1
-        with:
-          source: ./pages
-          destination: ./_site
       - name: Install trunk
         run: cargo install trunk --version=0.21.7
       - name: Install WASM rust target
@@ -39,9 +34,14 @@ jobs:
         run: trunk build
         working-directory: ./html2text-web-demo
       - name: Debug
-        run: ls -la html2text-web-demo/dist/html2text-web-demo{.js,_bg.wasm} ./_site/assets/
+        run: id ; ls -la html2text-web-demo/dist/html2text-web-demo{.js,_bg.wasm} ./pages/assets/
       - name: Copy WASM assets
-        run: cp html2text-web-demo/dist/html2text-web-demo{.js,_bg.wasm} ./_site/assets/
+        run: cp html2text-web-demo/dist/html2text-web-demo{.js,_bg.wasm} ./pages/assets/
+      - name: Build with Jekyll
+        uses: actions/jekyll-build-pages@v1
+        with:
+          source: ./pages
+          destination: ./_site
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
 
