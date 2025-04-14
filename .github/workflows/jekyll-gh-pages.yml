@@ -33,6 +33,8 @@ jobs:
           destination: ./_site
       - name: Install trunk
         run: cargo install trunk --version=0.21.7
+      - name: Install WASM rust target
+        run: rustup target add wasm32-unknown-unknown
       - name: Build WASM module
         run: trunk build
         working-directory: ./html2text-web-demo
