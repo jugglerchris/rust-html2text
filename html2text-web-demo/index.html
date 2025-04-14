@@ -1,0 +1,70 @@
+<!doctype html>
+<html>
+    <head>
+<style>
+body {
+    margin: 0;
+}
+pre {
+    margin: 0;
+}
+#main, #lib {
+    background-color: black;
+}
+#input_html {
+    width: 100%;
+    height: 300px;
+}
+</style>
+<script>
+function update_html() {
+    const text = document.getElementById("input_html").value;
+    const css = document.getElementById("conf_css").checked;
+    const colour = document.getElementById("conf_colour").checked;
+
+    let conf = wasmBindings.Config.new();
+    console.log("CSS:", css);
+    if (css) {
+        conf.use_css();
+    }
+    if (colour) {
+        conf.use_colour();
+    }
+
+    wasmBindings.format_html(conf, text);
+}
+window.addEventListener("TrunkApplicationStarted", update_html);
+</script>
+    </head>
+    <body>
+        <h1>Html2text demo</h1>
+        <input type="checkbox" id="conf_css" checked=true onchange="update_html()">CSS</input>
+        <br>
+        <input type="checkbox" id="conf_colour" checked=true onchange="update_html()">Colour</input>
+        <br>
+        <textarea id="input_html" onchange="update_html()" oninput="update_html()">&lt;html&gt;
+&lt;style&gt;
+.green {
+    color: #4f4;
+}
+&lt;/style&gt;
+&lt;body&gt;
+  &lt;h1&gt;Hi there&lt;/h1&gt;
+  &lt;p&gt;This is some simple text&lt;/p&gt;
+  &lt;ol&gt;
+    &lt;li&gt;Item one&lt;/li&gt;
+    &lt;li&gt;&lt;s&gt;Item two&lt/s&gt&lt;/li&gt;
+    &lt;li class="green"&gt;Item three&lt;/li&gt;
+  &lt;/ol&gt;
+&lt;table&gt;
+    &lt;tr&gt;&lt;th&gt;Heading 1&lt;/th&gt;&lt;th&gt;Heading 2&lt;/th&gt;&lt;th&gt;Heading 3&lt;/th&gt;&lt;/tr&gt;
+    &lt;tr&gt;&lt;td&gt;Data 1&lt;/td&gt;&lt;td&gt;Data 2&lt;/td&gt;&lt;td&gt;Data 3&lt;/td&gt;&lt;/tr&gt;
+    &lt;tr&gt;&lt;td colspan=3&gt;Hello there&lt;/td&gt;&lt;/tr&gt;
+&lt;/table&gt;
+&lt;/body&gt;&lt;/html&gt;
+        </textarea>
+        <br>
+        <button onclick="update_html()">Update</button>
+        <div id="lib"></div>
+    </body>
+</html>

@@ -1078,6 +1078,9 @@ pub(crate) struct RenderOptions {
 
     /// Whether to include footnotes for hyperlinks
     pub include_link_footnotes: bool,
+
+    /// Whether to use Unicode combining characters for crossing text out.
+    pub use_unicode_strikeout: bool,
 }
 
 impl Default for RenderOptions {
@@ -1090,6 +1093,7 @@ impl Default for RenderOptions {
             draw_borders: true,
             wrap_links: true,
             include_link_footnotes: false,
+            use_unicode_strikeout: true,
         }
     }
 }
@@ -1697,13 +1701,17 @@ impl<D: TextDecorator> Renderer for SubRenderer<D> {
         let (s, annotation) = self.decorator.decorate_strikeout_start();
         self.ann_stack.push(annotation);
         self.add_inline_text(&s)?;
-        self.text_filter_stack.push(filter_text_strikeout);
+        if self.options.use_unicode_strikeout {
+            self.text_filter_stack.push(filter_text_strikeout);
+        }
         Ok(())
     }
     fn end_strikeout(&mut self) -> Result<()> {
-        self.text_filter_stack
-            .pop()
-            .expect("end_strikeout() called without a corresponding start_strokeout()");
+        if self.options.use_unicode_strikeout {
+            self.text_filter_stack
+                .pop()
+                .expect("end_strikeout() called without a corresponding start_strokeout()");
+        }
         let s = self.decorator.decorate_strikeout_end();
         self.add_inline_text(&s)?;
         self.ann_stack.pop();
