@@ -1,0 +1,11 @@
+lsi: false
+safe: true
+source: .
+incremental: false
+baseurl: "/rust-html2text"
+gist:
+  noscript: false
+
+theme: minima
+
+github_username: jugglerchris
