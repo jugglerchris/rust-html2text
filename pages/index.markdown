@@ -29,7 +29,7 @@ h2t_js: "/assets/demo-main.js"
 | <input type="checkbox" id="conf_do_decorate">Add markdown-like decoration | Add characters, e.g. `*` around `<em>` text even with plain decorators. |
 | <input type="checkbox" id="conf_link_footnotes">URL footnotes | Add numbered list of URLs at the end of the output |
 
-
+<pre id="rust-code-pre"><code id="rust-code"></code></pre>
 
 <textarea id="input_html" onchange="update_html()" oninput="update_html()">
 <html>
