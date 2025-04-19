@@ -15,3 +15,10 @@
     background-color: black;
     border: 0px;
 }
+
+.warning {
+    color: red;
+}
+.warning::before {
+    content: "⚠️";
+}

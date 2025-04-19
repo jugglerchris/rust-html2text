@@ -10,6 +10,10 @@ h2t_wasm: true
 h2t_js: "/assets/demo-main.js"
 ---
 
+<noscript>
+<h2 class="warning">This demo page requires javascript (and WASM) to work.</h2>
+</noscript>
+
 <input type="checkbox" id="conf_css" checked=true onchange="update_html()">CSS
 <input type="checkbox" id="conf_colour" checked=true onchange="update_html()">Colour
 

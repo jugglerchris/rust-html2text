@@ -1,4 +1,4 @@
-trunk-version = "^0.21.7"
+trunk-version = "^0.21.13"
 
 [build]
 public_url = "/rust-html2text/"

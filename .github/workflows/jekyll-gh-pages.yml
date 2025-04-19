@@ -27,14 +27,12 @@ jobs:
       - name: Setup Pages
         uses: actions/configure-pages@v5
       - name: Install trunk
-        run: cargo install trunk --version=0.21.7
+        run: cargo install trunk --version=0.21.13
       - name: Install WASM rust target
         run: rustup target add wasm32-unknown-unknown
       - name: Build WASM module
         run: trunk build
         working-directory: ./html2text-web-demo
-      - name: Debug
-        run: id ; ls -la html2text-web-demo/dist/html2text-web-demo{.js,_bg.wasm} ./pages/assets/
       - name: Copy WASM assets
         run: cp html2text-web-demo/dist/html2text-web-demo{.js,_bg.wasm} ./pages/assets/
       - name: Build with Jekyll

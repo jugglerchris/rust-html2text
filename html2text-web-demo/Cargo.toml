@@ -5,8 +5,7 @@ edition = "2021"
 
 [dependencies]
 html2text = { path = "..", features = ["css"] }
-ratzilla = "0.0.2"
-#ratzilla = { path = "../ratzilla/" }
+ratzilla = "0.0.6"
 wasm-bindgen = "0.2.100"
 
 [lib]
