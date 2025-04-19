@@ -14,5 +14,13 @@ function update_html() {
 
     wasmBindings.format_html(conf, text);
 }
-window.addEventListener("TrunkApplicationStarted", update_html);
 
+function start() {
+    const confItems = document.querySelectorAll("input");
+    confItems.forEach((elt) => {
+        elt.addEventListener("change", update_html);
+    });
+    // Do the first render
+    update_html();
+}
+window.addEventListener("TrunkApplicationStarted", start);
