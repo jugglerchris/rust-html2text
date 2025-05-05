@@ -11,6 +11,10 @@ Possible log types:
 
 ### Latest
 
+### 0.14.4
+
+- [added] `RcDom::serialize`, and expose a few more of the `RcDom` types.
+
 ### 0.14.3
 
 - [changed] Updated dependencies, including html5ever 0.31.
