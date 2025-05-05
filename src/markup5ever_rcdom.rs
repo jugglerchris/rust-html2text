@@ -78,11 +78,16 @@ pub enum NodeData {
     Text { contents: RefCell<StrTendril> },
 
     /// A comment.
-    Comment { contents: StrTendril },
+    Comment {
+        /// The comment text.
+        contents: StrTendril
+    },
 
     /// An element with attributes.
     Element {
+        /// The qualified element name
         name: QualName,
+        /// The element's attributes.
         attrs: RefCell<Vec<Attribute>>,
 
         /// For HTML \<template\> elements, the [template contents].
@@ -289,6 +294,11 @@ impl RcDom {
         let mut s = String::new();
         Self::add_node_to_string(&mut s, node, 0);
         s
+    }
+
+    /// Serialise the DOM to a writable.
+    pub fn serialize(&self, writer: impl io::Write) -> io::Result<()> {
+        html5ever::serialize(writer, &SerializableHandle(self.document.clone()), Default::default())
     }
 
     /// Find the node at a child path starting from the root element.  At each level, 1 is the

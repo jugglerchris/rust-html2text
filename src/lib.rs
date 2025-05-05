@@ -55,9 +55,6 @@
 struct ReadMe;
 
 #[macro_use]
-extern crate html5ever;
-
-#[macro_use]
 mod macros;
 
 pub mod css;
@@ -72,11 +69,13 @@ use html5ever::driver::ParseOpts;
 use html5ever::parse_document;
 use html5ever::tree_builder::TreeBuilderOpts;
 mod markup5ever_rcdom;
-pub use markup5ever_rcdom::RcDom;
-use markup5ever_rcdom::{
+pub use markup5ever_rcdom::{
     Handle,
     NodeData::{Comment, Document, Element},
+    RcDom,
 };
+pub use html5ever::{expanded_name, local_name, namespace_url, ns};
+
 use std::cell::Cell;
 use std::cmp::{max, min};
 use std::collections::{BTreeSet, HashMap};
@@ -2455,7 +2454,6 @@ pub mod config {
             use html5ever::tendril::TendrilSink;
             let opts = super::ParseOpts {
                 tree_builder: super::TreeBuilderOpts {
-                    drop_doctype: true,
                     ..Default::default()
                 },
                 ..Default::default()
