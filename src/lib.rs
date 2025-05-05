@@ -69,12 +69,12 @@ use html5ever::driver::ParseOpts;
 use html5ever::parse_document;
 use html5ever::tree_builder::TreeBuilderOpts;
 mod markup5ever_rcdom;
+pub use html5ever::{expanded_name, local_name, namespace_url, ns};
 pub use markup5ever_rcdom::{
     Handle,
     NodeData::{Comment, Document, Element},
     RcDom,
 };
-pub use html5ever::{expanded_name, local_name, namespace_url, ns};
 
 use std::cell::Cell;
 use std::cmp::{max, min};

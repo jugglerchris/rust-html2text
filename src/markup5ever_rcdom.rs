@@ -80,7 +80,7 @@ pub enum NodeData {
     /// A comment.
     Comment {
         /// The comment text.
-        contents: StrTendril
+        contents: StrTendril,
     },
 
     /// An element with attributes.
@@ -298,7 +298,11 @@ impl RcDom {
 
     /// Serialise the DOM to a writable.
     pub fn serialize(&self, writer: impl io::Write) -> io::Result<()> {
-        html5ever::serialize(writer, &SerializableHandle(self.document.clone()), Default::default())
+        html5ever::serialize(
+            writer,
+            &SerializableHandle(self.document.clone()),
+            Default::default(),
+        )
     }
 
     /// Find the node at a child path starting from the root element.  At each level, 1 is the
