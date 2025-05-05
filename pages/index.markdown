@@ -14,8 +14,9 @@ h2t_js: "/assets/demo-main.js"
 <h2 class="warning">This demo page requires javascript (and WASM) to work.</h2>
 </noscript>
 
-<input type="checkbox" id="conf_css" checked=true onchange="update_html()">CSS
-<input type="checkbox" id="conf_colour" checked=true onchange="update_html()">Colour
+<div id="h2tmain" markdown="1">
+
+<div id="lib"></div>
 
 <textarea id="input_html" onchange="update_html()" oninput="update_html()">
 <html>
@@ -26,7 +27,7 @@ h2t_js: "/assets/demo-main.js"
 </style>
 <body>
   <h1>Hi there</h1>
-  <p>This is some simple text</p>
+  <p>This is some simple text with a <a href="https://github.com/jugglerchris/html2text/">link to github</a></p>
   <ol>
     <li>Item one</li>
     <li><s>Item two</s></li>
@@ -39,8 +40,26 @@ h2t_js: "/assets/demo-main.js"
 </table>
 </body></html>
 </textarea>
+<div id="configtable" markdown="1">
 
-<div id="lib"></div>
+| <input type="checkbox" id="conf_css" checked=true>use_doc_css | Parse CSS from the HTML document (css) |
+| <input type="checkbox" id="conf_colour" checked=true>Enable Colour | Use colours (css) |
+| <input type="text" id="conf_user_css">User CSS | Add user stylesheet rules (css) |
+| <input type="text" id="conf_agent_css">Agent CSS | Add browser stylesheet rules (css) |
+| <input type="checkbox" id="conf_pad_block_width">Pad block width | Pad blocks to the width with spaces |
+| <input type="number" id="conf_wrap_width">Text wrap width | Wrap text to this width even if overall width is wider |
+| <input type="checkbox" id="conf_allow_overflow">Allow width overflow | Allow text to be too wide in extreme cases instead of returning an error |
+| <input type="number" id="conf_min_wrap_width">Minimum wrap width | Set the minimum number of columns to use for text blocks. |
+| <input type="checkbox" id="conf_raw">Raw mode | Render contents of tables as if they were just text. Implies `no_table_borders` |
+| <input type="checkbox" id="conf_no_borders">Don't render table borders | Tables are shown without borders |
+| <input type="checkbox" id="conf_no_link_wrap">Don't wrap URLs at the end | Some terminals handle long URLs better if not pre-wrapped |
+| <input type="checkbox" id="conf_unicode_so">Use Unicode combining characters for strikeout | This allows crossed out text without terminal codes, but some environments don't render them correctly (e.g. offset). |
+| <input type="checkbox" id="conf_do_decorate">Add markdown-like decoration | Add characters, e.g. `*` around `<em>` text even with plain decorators. |
+| <input type="checkbox" id="conf_link_footnotes">URL footnotes | Add numbered list of URLs at the end of the output |
+
+</div>
+
+<pre id="rust-code-pre"><code id="rust-code"></code></pre>
 
 <script type="module">
 import init, * as bindings from '/rust-html2text/assets/html2text-web-demo.js';

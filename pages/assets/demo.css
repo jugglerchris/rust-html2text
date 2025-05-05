@@ -22,3 +22,34 @@
 .warning::before {
     content: "⚠️";
 }
+
+div.wrapper {
+    max-width: 100%;
+}
+@media screen and (min-width: 1000px) {
+    #h2tmain {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+    }
+    #lib, #input_html, #configtable, #rust-code-pre {
+        /* max-width: 50%; */
+    }
+    #lib {
+        grid-column: 1;
+    }
+    #input_html {
+        grid-column: 1;
+        grid-row-start: 2;
+        min-width: 50%;
+    }
+    #configtable {
+        grid-column: 2;
+        grid-row-start: 1;
+        min-width: 50%;
+    }
+    #rust-code-pre {
+        grid-column: 2;
+        min-width: 50%;
+    }
+
+}
