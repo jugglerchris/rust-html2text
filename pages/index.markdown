@@ -14,10 +14,30 @@ h2t_js: "/assets/demo-main.js"
 <h2 class="warning">This demo page requires javascript (and WASM) to work.</h2>
 </noscript>
 
+An online demonstration of the
+[`html2text`](https://github.com/jugglerchris/rust-html2text) Rust crate. Edit
+the HTML below and see how `html2text` converts it for text or terminal
+display.
+
+This demo uses `html2text` compiled to WASM, which can run in any modern
+browser, with [ratzilla](https://github.com/orhun/ratzilla) for the web-based
+terminal output.
+
 <div id="h2tmain" markdown="1">
+
+<div id="lib_container" markdown="1">
+
+## Output
+
+The html2text output is updated here:
 
 <div id="lib"></div>
 
+</div>
+
+<div id="input_container">
+<h2>Input HTML</h2>
+<p>Edit the HTML here - the output will update live.</p>
 <textarea id="input_html" onchange="update_html()" oninput="update_html()">
 <html>
 <style>
@@ -40,10 +60,15 @@ h2t_js: "/assets/demo-main.js"
 </table>
 </body></html>
 </textarea>
+</div>
 <div id="configtable" markdown="1">
 
+## Configuration
+
+The following are the configuration settings (accessible via [`html2text::config`](https://docs.rs/html2text/latest/html2text/config/struct.Config.html)).
+
+| <input type="checkbox" id="conf_colour" checked=true>Use Rich output | The [`rich`](https://docs.rs/html2text/latest/html2text/config/fn.rich.html) mode returns spans with attributes (like hyperlinks, emphasis, or colours).  When disabled ([`plain`](https://docs.rs/html2text/latest/html2text/config/fn.plain.html)), the output is a plain `String` (possibly with formatting depending on other settings, e.g. table borders or `**markdown-style**` characters added).  Rich output adds extra information (annotations) to allow, for example, using terminal colours and other features for a nicer TUI.  |
 | <input type="checkbox" id="conf_css" checked=true>use_doc_css | Parse CSS from the HTML document (css) |
-| <input type="checkbox" id="conf_colour" checked=true>Enable Colour | Use colours (css) |
 | <input type="text" id="conf_user_css">User CSS | Add user stylesheet rules (css) |
 | <input type="text" id="conf_agent_css">Agent CSS | Add browser stylesheet rules (css) |
 | <input type="checkbox" id="conf_pad_block_width">Pad block width | Pad blocks to the width with spaces |
@@ -59,7 +84,14 @@ h2t_js: "/assets/demo-main.js"
 
 </div>
 
-<pre id="rust-code-pre"><code id="rust-code"></code></pre>
+<div id="rust-code-pre" markdown="1">
+
+## Rust API configuration
+
+The code below shows how to use the currently selected settings in the Rust API.
+
+<pre><code id="rust-code"></code></pre>
+</div>
 
 <script type="module">
 import init, * as bindings from '/rust-html2text/assets/html2text-web-demo.js';
