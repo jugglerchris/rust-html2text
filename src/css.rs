@@ -626,7 +626,7 @@ impl std::fmt::Display for StyleData {
 pub(crate) mod dom_extract {
     use std::io::Write;
 
-    use html5ever::expanded_name;
+    use crate::{expanded_name, local_name, namespace_url, ns};
 
     use crate::{
         markup5ever_rcdom::{
