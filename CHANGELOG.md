@@ -14,6 +14,7 @@ Possible log types:
 ### 0.14.4
 
 - [added] `RcDom::serialize`, and expose a few more of the `RcDom` types.
+- [added] Online [demo page](https://jugglerchris.github.io/rust-html2text/)
 
 ### 0.14.3
 

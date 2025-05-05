@@ -4,8 +4,9 @@
     overflow: scroll;
 }
 #input_html {
-    width: 100%;
     height: 300px;
+    width: 95%;
+    overflow: scroll;
 }
 
 #lib pre {
@@ -29,27 +30,27 @@ div.wrapper {
 @media screen and (min-width: 1000px) {
     #h2tmain {
         display: grid;
+        gap: 10px;
         grid-template-columns: 1fr 1fr;
     }
-    #lib, #input_html, #configtable, #rust-code-pre {
-        /* max-width: 50%; */
-    }
-    #lib {
+    #lib_container {
         grid-column: 1;
+        min-width: 45%;
     }
-    #input_html {
+    #input_container {
         grid-column: 1;
         grid-row-start: 2;
-        min-width: 50%;
+        min-width: 45%;
     }
     #configtable {
         grid-column: 2;
         grid-row-start: 1;
-        min-width: 50%;
+        grid-row-end: 3;
+        min-width: 45%;
     }
     #rust-code-pre {
         grid-column: 2;
-        min-width: 50%;
+        min-width: 45%;
     }
 
 }
