@@ -14,6 +14,34 @@ h2t_js: "/assets/demo-main.js"
 <h2 class="warning">This demo page requires javascript (and WASM) to work.</h2>
 </noscript>
 
+<div id="h2tmain" markdown="1">
+
+<div id="lib"></div>
+
+<textarea id="input_html" onchange="update_html()" oninput="update_html()">
+<html>
+<style>
+.green {
+    color: #4f4;
+}
+</style>
+<body>
+  <h1>Hi there</h1>
+  <p>This is some simple text with a <a href="https://github.com/jugglerchris/html2text/">link to github</a></p>
+  <ol>
+    <li>Item one</li>
+    <li><s>Item two</s></li>
+    <li class="green">Item three</li>
+  </ol>
+<table>
+    <tr><th>Heading 1</th><th>Heading 2</th><th>Heading 3</th></tr>
+    <tr><td>Data 1</td><td>Data 2</td><td>Data 3</td></tr>
+    <tr><td colspan=3>Hello there</td></tr>
+</table>
+</body></html>
+</textarea>
+<div id="configtable" markdown="1">
+
 | <input type="checkbox" id="conf_css" checked=true>use_doc_css | Parse CSS from the HTML document (css) |
 | <input type="checkbox" id="conf_colour" checked=true>Enable Colour | Use colours (css) |
 | <input type="text" id="conf_user_css">User CSS | Add user stylesheet rules (css) |
@@ -29,32 +57,9 @@ h2t_js: "/assets/demo-main.js"
 | <input type="checkbox" id="conf_do_decorate">Add markdown-like decoration | Add characters, e.g. `*` around `<em>` text even with plain decorators. |
 | <input type="checkbox" id="conf_link_footnotes">URL footnotes | Add numbered list of URLs at the end of the output |
 
+</div>
+
 <pre id="rust-code-pre"><code id="rust-code"></code></pre>
-
-<textarea id="input_html" onchange="update_html()" oninput="update_html()">
-<html>
-<style>
-.green {
-    color: #4f4;
-}
-</style>
-<body>
-  <h1>Hi there</h1>
-  <p>This is some simple text</p>
-  <ol>
-    <li>Item one</li>
-    <li><s>Item two</s></li>
-    <li class="green">Item three</li>
-  </ol>
-<table>
-    <tr><th>Heading 1</th><th>Heading 2</th><th>Heading 3</th></tr>
-    <tr><td>Data 1</td><td>Data 2</td><td>Data 3</td></tr>
-    <tr><td colspan=3>Hello there</td></tr>
-</table>
-</body></html>
-</textarea>
-
-<div id="lib"></div>
 
 <script type="module">
 import init, * as bindings from '/rust-html2text/assets/html2text-web-demo.js';

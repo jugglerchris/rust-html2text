@@ -1,3 +1,5 @@
+use std::os::raw;
+
 use wasm_bindgen::prelude::wasm_bindgen;
 
 use ratzilla::ratatui::{
@@ -18,6 +20,16 @@ pub struct Config {
     colour: bool,
     user_css: Option<String>,
     agent_css: Option<String>,
+    pad_block_width: bool,
+    wrap_width: Option<usize>,
+    allow_overflow: bool,
+    min_wrap_width: Option<usize>,
+    raw_mode: bool,
+    no_borders: bool,
+    no_link_wrap: bool,
+    unicode_so: bool,
+    do_decorate: bool,
+    link_footnotes: bool,
 }
 
 #[wasm_bindgen]
@@ -52,6 +64,41 @@ impl Config {
         }
     }
 
+    pub fn pad_block_width(&mut self) {
+        self.pad_block_width = true;
+    }
+
+    pub fn max_wrap_width(&mut self, width: usize) {
+        self.wrap_width = Some(width);
+    }
+
+    pub fn allow_overflow(&mut self) {
+        self.allow_overflow = true;
+    }
+
+    pub fn min_wrap_width(&mut self, width: usize) {
+        self.min_wrap_width = Some(width);
+    }
+    pub fn raw_mode(&mut self) {
+        self.raw_mode = true;
+    }
+    pub fn no_borders(&mut self) {
+        self.no_borders = true;
+    }
+    pub fn no_link_wrap(&mut self) {
+        self.no_link_wrap = true;
+    }
+    pub fn unicode_so(&mut self) {
+        self.unicode_so = true;
+    }
+    pub fn do_decorate(&mut self) {
+        self.do_decorate = true;
+    }
+    pub fn link_footnotes(&mut self, value: bool) {
+        self.link_footnotes = value;
+    }
+
+
     fn update_conf<D: TextDecorator>(&self, conf: html2text::config::Config<D>) -> Result<html2text::config::Config<D>, String> {
         let mut conf = if self.css {
             conf.use_doc_css()
@@ -64,6 +111,34 @@ impl Config {
         if let Some(agent_css) = &self.agent_css {
             conf = conf.add_agent_css(agent_css).map_err(|e| format!("{}", e))?;
         }
+        if self.pad_block_width {
+            conf = conf.pad_block_width();
+        }
+        if let Some(width) = self.wrap_width {
+            conf = conf.max_wrap_width(width);
+        }
+        if self.allow_overflow {
+            conf = conf.allow_width_overflow();
+        }
+        if let Some(width) = self.min_wrap_width {
+            conf = conf.min_wrap_width(width);
+        }
+        if self.raw_mode {
+            conf = conf.raw_mode(true);
+        }
+        if self.no_borders {
+            conf = conf.no_table_borders();
+        }
+        if self.no_link_wrap {
+            conf = conf.no_link_wrapping();
+        }
+        if self.unicode_so {
+            conf = conf.unicode_strikeout(true);
+        }
+        if self.do_decorate {
+            conf = conf.do_decorate();
+        }
+        conf = conf.link_footnotes(self.link_footnotes);
         Ok(conf
             .unicode_strikeout(false))
     }
