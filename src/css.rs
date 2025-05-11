@@ -306,8 +306,10 @@ pub(crate) struct StyleData {
 }
 
 #[cfg(feature = "css")]
-fn styles_from_properties(decls: &[parser::Declaration],
-    _allow_extensions: bool) -> Vec<StyleDecl> {
+fn styles_from_properties(
+    decls: &[parser::Declaration],
+    _allow_extensions: bool,
+) -> Vec<StyleDecl> {
     let mut styles = Vec::new();
     html_trace_quiet!("styles:from_properties2: {decls:?}");
     let mut overflow_hidden = false;

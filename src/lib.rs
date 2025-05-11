@@ -1373,6 +1373,58 @@ struct HtmlContext {
     syntax_highlighters: HighlighterMap,
 }
 
+impl HtmlContext {
+    #[cfg(feature = "css_ext")]
+    // Run plain preformatted text through a highlighter and produce the RenderTree for it.
+    fn render_highlighted_text(
+        &self,
+        computed: &ComputedStyle,
+        text: &str,
+        language: &str,
+    ) -> Option<RenderNode> {
+        let Some(highlighter) = self.syntax_highlighters.get(&language) else {
+            return None;
+        };
+        let highlighted = highlighter(&text);
+
+        let mut computed = computed.inherit();
+        computed.white_space.maybe_update(
+            false,
+            StyleOrigin::Agent,
+            Default::default(),
+            WhiteSpace::Pre,
+        );
+        computed.internal_pre = true;
+
+        let mut children = Vec::new();
+        for (style, s) in highlighted {
+            let mut cstyle = computed.inherit();
+            cstyle.colour.maybe_update(
+                true,
+                StyleOrigin::Author,
+                Specificity::inline(),
+                style.fg_colour,
+            );
+            if let Some(bgcol) = style.bg_colour {
+                cstyle.bg_colour.maybe_update(
+                    true,
+                    StyleOrigin::Author,
+                    Specificity::inline(),
+                    bgcol,
+                );
+            }
+            children.push(RenderNode::new_styled(
+                RenderNodeInfo::Text(s.into()),
+                cstyle,
+            ));
+        }
+        Some(RenderNode::new_styled(
+            RenderNodeInfo::Container(children),
+            computed.inherit(),
+        ))
+    }
+}
+
 // Input to render tree conversion.
 struct RenderInput {
     handle: Handle,
@@ -1601,6 +1653,17 @@ fn process_dom_node<T: Write>(
                     #[cfg(feature = "css_ext")]
                     Some(css::Display::ExtRawDom) => {
                         let result_text = RcDom::node_as_dom_string(_handle);
+                        if let Some(synval) = computed.syntax.val() {
+                            // Try to syntax highlight
+                            if let Some(node) = context.render_highlighted_text(
+                                &computed,
+                                &result_text,
+                                &synval.language,
+                            ) {
+                                return Ok(Finished(node));
+                            }
+                        }
+
                         let mut computed = computed;
                         computed.white_space.maybe_update(
                             false,
@@ -1742,44 +1805,11 @@ fn process_dom_node<T: Write>(
                     #[cfg(feature = "css_ext")]
                     {
                         if let Some(synval) = computed.syntax.val() {
-                            if let Some(highlighter) =
-                                context.syntax_highlighters.get(&synval.language)
+                            let text = extract_pre_text(&input.handle);
+                            if let Some(node) =
+                                context.render_highlighted_text(&computed, &text, &synval.language)
                             {
-                                let text = extract_pre_text(&input.handle);
-                                let highlighted = highlighter(&text);
-
-                                let mut computed = computed.inherit();
-                                computed.white_space.maybe_update(
-                                    false,
-                                    StyleOrigin::Agent,
-                                    Default::default(),
-                                    WhiteSpace::Pre,
-                                );
-                                computed.internal_pre = true;
-
-                                let mut children = Vec::new();
-                                for (style, s) in highlighted {
-                                    let mut cstyle = computed.inherit();
-                                    cstyle.colour.maybe_update(
-                                        true,
-                                        StyleOrigin::Author,
-                                        Specificity::inline(),
-                                        style.fg_colour,
-                                    );
-                                    if let Some(bgcol) = style.bg_colour {
-                                        cstyle.bg_colour.maybe_update(
-                                            true,
-                                            StyleOrigin::Author,
-                                            Specificity::inline(),
-                                            bgcol,
-                                        );
-                                    }
-                                    children.push(RenderNode::new_styled(Text(s.into()), cstyle));
-                                }
-                                result = Some(TreeMapResult::Finished(RenderNode::new_styled(
-                                    Container(children),
-                                    computed.inherit(),
-                                )));
+                                result = Some(TreeMapResult::Finished(node));
                             }
                         }
                     }

@@ -140,8 +140,9 @@ fn update_config<T: TextDecorator>(mut config: Config<T>, flags: &Flags) -> Conf
     }
     #[cfg(feature = "css_ext")]
     if flags.syntax_highlight {
-        config =
-            config.register_highlighter("rs", Box::new(|text| do_syntect_highlight(text, "rs")));
+        config = config
+            .register_highlighter("rs", Box::new(|text| do_syntect_highlight(text, "rs")))
+            .register_highlighter("html", Box::new(|text| do_syntect_highlight(text, "html")));
     }
     match (flags.link_footnotes, flags.no_link_footnotes) {
         (true, true) => {
