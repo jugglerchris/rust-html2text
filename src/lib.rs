@@ -60,6 +60,43 @@ mod macros;
 pub mod css;
 pub mod render;
 
+#[cfg(feature = "css_ext")]
+/// Text style information.
+#[derive(Clone, Debug)]
+#[non_exhaustive]
+pub struct TextStyle {
+    /// The foreground colour
+    pub fg_colour: Colour,
+    /// The background colour, or None.
+    pub bg_colour: Option<Colour>,
+}
+
+#[cfg(feature = "css_ext")]
+impl TextStyle {
+    /// Create a TextStyle from foreground and background colours.
+    pub fn colours(fg_colour: Colour, bg_colour: Colour) -> Self {
+        TextStyle {
+            fg_colour,
+            bg_colour: Some(bg_colour),
+        }
+    }
+
+    /// Create a TextStyle using only a foreground colour.
+    pub fn foreground(fg_colour: Colour) -> Self {
+        TextStyle {
+            fg_colour,
+            bg_colour: None,
+        }
+    }
+}
+
+#[cfg(feature = "css_ext")]
+/// Syntax highlighter function.
+///
+/// Takes a string corresponding to some text to be highlighted, and returns
+/// spans with sub-strs of that text with associated colours.
+pub type SyntaxHighlighter = Box<dyn for<'a> Fn(&'a str) -> Vec<(TextStyle, &'a str)>>;
+
 use render::text_renderer::{
     RenderLine, RenderOptions, RichAnnotation, SubRenderer, TaggedLine, TextRenderer,
 };
@@ -80,6 +117,8 @@ use std::cell::Cell;
 use std::cmp::{max, min};
 use std::collections::{BTreeSet, HashMap};
 use std::rc::Rc;
+#[cfg(feature = "css_ext")]
+use std::sync::Arc;
 use unicode_width::UnicodeWidthStr;
 
 use std::io;
@@ -278,6 +317,8 @@ pub(crate) struct ComputedStyle {
     pub(crate) white_space: WithSpec<WhiteSpace>,
     /// The CSS content property
     pub(crate) content: WithSpec<css::PseudoContent>,
+    #[cfg(feature = "css_ext")]
+    pub(crate) syntax: WithSpec<css::SyntaxInfo>,
 
     /// The CSS content property for ::before
     pub(crate) content_before: Option<Box<ComputedStyle>>,
@@ -1276,6 +1317,42 @@ where
     }
 }
 
+#[cfg(feature = "css_ext")]
+#[derive(Clone, Default)]
+struct HighlighterMap {
+    map: HashMap<String, Arc<SyntaxHighlighter>>,
+}
+
+#[cfg(feature = "css_ext")]
+impl HighlighterMap {
+    pub fn get(&self, name: &str) -> Option<Arc<SyntaxHighlighter>> {
+        self.map.get(name).cloned()
+    }
+
+    fn insert(&mut self, name: impl Into<String>, f: Arc<SyntaxHighlighter>) {
+        self.map.insert(name.into(), f);
+    }
+}
+
+#[cfg(feature = "css_ext")]
+impl std::fmt::Debug for HighlighterMap {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("HighlighterMap")
+            .field("map", &self.map.keys().collect::<Vec<_>>())
+            .finish()
+    }
+}
+
+#[cfg(feature = "css_ext")]
+impl PartialEq for HighlighterMap {
+    fn eq(&self, _other: &Self) -> bool {
+        todo!()
+    }
+}
+
+#[cfg(feature = "css_ext")]
+impl Eq for HighlighterMap {}
+
 #[derive(Debug, PartialEq, Eq)]
 struct HtmlContext {
     style_data: css::StyleData,
@@ -1291,6 +1368,9 @@ struct HtmlContext {
     wrap_links: bool,
     include_link_footnotes: bool,
     use_unicode_strikeout: bool,
+
+    #[cfg(feature = "css_ext")]
+    syntax_highlighters: HighlighterMap,
 }
 
 // Input to render tree conversion.
@@ -1657,17 +1737,68 @@ fn process_dom_node<T: Write>(
                 expanded_name!(html "div") => pending_noempty(input, move |_, cs| {
                     Some(RenderNode::new_styled(Div(cs), computed))
                 }),
-                expanded_name!(html "pre") => pending(input, move |_, cs| {
-                    let mut computed = computed;
-                    computed.white_space.maybe_update(
-                        false,
-                        StyleOrigin::Agent,
-                        Default::default(),
-                        WhiteSpace::Pre,
-                    );
-                    computed.internal_pre = true;
-                    Some(RenderNode::new_styled(Block(cs), computed))
-                }),
+                expanded_name!(html "pre") => {
+                    let mut result = None;
+                    #[cfg(feature = "css_ext")]
+                    {
+                        if let Some(synval) = computed.syntax.val() {
+                            if let Some(highlighter) =
+                                context.syntax_highlighters.get(&synval.language)
+                            {
+                                let text = extract_pre_text(&input.handle);
+                                let highlighted = highlighter(&text);
+
+                                let mut computed = computed.inherit();
+                                computed.white_space.maybe_update(
+                                    false,
+                                    StyleOrigin::Agent,
+                                    Default::default(),
+                                    WhiteSpace::Pre,
+                                );
+                                computed.internal_pre = true;
+
+                                let mut children = Vec::new();
+                                for (style, s) in highlighted {
+                                    let mut cstyle = computed.inherit();
+                                    cstyle.colour.maybe_update(
+                                        true,
+                                        StyleOrigin::Author,
+                                        Specificity::inline(),
+                                        style.fg_colour,
+                                    );
+                                    if let Some(bgcol) = style.bg_colour {
+                                        cstyle.bg_colour.maybe_update(
+                                            true,
+                                            StyleOrigin::Author,
+                                            Specificity::inline(),
+                                            bgcol,
+                                        );
+                                    }
+                                    children.push(RenderNode::new_styled(Text(s.into()), cstyle));
+                                }
+                                result = Some(TreeMapResult::Finished(RenderNode::new_styled(
+                                    Container(children),
+                                    computed.inherit(),
+                                )));
+                            }
+                        }
+                    }
+
+                    if result.is_none() {
+                        result = Some(pending(input, move |_, cs| {
+                            let mut computed = computed;
+                            computed.white_space.maybe_update(
+                                false,
+                                StyleOrigin::Agent,
+                                Default::default(),
+                                WhiteSpace::Pre,
+                            );
+                            computed.internal_pre = true;
+                            Some(RenderNode::new_styled(Block(cs), computed))
+                        }))
+                    }
+                    result.unwrap()
+                }
                 expanded_name!(html "br") => Finished(RenderNode::new_styled(Break, computed)),
                 expanded_name!(html "table") => table_to_render_tree(input, computed, err_out),
                 expanded_name!(html "thead") | expanded_name!(html "tbody") => {
@@ -1825,6 +1956,27 @@ fn process_dom_node<T: Write>(
             Nothing
         }
     })
+}
+
+#[cfg(feature = "css_ext")]
+fn do_extract_text(out: &mut String, handle: &Handle) {
+    match handle.data {
+        markup5ever_rcdom::NodeData::Text { contents: ref tstr } => {
+            out.push_str(&tstr.borrow());
+        }
+        _ => {
+            for child in handle.children.borrow().iter() {
+                do_extract_text(out, child);
+            }
+        }
+    }
+}
+
+#[cfg(feature = "css_ext")]
+fn extract_pre_text(handle: &Handle) -> String {
+    let mut result = String::new();
+    do_extract_text(&mut result, handle);
+    result
 }
 
 fn render_tree_to_string<T: Write, D: TextDecorator>(
@@ -2393,6 +2545,8 @@ pub mod config {
         },
         HtmlContext, RenderTree, Result, MIN_WIDTH,
     };
+    #[cfg(feature = "css_ext")]
+    use crate::{HighlighterMap, SyntaxHighlighter};
 
     /// Configure the HTML processing.
     pub struct Config<D: TextDecorator> {
@@ -2413,6 +2567,9 @@ pub mod config {
         wrap_links: bool,
         include_link_footnotes: bool,
         use_unicode_strikeout: bool,
+
+        #[cfg(feature = "css_ext")]
+        syntax_highlighters: HighlighterMap,
     }
 
     impl<D: TextDecorator> Config<D> {
@@ -2432,6 +2589,9 @@ pub mod config {
                 wrap_links: self.wrap_links,
                 include_link_footnotes: self.include_link_footnotes,
                 use_unicode_strikeout: self.use_unicode_strikeout,
+
+                #[cfg(feature = "css_ext")]
+                syntax_highlighters: self.syntax_highlighters.clone(),
             }
         }
         /// Parse with context.
@@ -2653,6 +2813,21 @@ pub mod config {
             self.include_link_footnotes = include_footnotes;
             self
         }
+
+        #[cfg(feature = "css_ext")]
+        /// Register a named syntax highlighter.
+        ///
+        /// The highlighter will be used when a `<pre>` element
+        /// is styled with `x-syntax: name`
+        pub fn register_highlighter(
+            mut self,
+            name: impl Into<String>,
+            f: SyntaxHighlighter,
+        ) -> Self {
+            self.syntax_highlighters
+                .insert(name.into(), std::sync::Arc::new(f));
+            self
+        }
     }
 
     impl Config<RichDecorator> {
@@ -2728,6 +2903,8 @@ pub mod config {
             wrap_links: true,
             include_link_footnotes: false,
             use_unicode_strikeout: true,
+            #[cfg(feature = "css_ext")]
+            syntax_highlighters: Default::default(),
         }
     }
 }

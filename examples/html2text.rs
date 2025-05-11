@@ -91,6 +91,41 @@ fn default_colour_map(
     result
 }
 
+#[cfg(feature = "css_ext")]
+fn do_syntect_highlight<'t>(text: &'t str, language: &str) -> Vec<(html2text::TextStyle, &'t str)> {
+    use html2text::{Colour, TextStyle};
+    use syntect::{
+        easy::HighlightLines, highlighting::ThemeSet, parsing::SyntaxSet, util::LinesWithEndings,
+    };
+
+    let ps = SyntaxSet::load_defaults_newlines();
+    let ts = ThemeSet::load_defaults();
+
+    let syntax = ps.find_syntax_by_extension(&language).unwrap();
+    let mut h = HighlightLines::new(syntax, &ts.themes["Solarized (dark)"]);
+
+    let mut results = Vec::new();
+    for line in LinesWithEndings::from(&text) {
+        let ranges: Vec<(syntect::highlighting::Style, &str)> =
+            h.highlight_line(line, &ps).unwrap();
+
+        fn convert(c: syntect::highlighting::Color) -> Colour {
+            Colour {
+                r: c.r,
+                g: c.g,
+                b: c.b,
+            }
+        }
+        for (sty, text) in ranges {
+            results.push((
+                TextStyle::colours(convert(sty.foreground), convert(sty.background)),
+                text,
+            ));
+        }
+    }
+    results
+}
+
 fn update_config<T: TextDecorator>(mut config: Config<T>, flags: &Flags) -> Config<T> {
     if let Some(wrap_width) = flags.wrap_width {
         config = config.max_wrap_width(wrap_width);
@@ -98,6 +133,15 @@ fn update_config<T: TextDecorator>(mut config: Config<T>, flags: &Flags) -> Conf
     #[cfg(feature = "css")]
     if flags.use_css {
         config = config.use_doc_css();
+    }
+    #[cfg(feature = "css")]
+    if !flags.agent_css.is_empty() {
+        config = config.add_agent_css(&flags.agent_css).expect("Invalid CSS");
+    }
+    #[cfg(feature = "css_ext")]
+    if flags.syntax_highlight {
+        config =
+            config.register_highlighter("rs", Box::new(|text| do_syntect_highlight(text, "rs")));
     }
     match (flags.link_footnotes, flags.no_link_footnotes) {
         (true, true) => {
@@ -184,6 +228,10 @@ struct Flags {
     show_css: bool,
     link_footnotes: bool,
     no_link_footnotes: bool,
+    #[cfg(feature = "css_ext")]
+    syntax_highlight: bool,
+    #[cfg(feature = "css")]
+    agent_css: String,
 }
 
 fn main() {
@@ -206,8 +254,12 @@ fn main() {
         show_render: false,
         #[cfg(feature = "css")]
         show_css: false,
+        #[cfg(feature = "css")]
+        agent_css: Default::default(),
         link_footnotes: false,
         no_link_footnotes: false,
+        #[cfg(feature = "css_ext")]
+        syntax_highlight: false,
     };
     let mut literal: bool = false;
 
@@ -281,6 +333,18 @@ fn main() {
             &["--show-css"],
             StoreTrue,
             "Show the parsed CSS instead of rendered output",
+        );
+        #[cfg(feature = "css")]
+        ap.refer(&mut flags.agent_css).add_option(
+            &["--agent-css"],
+            Store,
+            "Add some CSS rules (to the agent spreadsheet)",
+        );
+        #[cfg(feature = "css_ext")]
+        ap.refer(&mut flags.syntax_highlight).add_option(
+            &["--syntax"],
+            StoreTrue,
+            "Enable syntax highlighting of <pre> blocks.",
         );
         ap.parse_args_or_exit();
     }

@@ -95,6 +95,10 @@ pub(crate) enum Decl {
     Content {
         text: String,
     },
+    #[cfg(feature = "css_ext")]
+    XSyntax {
+        language: String,
+    },
     Unknown {
         name: PropertyName,
         //        value: Vec<Token>,
@@ -491,6 +495,14 @@ pub(crate) fn parse_declaration(text: &str) -> IResult<&str, Option<Declaration>
                 Decl::Unknown { name: prop }
             }
         }
+        #[cfg(feature = "css_ext")]
+        "x-syntax" => {
+            if let Ok(value) = parse_syntax(&value) {
+                Decl::XSyntax { language: value }
+            } else {
+                Decl::Unknown { name: prop }
+            }
+        }
         _ => Decl::Unknown {
             name: prop,
             //            value: /*value*/"".into(),
@@ -756,6 +768,17 @@ fn parse_display(value: &RawValue) -> Result<Display, nom::Err<nom::error::Error
         }
     }
     Ok(Display::Other)
+}
+
+#[cfg(feature = "css_ext")]
+fn parse_syntax(value: &RawValue) -> Result<String, nom::Err<nom::error::Error<&'static str>>> {
+    for tok in &value.tokens {
+        if let Token::Ident(word) = tok {
+            return Ok(word.to_string());
+        }
+        break;
+    }
+    Err(empty_fail())
 }
 
 fn parse_white_space(
@@ -1079,7 +1102,7 @@ pub(crate) fn parse_style_attribute(text: &str) -> crate::Result<Vec<StyleDecl>>
     html_trace_quiet!("Parsing inline style: {text}");
     let (_rest, decls) = parse_rules(text).map_err(|_| crate::Error::CssParseError)?;
 
-    let styles = styles_from_properties(&decls);
+    let styles = styles_from_properties(&decls, false);
     html_trace_quiet!("Parsed inline style: {:?}", styles);
     Ok(styles)
 }
