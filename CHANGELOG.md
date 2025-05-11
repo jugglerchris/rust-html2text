@@ -11,6 +11,14 @@ Possible log types:
 
 ### Latest
 
+### 0.15.0
+
+- [added] Syntax highlighting support for `<pre>` blocks
+  (`Config::register_highlighter` and CSS `x-syntax: foo`)
+- [changed] CSS extensions (until now `display: x-raw-dom`, and only if the
+  `css_ext` Cargo feature is enabled) are now only available in agent and user CSS.
+  This is a breaking change, but is not likely to affect many users.
+
 ### 0.14.4
 
 - [added] `RcDom::serialize`, and expose a few more of the `RcDom` types.

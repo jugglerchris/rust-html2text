@@ -223,6 +223,13 @@ pub(crate) struct PseudoContent {
     pub(crate) text: String,
 }
 
+#[cfg(feature = "css_ext")]
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct SyntaxInfo {
+    /// Highlight language
+    pub(crate) language: String,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum Style {
     #[cfg(feature = "css")]
@@ -234,6 +241,8 @@ pub(crate) enum Style {
     #[cfg(feature = "css")]
     WhiteSpace(WhiteSpace),
     Content(PseudoContent),
+    #[cfg(feature = "css_ext")]
+    Syntax(SyntaxInfo),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -260,6 +269,8 @@ impl std::fmt::Display for StyleDecl {
                 WhiteSpace::PreWrap => write!(f, "white-space: pre-wrap")?,
             },
             Style::Content(content) => write!(f, "content: \"{}\"", content.text)?,
+            #[cfg(feature = "css_ext")]
+            Style::Syntax(syntax_info) => write!(f, "x-syntax: {}", syntax_info.language)?,
         }
         match self.importance {
             Importance::Default => (),
@@ -295,7 +306,10 @@ pub(crate) struct StyleData {
 }
 
 #[cfg(feature = "css")]
-fn styles_from_properties(decls: &[parser::Declaration]) -> Vec<StyleDecl> {
+fn styles_from_properties(
+    decls: &[parser::Declaration],
+    _allow_extensions: bool,
+) -> Vec<StyleDecl> {
     let mut styles = Vec::new();
     html_trace_quiet!("styles:from_properties2: {decls:?}");
     let mut overflow_hidden = false;
@@ -362,6 +376,9 @@ fn styles_from_properties(decls: &[parser::Declaration]) -> Vec<StyleDecl> {
                 }
                 #[cfg(feature = "css_ext")]
                 parser::Display::RawDom => {
+                    if !_allow_extensions {
+                        continue;
+                    }
                     styles.push(StyleDecl {
                         style: Style::Display(Display::ExtRawDom),
                         importance: decl.important,
@@ -378,6 +395,18 @@ fn styles_from_properties(decls: &[parser::Declaration]) -> Vec<StyleDecl> {
             parser::Decl::Content { text } => {
                 styles.push(StyleDecl {
                     style: Style::Content(PseudoContent { text: text.clone() }),
+                    importance: decl.important,
+                });
+            }
+            #[cfg(feature = "css_ext")]
+            parser::Decl::XSyntax { language } => {
+                if !_allow_extensions {
+                    continue;
+                }
+                styles.push(StyleDecl {
+                    style: Style::Syntax(SyntaxInfo {
+                        language: language.clone(),
+                    }),
                     importance: decl.important,
                 });
             } /*
@@ -401,11 +430,11 @@ impl StyleData {
     #[cfg(feature = "css")]
     /// Add some CSS source to be included.  The source will be parsed
     /// and the relevant and supported features extracted.
-    fn do_add_css(css: &str, rules: &mut Vec<Ruleset>) -> Result<()> {
+    fn do_add_css(css: &str, rules: &mut Vec<Ruleset>, allow_extensions: bool) -> Result<()> {
         let (_, ss) = parser::parse_stylesheet(css).map_err(|_| crate::Error::CssParseError)?;
 
         for rule in ss {
-            let styles = styles_from_properties(&rule.declarations);
+            let styles = styles_from_properties(&rule.declarations, allow_extensions);
             if !styles.is_empty() {
                 for selector in rule.selectors {
                     let ruleset = Ruleset {
@@ -429,19 +458,19 @@ impl StyleData {
     #[cfg(feature = "css")]
     /// Add some CSS source to be included as part of the user agent ("browser") CSS rules.
     pub fn add_agent_css(&mut self, css: &str) -> Result<()> {
-        Self::do_add_css(css, &mut self.agent_rules)
+        Self::do_add_css(css, &mut self.agent_rules, true)
     }
 
     #[cfg(feature = "css")]
     /// Add some CSS source to be included as part of the user CSS rules.
     pub fn add_user_css(&mut self, css: &str) -> Result<()> {
-        Self::do_add_css(css, &mut self.user_rules)
+        Self::do_add_css(css, &mut self.user_rules, true)
     }
 
     #[cfg(feature = "css")]
     /// Add some CSS source to be included as part of the document/author CSS rules.
     pub fn add_author_css(&mut self, css: &str) -> Result<()> {
-        Self::do_add_css(css, &mut self.author_rules)
+        Self::do_add_css(css, &mut self.author_rules, false)
     }
 
     #[cfg(feature = "css")]
@@ -593,6 +622,15 @@ impl StyleData {
                 result_target
                     .content
                     .maybe_update(important, origin, specificity, content.clone());
+            }
+            #[cfg(feature = "css_ext")]
+            Style::Syntax(ref syntax_info) => {
+                result_target.syntax.maybe_update(
+                    important,
+                    origin,
+                    specificity,
+                    syntax_info.clone(),
+                );
             }
         }
     }
