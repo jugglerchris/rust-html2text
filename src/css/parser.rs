@@ -660,7 +660,9 @@ fn parse_string_token(text: &str) -> IResult<&str, Token> {
     let mut chars = text.char_indices();
     let mut s = String::new();
     let end_char = chars.next().unwrap().1;
-    debug_assert!(end_char == '"' || end_char == '\'');
+    if !(end_char == '"' || end_char == '\'') {
+        return fail(text);
+    }
 
     loop {
         match chars.next() {
@@ -687,6 +689,19 @@ fn parse_string_token(text: &str) -> IResult<&str, Token> {
                 s.push(c);
             }
         }
+    }
+}
+
+// Parse a string as in `parse_string_token`, but fail on
+// bad strings.
+fn parse_quoted_string(text: &str) -> IResult<&str, String> {
+    let (rest, result) = parse_string_token(text)?;
+
+    match result {
+        Token::String(s) => {
+            Ok((rest, s.to_string()))
+        }
+        _ => fail("Invalid string")
     }
 }
 
@@ -824,6 +839,27 @@ fn parse_class(text: &str) -> IResult<&str, SelectorComponent> {
     Ok((rest, SelectorComponent::Class(classname)))
 }
 
+fn parse_attr(text: &str) -> IResult<&str, SelectorComponent> {
+    alt((
+        map(tuple((tag("["), parse_ident, tag("]"))), |(_, name, _)| SelectorComponent::Attr {
+            name,
+            value: None,
+            op: super::AttrOperator::Present
+        }),
+        map(tuple((tag("["), parse_ident, tag("="), parse_quoted_string, tag("]"))), |(_, name, _, value, _)| SelectorComponent::Attr {
+            name,
+            value: Some(value),
+            op: super::AttrOperator::Equal
+        }),
+        map(tuple((tag("["), parse_ident, tag("="), parse_ident, tag("]"))), |(_, name, _, value, _)| SelectorComponent::Attr {
+            name,
+            value: Some(value),
+            op: super::AttrOperator::Equal
+        }),
+    ))(text)
+
+}
+
 #[derive(Eq, PartialEq, Copy, Clone)]
 enum Sign {
     Plus,
@@ -938,6 +974,7 @@ fn parse_simple_selector_component(text: &str) -> IResult<&str, SelectorComponen
         ),
         map(parse_ws, |_| SelectorComponent::CombDescendant),
         parse_class,
+        parse_attr,
         parse_hash,
         map(parse_ident, SelectorComponent::Element),
         parse_pseudo_class,
@@ -1111,7 +1148,7 @@ pub(crate) fn parse_style_attribute(text: &str) -> crate::Result<Vec<StyleDecl>>
 mod test {
     use crate::css::{
         parser::{Height, Importance, LengthUnit, RuleSet, Selector},
-        PseudoElement, SelectorComponent,
+        PseudoElement, SelectorComponent, AttrOperator,
     };
 
     use super::{Colour, Decl, Declaration, Overflow, PropertyName};
@@ -1712,6 +1749,71 @@ mod test {
                         b: 0,
                         sel: sel_all.clone()
                     }],
+                    ..Default::default()
+                }
+            )
+        );
+    }
+    #[test]
+    fn test_attr() {
+        use SelectorComponent::{Attr, Class, Element};
+        use AttrOperator::*;
+        assert_eq!(
+            super::parse_selector("[foo]").unwrap(),
+            (
+                "",
+                Selector {
+                    components: vec![Attr {
+                        name: "foo".into(),
+                        value: None,
+                        op: Present,
+                    }],
+                    ..Default::default()
+                }
+            )
+        );
+        assert_eq!(
+            super::parse_selector("[foo=bar]").unwrap(),
+            (
+                "",
+                Selector {
+                    components: vec![Attr {
+                        name: "foo".into(),
+                        value: Some("bar".into()),
+                        op: Equal,
+                    }],
+                    ..Default::default()
+                }
+            )
+        );
+        assert_eq!(
+            super::parse_selector("[foo='some string']").unwrap(),
+            (
+                "",
+                Selector {
+                    components: vec![Attr {
+                        name: "foo".into(),
+                        value: Some("some string".into()),
+                        op: Equal,
+                    }],
+                    ..Default::default()
+                }
+            )
+        );
+        assert_eq!(
+            super::parse_selector("x.y[foo='some string']").unwrap(),
+            (
+                "",
+                Selector {
+                    components: vec![
+                        Element("x".into()),
+                        Class("y".into()),
+                        Attr {
+                            name: "foo".into(),
+                            value: Some("some string".into()),
+                            op: Equal,
+                        }
+                    ],
                     ..Default::default()
                 }
             )

@@ -22,6 +22,13 @@ use crate::{
 };
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+/// Attribute seletor operations
+pub(crate) enum AttrOperator {
+    Present, // foo[href]
+    Equal,   // foo[href="foo"]
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 #[allow(unused)]
 pub(crate) enum SelectorComponent {
     Class(String),
@@ -36,6 +43,13 @@ pub(crate) enum SelectorComponent {
         b: i32,
         sel: Selector,
     },
+    Attr {
+        name: String,
+        value: Option<String>,
+        op: AttrOperator,
+        // TODO: other comparisions like $=
+        // TODO: case sensitivity flags
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -54,6 +68,10 @@ impl std::fmt::Display for SelectorComponent {
             SelectorComponent::CombChild => write!(f, " > "),
             SelectorComponent::CombDescendant => write!(f, " "),
             SelectorComponent::NthChild { a, b, .. } => write!(f, ":nth-child({}n+{})", a, b),
+            SelectorComponent::Attr { name, value, op } => match op {
+                AttrOperator::Present => write!(f, "[{name}]"),
+                AttrOperator::Equal => write!(f, "[{name} = \"{}\"]", value.as_ref().expect("Missing value for attribute equality comparison")),
+            }
         }
     }
 }
@@ -97,6 +115,33 @@ impl Selector {
                                 for cls in attr.value.split_whitespace() {
                                     if cls == class {
                                         return Self::do_matches(&comps[1..], node);
+                                    }
+                                }
+                            }
+                        }
+                        false
+                    }
+                },
+                SelectorComponent::Attr{ name, value, op } => match &node.data {
+                    Document
+                    | NodeData::Doctype { .. }
+                    | NodeData::Text { .. }
+                    | Comment { .. }
+                    | NodeData::ProcessingInstruction { .. } => false,
+                    Element { attrs, .. } => {
+                        let attrs = attrs.borrow();
+                        for attr in attrs.iter() {
+                            if &attr.name.local == name{
+                                match op {
+                                    AttrOperator::Present => {
+                                        return Self::do_matches(&comps[1..], node);
+                                    }
+                                    AttrOperator::Equal => {
+                                        if &*attr.value == value.as_ref().expect("No value in Attr equality comparison") {
+                                            return Self::do_matches(&comps[1..], node);
+                                        } else {
+                                            return false;
+                                        }
                                     }
                                 }
                             }
@@ -184,7 +229,7 @@ impl Selector {
 
         for component in &self.components {
             match component {
-                SelectorComponent::Class(_) => {
+                SelectorComponent::Class(_) | SelectorComponent::Attr { .. } => {
                     result.class += 1;
                 }
                 SelectorComponent::Element(_) => {
@@ -306,10 +351,8 @@ pub(crate) struct StyleData {
 }
 
 #[cfg(feature = "css")]
-fn styles_from_properties(
-    decls: &[parser::Declaration],
-    _allow_extensions: bool,
-) -> Vec<StyleDecl> {
+fn styles_from_properties(decls: &[parser::Declaration],
+    _allow_extensions: bool) -> Vec<StyleDecl> {
     let mut styles = Vec::new();
     html_trace_quiet!("styles:from_properties2: {decls:?}");
     let mut overflow_hidden = false;
