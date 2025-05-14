@@ -11,6 +11,12 @@ Possible log types:
 
 ### Latest
 
+- [added] CSS: Support basic attribute selectors (`div[attr="bar"]`).
+- [changed] Syntax highlighting uses the priority of the `x-syntax` rule.
+- [fixed] With `pad_block_width` enabled, do a better job of padding blocks.
+  In particular, the padding gets the block's background colour (when CSS etc.
+  are being used).
+
 ### 0.15.0
 
 - [added] Syntax highlighting support for `<pre>` blocks
