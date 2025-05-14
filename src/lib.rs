@@ -116,6 +116,7 @@ pub use markup5ever_rcdom::{
 use std::cell::Cell;
 use std::cmp::{max, min};
 use std::collections::{BTreeSet, HashMap};
+use std::ops::Range;
 use std::rc::Rc;
 #[cfg(feature = "css_ext")]
 use std::sync::Arc;
@@ -1803,7 +1804,7 @@ fn process_dom_node<T: Write>(
                     #[cfg(feature = "css_ext")]
                     {
                         if let Some(synval) = computed.syntax.val() {
-                            let text = extract_pre_text(&input.handle);
+                            let (text, spans) = extract_raw_text(&input.handle);
                             if let Some(node) =
                                 context.render_highlighted_text(&computed, &text, &synval.language)
                             {
@@ -1987,24 +1988,40 @@ fn process_dom_node<T: Write>(
 }
 
 #[cfg(feature = "css_ext")]
-fn do_extract_text(out: &mut String, handle: &Handle) {
+fn do_extract_text(out: &mut String, spans: &mut Vec<TextSource>, handle: &Handle, depth: usize) {
     match handle.data {
         markup5ever_rcdom::NodeData::Text { contents: ref tstr } => {
-            out.push_str(&tstr.borrow());
+            let s: &str = &tstr.borrow();
+            spans.push(TextSource {
+                range: out.len()..out.len()+s.len(),
+                node: handle.clone(),
+                depth
+            });
+            out.push_str(s);
         }
         _ => {
             for child in handle.children.borrow().iter() {
-                do_extract_text(out, child);
+                do_extract_text(out, spans, child, depth+1);
             }
         }
     }
 }
 
 #[cfg(feature = "css_ext")]
-fn extract_pre_text(handle: &Handle) -> String {
+struct TextSource {
+    range: Range<usize>, // The range from the output string covered.
+    node: Handle,        // The text node containing text
+    depth: usize,        // The number of steps down from the root node.
+}
+
+#[cfg(feature = "css_ext")]
+/// Return a full String, and a list of where substrings came from:
+///
+fn extract_raw_text(handle: &Handle) -> (String, Vec<TextSource>) {
     let mut result = String::new();
-    do_extract_text(&mut result, handle);
-    result
+    let mut spans = Vec::new();
+    do_extract_text(&mut result, &mut spans, handle, 0);
+    (result, spans)
 }
 
 fn render_tree_to_string<T: Write, D: TextDecorator>(
