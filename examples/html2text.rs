@@ -153,6 +153,9 @@ fn update_config<T: TextDecorator>(mut config: Config<T>, flags: &Flags) -> Conf
         (false, true) => config = config.link_footnotes(false),
         (false, false) => {}
     };
+    if flags.pad_width {
+        config = config.pad_block_width();
+    }
     config
 }
 
@@ -227,6 +230,7 @@ struct Flags {
     show_render: bool,
     #[cfg(feature = "css")]
     show_css: bool,
+    pad_width: bool,
     link_footnotes: bool,
     no_link_footnotes: bool,
     #[cfg(feature = "css_ext")]
@@ -257,6 +261,7 @@ fn main() {
         show_css: false,
         #[cfg(feature = "css")]
         agent_css: Default::default(),
+        pad_width: false,
         link_footnotes: false,
         no_link_footnotes: false,
         #[cfg(feature = "css_ext")]
@@ -290,6 +295,11 @@ fn main() {
             &["-L", "--literal"],
             StoreTrue,
             "Output only literal text (no decorations)",
+        );
+        ap.refer(&mut flags.pad_width).add_option(
+            &["--pad-width"],
+            StoreTrue,
+            "Pad blocks to their full width",
         );
         ap.refer(&mut flags.link_footnotes).add_option(
             &["--link-footnotes"],
