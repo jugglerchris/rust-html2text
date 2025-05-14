@@ -698,10 +698,8 @@ fn parse_quoted_string(text: &str) -> IResult<&str, String> {
     let (rest, result) = parse_string_token(text)?;
 
     match result {
-        Token::String(s) => {
-            Ok((rest, s.to_string()))
-        }
-        _ => fail("Invalid string")
+        Token::String(s) => Ok((rest, s.to_string())),
+        _ => fail("Invalid string"),
     }
 }
 
@@ -841,23 +839,36 @@ fn parse_class(text: &str) -> IResult<&str, SelectorComponent> {
 
 fn parse_attr(text: &str) -> IResult<&str, SelectorComponent> {
     alt((
-        map(tuple((tag("["), parse_ident, tag("]"))), |(_, name, _)| SelectorComponent::Attr {
-            name,
-            value: None,
-            op: super::AttrOperator::Present
+        map(tuple((tag("["), parse_ident, tag("]"))), |(_, name, _)| {
+            SelectorComponent::Attr {
+                name,
+                value: None,
+                op: super::AttrOperator::Present,
+            }
         }),
-        map(tuple((tag("["), parse_ident, tag("="), parse_quoted_string, tag("]"))), |(_, name, _, value, _)| SelectorComponent::Attr {
-            name,
-            value: Some(value),
-            op: super::AttrOperator::Equal
-        }),
-        map(tuple((tag("["), parse_ident, tag("="), parse_ident, tag("]"))), |(_, name, _, value, _)| SelectorComponent::Attr {
-            name,
-            value: Some(value),
-            op: super::AttrOperator::Equal
-        }),
+        map(
+            tuple((
+                tag("["),
+                parse_ident,
+                tag("="),
+                parse_quoted_string,
+                tag("]"),
+            )),
+            |(_, name, _, value, _)| SelectorComponent::Attr {
+                name,
+                value: Some(value),
+                op: super::AttrOperator::Equal,
+            },
+        ),
+        map(
+            tuple((tag("["), parse_ident, tag("="), parse_ident, tag("]"))),
+            |(_, name, _, value, _)| SelectorComponent::Attr {
+                name,
+                value: Some(value),
+                op: super::AttrOperator::Equal,
+            },
+        ),
     ))(text)
-
 }
 
 #[derive(Eq, PartialEq, Copy, Clone)]
@@ -1148,7 +1159,7 @@ pub(crate) fn parse_style_attribute(text: &str) -> crate::Result<Vec<StyleDecl>>
 mod test {
     use crate::css::{
         parser::{Height, Importance, LengthUnit, RuleSet, Selector},
-        PseudoElement, SelectorComponent, AttrOperator,
+        AttrOperator, PseudoElement, SelectorComponent,
     };
 
     use super::{Colour, Decl, Declaration, Overflow, PropertyName};
@@ -1756,8 +1767,8 @@ mod test {
     }
     #[test]
     fn test_attr() {
-        use SelectorComponent::{Attr, Class, Element};
         use AttrOperator::*;
+        use SelectorComponent::{Attr, Class, Element};
         assert_eq!(
             super::parse_selector("[foo]").unwrap(),
             (

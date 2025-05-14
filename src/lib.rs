@@ -1391,7 +1391,6 @@ impl HtmlContext {
         let spec = computed.syntax.specificity;
         let important = computed.syntax.important;
 
-
         let mut computed = computed.inherit();
         computed.white_space.maybe_update(
             false,
@@ -1404,19 +1403,13 @@ impl HtmlContext {
         let mut children = Vec::new();
         for (style, s) in highlighted {
             let mut cstyle = computed.inherit();
-            cstyle.colour.maybe_update(
-                important,
-                origin,
-                spec,
-                style.fg_colour,
-            );
+            cstyle
+                .colour
+                .maybe_update(important, origin, spec, style.fg_colour);
             if let Some(bgcol) = style.bg_colour {
-                cstyle.bg_colour.maybe_update(
-                    important,
-                    origin,
-                    spec,
-                    bgcol,
-                );
+                cstyle
+                    .bg_colour
+                    .maybe_update(important, origin, spec, bgcol);
             }
             children.push(RenderNode::new_styled(
                 RenderNodeInfo::Text(s.into()),

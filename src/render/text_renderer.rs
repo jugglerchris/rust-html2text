@@ -355,7 +355,12 @@ struct WrappedBlock<T> {
 }
 
 impl<T: Clone + Eq + Debug + Default> WrappedBlock<T> {
-    pub fn new(width: usize, pad_blocks: bool, allow_overflow: bool, default_tag: T) -> WrappedBlock<T> {
+    pub fn new(
+        width: usize,
+        pad_blocks: bool,
+        allow_overflow: bool,
+        default_tag: T,
+    ) -> WrappedBlock<T> {
         WrappedBlock {
             width,
             text: Vec::new(),
@@ -367,7 +372,7 @@ impl<T: Clone + Eq + Debug + Default> WrappedBlock<T> {
             pre_wrapped: false,
             pad_blocks,
             allow_overflow,
-            default_tag
+            default_tag,
         }
     }
 
@@ -1167,7 +1172,7 @@ impl<D: TextDecorator> SubRenderer<D> {
                 RenderLine::Text(ref mut tl) => {
                     tl.pad_to(self.width, &self.ann_stack);
                 }
-                RenderLine::Line(..) => ()
+                RenderLine::Line(..) => (),
             }
         }
         self.lines.push_back(line);
@@ -1419,7 +1424,12 @@ impl<D: TextDecorator> Renderer for SubRenderer<D> {
         }
         let filtered_text = s.as_deref().unwrap_or(text);
         let ws_mode = self.ws_mode();
-        let wrapping = get_wrapping_or_insert::<D>(&mut self.wrapping, &self.options, self.width, &self.ann_stack);
+        let wrapping = get_wrapping_or_insert::<D>(
+            &mut self.wrapping,
+            &self.options,
+            self.width,
+            &self.ann_stack,
+        );
         let mut pre_tag_start;
         let mut pre_tag_cont;
 
@@ -1763,8 +1773,13 @@ impl<D: TextDecorator> Renderer for SubRenderer<D> {
     fn record_frag_start(&mut self, fragname: &str) {
         use self::TaggedLineElement::FragmentStart;
 
-        get_wrapping_or_insert::<D>(&mut self.wrapping, &self.options, self.width, &self.ann_stack)
-            .add_element(FragmentStart(fragname.to_string()));
+        get_wrapping_or_insert::<D>(
+            &mut self.wrapping,
+            &self.options,
+            self.width,
+            &self.ann_stack,
+        )
+        .add_element(FragmentStart(fragname.to_string()));
     }
 
     #[allow(unused)]
