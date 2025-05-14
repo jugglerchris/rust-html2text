@@ -1806,13 +1806,13 @@ mod test {
                 "",
                 Selector {
                     components: vec![
-                        Element("x".into()),
-                        Class("y".into()),
                         Attr {
                             name: "foo".into(),
                             value: Some("some string".into()),
                             op: Equal,
-                        }
+                        },
+                        Class("y".into()),
+                        Element("x".into()),
                     ],
                     ..Default::default()
                 }

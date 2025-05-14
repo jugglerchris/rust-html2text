@@ -351,10 +351,11 @@ struct WrappedBlock<T> {
     pre_wrapped: bool, // If true, we've been forced to wrap a <pre> line.
     pad_blocks: bool,
     allow_overflow: bool,
+    default_tag: T,
 }
 
 impl<T: Clone + Eq + Debug + Default> WrappedBlock<T> {
-    pub fn new(width: usize, pad_blocks: bool, allow_overflow: bool) -> WrappedBlock<T> {
+    pub fn new(width: usize, pad_blocks: bool, allow_overflow: bool, default_tag: T) -> WrappedBlock<T> {
         WrappedBlock {
             width,
             text: Vec::new(),
@@ -366,6 +367,7 @@ impl<T: Clone + Eq + Debug + Default> WrappedBlock<T> {
             pre_wrapped: false,
             pad_blocks,
             allow_overflow,
+            default_tag
         }
     }
 
@@ -513,14 +515,7 @@ impl<T: Clone + Eq + Debug + Default> WrappedBlock<T> {
         let mut tmp_line = TaggedLine::new();
         mem::swap(&mut tmp_line, &mut self.line);
         if self.pad_blocks {
-            let tmp_tag;
-            let tag = if let Some(st) = self.spacetag.as_ref() {
-                st
-            } else {
-                tmp_tag = Default::default();
-                &tmp_tag
-            };
-            tmp_line.pad_to(self.width, tag);
+            tmp_line.pad_to(self.width, &self.default_tag);
         }
         self.text.push(tmp_line);
     }
@@ -1102,6 +1097,7 @@ fn get_wrapping_or_insert<'w, D: TextDecorator>(
     wrapping: &'w mut Option<WrappedBlock<Vec<D::Annotation>>>,
     options: &RenderOptions,
     width: usize,
+    default_tag: &Vec<D::Annotation>,
 ) -> &'w mut WrappedBlock<Vec<D::Annotation>> {
     wrapping.get_or_insert_with(|| {
         let wwidth = match options.wrap_width {
@@ -1112,6 +1108,7 @@ fn get_wrapping_or_insert<'w, D: TextDecorator>(
             wwidth,
             options.pad_block_width,
             options.allow_width_overflow,
+            default_tag.clone(),
         )
     })
 }
@@ -1146,7 +1143,7 @@ impl<D: TextDecorator> SubRenderer<D> {
 
     /// Append a line to the output.
     /// Any pending fragments will be prepended to a non-border line.
-    fn add_line(&mut self, line: RenderLine<Vec<D::Annotation>>) {
+    fn add_line(&mut self, mut line: RenderLine<Vec<D::Annotation>>) {
         if !self.pending_frags.is_empty() {
             match line {
                 RenderLine::Text(tagged_line) => {
@@ -1157,10 +1154,20 @@ impl<D: TextDecorator> SubRenderer<D> {
                     for part in tagged_line.into_iter() {
                         tl.push(part);
                     }
-                    self.lines.push_back(RenderLine::Text(tl));
-                    return;
+                    if self.options.pad_block_width {
+                        tl.pad_to(self.width, &self.ann_stack);
+                    }
+                    line = RenderLine::Text(tl);
                 }
                 RenderLine::Line(..) => (),
+            }
+        }
+        if self.options.pad_block_width {
+            match &mut line {
+                RenderLine::Text(ref mut tl) => {
+                    tl.pad_to(self.width, &self.ann_stack);
+                }
+                RenderLine::Line(..) => ()
             }
         }
         self.lines.push_back(line);
@@ -1412,7 +1419,7 @@ impl<D: TextDecorator> Renderer for SubRenderer<D> {
         }
         let filtered_text = s.as_deref().unwrap_or(text);
         let ws_mode = self.ws_mode();
-        let wrapping = get_wrapping_or_insert::<D>(&mut self.wrapping, &self.options, self.width);
+        let wrapping = get_wrapping_or_insert::<D>(&mut self.wrapping, &self.options, self.width, &self.ann_stack);
         let mut pre_tag_start;
         let mut pre_tag_cont;
 
@@ -1756,7 +1763,7 @@ impl<D: TextDecorator> Renderer for SubRenderer<D> {
     fn record_frag_start(&mut self, fragname: &str) {
         use self::TaggedLineElement::FragmentStart;
 
-        get_wrapping_or_insert::<D>(&mut self.wrapping, &self.options, self.width)
+        get_wrapping_or_insert::<D>(&mut self.wrapping, &self.options, self.width, &self.ann_stack)
             .add_element(FragmentStart(fragname.to_string()));
     }
 

@@ -24,7 +24,9 @@ use crate::{
 #[derive(Debug, Clone, PartialEq, Eq)]
 /// Attribute seletor operations
 pub(crate) enum AttrOperator {
+    #[allow(unused)]
     Present, // foo[href]
+    #[allow(unused)]
     Equal,   // foo[href="foo"]
 }
 
