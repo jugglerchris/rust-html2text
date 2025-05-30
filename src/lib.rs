@@ -1397,7 +1397,31 @@ impl RenderInput {
         }
     }
 
-    fn set_syntax_info(&self, mut node_styles: Vec<(Range<usize>, TextStyle)>) {
+    fn set_syntax_info(&self, full_text: &str, highlighted: Vec<(TextStyle, &str)>) {
+                        let mut node_styles = Vec::new();
+
+                        // Turn the returned strings into offsets into full_text.  We assume
+                        // we can maintain relative offsets as we step through the tree rendering.
+                        for (style, s) in highlighted {
+                            fn get_offset(full: &str, sub: &str) -> Option<Range<usize>> {
+                                // This looks scary, but if we get this wrong the worst case is
+                                // that we end up panicking when using the offsets.
+                                let full_start = full.as_ptr() as usize;
+                                let full_end = full_start + full.len();
+                                let sub_start = sub.as_ptr() as usize;
+                                let sub_end = sub_start + sub.len();
+
+                                if sub_start >= full_start && sub_end <= full_end {
+                                    Some((sub_start - full_start)..(sub_end - full_start))
+                                } else {
+                                    None
+                                }
+                            }
+
+                            if let Some(offset_range) = get_offset(&full_text, s) {
+                                node_styles.push((offset_range, style));
+                            } // else we ignore the highlight.
+                        }
         node_styles.sort_by_key(|r| (r.0.start, r.0.end));
         *self.extra_styles.borrow_mut() = node_styles;
     }
@@ -1694,41 +1718,43 @@ fn process_dom_node<T: Write>(
                     Some(css::Display::None) => return Ok(Nothing),
                     #[cfg(feature = "css_ext")]
                     Some(css::Display::ExtRawDom) => {
-                        todo!("Implement ExtRawDom with highlighting");
-                        /*
-                        let result_text = RcDom::node_as_dom_string(handle);
-                        if let Some(synval) = computed.syntax.val() {
-                            // Try to syntax highlight
-                            if let Some(node) = context.render_highlighted_text(
-                                &computed,
-                                &result_text,
-                                &[TextSource {
-                                    range: 0..result_text.len(),
-                                    node: markup5ever_rcdom::Node::new(
-                                            markup5ever_rcdom::NodeData::Text {
-                                                contents: std::cell::RefCell::new(result_text.as_str().into())
-                                            }),
-                                    depth: 0,
-                                }],
-                                &synval.language,
-                            ) {
-                                return Ok(Finished(node));
+                        use html5ever::interface::{NodeOrText, TreeSink};
+                        use html5ever::{QualName, LocalName};
+                        let mut html_bytes: Vec<u8> = Default::default();
+                        handle.serialize(&mut html_bytes)?;
+
+                        // Make a new DOM object so that we can easily create new
+                        // nodes.  They will be independent.
+                        let dom = RcDom::default();
+
+                        // We'll enclose it in a `<pre>`, so that we have an element in the right
+                        // shape to process.
+                        let html_string = String::from_utf8_lossy(&html_bytes).into_owned();
+                        let pre_node = dom.create_element(QualName::new(None, ns!(html), LocalName::from("pre")), vec![], Default::default());
+                        dom.append(&pre_node, NodeOrText::AppendText(html_string.into()));
+
+                        // Remove the RawDom setting; we don't want to be recursively converting to
+                        // raw DOM.
+                        let mut my_computed = computed;
+                        my_computed.display = Default::default();
+
+                        let new_input = RenderInput {
+                            handle: pre_node,
+                            parent_style: Rc::new(my_computed.clone()),
+                            extra_styles: Default::default(),
+                            node_lengths: Default::default(),
+                        };
+
+                        if let Some(syntax_info) = my_computed.syntax.val() {
+                            if let Some(highlighter) = context.syntax_highlighters.get(&syntax_info.language) {
+                                // Do the highlighting here.
+                                let text = new_input.extract_raw_text();
+                                let highlighted = highlighter(&text);
+                                new_input.set_syntax_info(&text, highlighted);
                             }
                         }
-
-                        let mut computed = computed;
-                        computed.white_space.maybe_update(
-                            false,
-                            StyleOrigin::Agent,
-                            Default::default(),
-                            WhiteSpace::Pre,
-                        );
-                        let text = RenderNode::new(RenderNodeInfo::Text(result_text));
-                        return Ok(Finished(RenderNode::new_styled(
-                            RenderNodeInfo::Block(vec![text]),
-                            computed,
-                        )));
-                        */
+                        return Ok(pending(new_input, 
+                            move |_, cs| Some(RenderNode::new_styled(Container(cs), my_computed))));
                     }
                     _ => (),
                 }
@@ -1739,31 +1765,7 @@ fn process_dom_node<T: Write>(
                     {
                         let extracted_text = input.extract_raw_text();
                         let highlighted = highlighter(&extracted_text);
-                        let mut node_styles = Vec::new();
-
-                        // Turn the returned strings into offsets into extracted_text.  We assume
-                        // we can maintain relative offsets as we step through the tree rendering.
-                        for (style, s) in highlighted {
-                            fn get_offset(full: &str, sub: &str) -> Option<Range<usize>> {
-                                // This looks scary, but if we get this wrong the worst case is
-                                // that we end up panicking when using the offsets.
-                                let full_start = full.as_ptr() as usize;
-                                let full_end = full_start + full.len();
-                                let sub_start = sub.as_ptr() as usize;
-                                let sub_end = sub_start + sub.len();
-
-                                if sub_start >= full_start && sub_end <= full_end {
-                                    Some((sub_start - full_start)..(sub_end - full_start))
-                                } else {
-                                    None
-                                }
-                            }
-
-                            if let Some(offset_range) = get_offset(&extracted_text, s) {
-                                node_styles.push((offset_range, style));
-                            } // else we ignore the highlight.
-                        }
-                        input.set_syntax_info(node_styles);
+                        input.set_syntax_info(&extracted_text, highlighted);
                     }
                 }
 

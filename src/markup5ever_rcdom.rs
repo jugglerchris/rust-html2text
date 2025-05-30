@@ -160,6 +160,16 @@ impl Node {
             None
         }
     }
+
+    /// Serialise the node to a writable.
+    pub fn serialize(self: &Rc<Self>, writer: impl io::Write) -> io::Result<()> {
+        html5ever::serialize(
+            writer,
+            &SerializableHandle(self.clone()),
+            Default::default(),
+        )
+    }
+
 }
 
 impl Drop for Node {
