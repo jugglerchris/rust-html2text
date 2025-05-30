@@ -166,7 +166,11 @@ impl Node {
         html5ever::serialize(
             writer,
             &SerializableHandle(self.clone()),
-            Default::default(),
+            html5ever::serialize::SerializeOpts {
+                scripting_enabled: true,
+                traversal_scope: html5ever::serialize::TraversalScope::IncludeNode,
+                create_missing_parent: false,
+            }
         )
     }
 
@@ -311,7 +315,11 @@ impl RcDom {
         html5ever::serialize(
             writer,
             &SerializableHandle(self.document.clone()),
-            Default::default(),
+            html5ever::serialize::SerializeOpts {
+                scripting_enabled: true,
+                traversal_scope: html5ever::serialize::TraversalScope::IncludeNode,
+                create_missing_parent: false,
+            }
         )
     }
 

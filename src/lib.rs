@@ -1737,6 +1737,14 @@ fn process_dom_node<T: Write>(
                         // raw DOM.
                         let mut my_computed = computed;
                         my_computed.display = Default::default();
+                        // Preformat it
+                        my_computed.white_space.maybe_update(
+                            false,
+                            StyleOrigin::Agent,
+                            Default::default(),
+                            WhiteSpace::Pre,
+                        );
+                        my_computed.internal_pre = true;
 
                         let new_input = RenderInput {
                             handle: pre_node,
