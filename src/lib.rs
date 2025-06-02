@@ -1376,8 +1376,6 @@ struct HtmlContext {
     syntax_highlighters: HighlighterMap,
 }
 
-impl HtmlContext {}
-
 // Input to render tree conversion.
 struct RenderInput {
     handle: Handle,
