@@ -11,8 +11,14 @@ Possible log types:
 
 ### Latest
 
+### 0.15.1
+
 - [added] CSS: Support basic attribute selectors (`div[attr="bar"]`).
-- [changed] Syntax highlighting uses the priority of the `x-syntax` rule.
+- [changed] Various improvements to syntax highlighting:
+  - It uses the priority of the `x-syntax` rule.
+  - Now supported on non-`<pre>` elements.
+  - No longer strips contained tags when highlighting
+  - Compatible with `display: x-raw-dom` extension (e.g. to colour the HTML)
 - [fixed] With `pad_block_width` enabled, do a better job of padding blocks.
   In particular, the padding gets the block's background colour (when CSS etc.
   are being used).
