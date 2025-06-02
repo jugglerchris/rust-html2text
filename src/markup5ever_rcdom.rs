@@ -160,6 +160,19 @@ impl Node {
             None
         }
     }
+
+    /// Serialise the node to a writable.
+    pub fn serialize(self: &Rc<Self>, writer: impl io::Write) -> io::Result<()> {
+        html5ever::serialize(
+            writer,
+            &SerializableHandle(self.clone()),
+            html5ever::serialize::SerializeOpts {
+                scripting_enabled: true,
+                traversal_scope: html5ever::serialize::TraversalScope::IncludeNode,
+                create_missing_parent: false,
+            },
+        )
+    }
 }
 
 impl Drop for Node {
@@ -301,7 +314,11 @@ impl RcDom {
         html5ever::serialize(
             writer,
             &SerializableHandle(self.document.clone()),
-            Default::default(),
+            html5ever::serialize::SerializeOpts {
+                scripting_enabled: true,
+                traversal_scope: html5ever::serialize::TraversalScope::IncludeNode,
+                create_missing_parent: false,
+            },
         )
     }
 

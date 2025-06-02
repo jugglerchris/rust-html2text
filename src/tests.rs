@@ -178,6 +178,20 @@ where
     assert_eq_str!(output, expected);
 }
 
+#[cfg(feature = "css_ext")]
+#[track_caller]
+fn test_html_conf_rendertree<F>(input: &[u8], conf: F, expected: crate::RenderTree)
+where
+    F: Fn(Config<RichDecorator>) -> Config<RichDecorator>,
+{
+    let conf = conf(config::rich());
+    let dom = conf.parse_html(input).expect("Failed to parse HTML");
+    let rt = conf
+        .dom_to_render_tree(&dom)
+        .expect("Failed to get render tree");
+    assert_eq_str!(rt.to_string(), expected.to_string());
+}
+
 #[test]
 fn test_table() {
     test_html(
@@ -3129,6 +3143,119 @@ at  line  breaks
             r#"Hello [world]!
 "#,
             80,
+        );
+    }
+}
+
+#[cfg(feature = "css_ext")]
+mod css_ext_tests {
+    use super::test_html_conf_rendertree;
+    use crate::{
+        Colour, ComputedStyle, RenderNode, RenderNodeInfo, RenderTree, StyleOrigin, TextStyle,
+        WhiteSpace,
+    };
+
+    // Text node
+    fn t(s: &str) -> RenderNode {
+        RenderNode::new(RenderNodeInfo::Text(s.into()))
+    }
+    // Text node
+    fn t_s(s: &str, st: ComputedStyle) -> RenderNode {
+        RenderNode::new_styled(RenderNodeInfo::Text(s.into()), st)
+    }
+    // Em node containing text
+    fn em(ns: &[RenderNode]) -> RenderNode {
+        RenderNode::new(RenderNodeInfo::Em(ns.into()))
+    }
+    // Container
+    fn c(ns: &[RenderNode]) -> RenderNode {
+        RenderNode::new(RenderNodeInfo::Container(ns.into()))
+    }
+    /*
+    // Container
+    fn c_s(ns: &[RenderNode], st: ComputedStyle) -> RenderNode {
+        RenderNode::new_styled(RenderNodeInfo::Container(ns.into()), st)
+    }
+    // Block
+    fn b(ns: &[RenderNode]) -> RenderNode {
+        RenderNode::new(RenderNodeInfo::Block(ns.into()))
+    }
+    */
+    // Container
+    fn b_s(ns: &[RenderNode], st: ComputedStyle) -> RenderNode {
+        RenderNode::new_styled(RenderNodeInfo::Block(ns.into()), st)
+    }
+    /*
+    // Pre
+    fn pre(text: &str) -> RenderNode {
+        let st: ComputedStyle = st().pre();
+
+        RenderNode::new_styled(RenderNodeInfo::Container(vec![t_s(text, st.inherit())]), st)
+    }
+    */
+    fn d<T: Default>() -> T {
+        Default::default()
+    }
+
+    fn st() -> ComputedStyle {
+        d()
+    }
+
+    trait TestAddStyle {
+        fn fg(self, r: u8, g: u8, b: u8) -> Self;
+        fn pre(self) -> Self;
+    }
+    impl TestAddStyle for ComputedStyle {
+        fn fg(mut self, r: u8, g: u8, b: u8) -> Self {
+            self.colour.maybe_update(
+                false,               // important
+                StyleOrigin::Author, // origin
+                Default::default(),  // specificity
+                Colour { r, g, b },
+            );
+            self
+        }
+        fn pre(mut self) -> Self {
+            self.white_space.maybe_update(
+                false,               // important
+                StyleOrigin::Author, // origin
+                Default::default(),  // specificity
+                WhiteSpace::Pre,
+            );
+            self.internal_pre = true;
+            self
+        }
+    }
+
+    #[test]
+    fn render_1() {
+        test_html_conf_rendertree(
+            br#"<p style="color: red">Hi</p>"#,
+            |conf| conf.use_doc_css(),
+            RenderTree(c(&[c(&[c(&[b_s(&[t("Hi")], st().fg(255, 0, 0))])])])),
+        );
+    }
+
+    fn syntax_all_blue(text: &str) -> Vec<(TextStyle, &str)> {
+        vec![(TextStyle::foreground(Colour { r: 0, g: 0, b: 255 }), text)]
+    }
+    #[test]
+    fn syntax_pre_em() {
+        test_html_conf_rendertree(
+            br#"<pre>Hi <em>there</em></pre>"#,
+            |conf| {
+                conf.use_doc_css()
+                    .register_highlighter("syn", Box::new(syntax_all_blue))
+                    .add_agent_css("pre { x-syntax: syn; }")
+                    .expect("CSS parsing")
+            },
+            RenderTree(c(&[c(&[c(&[b_s(
+                &[
+                    t_s("Hi ", st().fg(0, 0, 255)),
+                    em(&[t_s("there", st().fg(0, 0, 255))]),
+                ],
+                st().pre(),
+            )])])])),
         );
     }
 }

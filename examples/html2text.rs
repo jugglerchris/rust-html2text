@@ -168,6 +168,13 @@ where
         if flags.use_colour {
             let conf = config::rich();
             let conf = update_config(conf, &flags);
+            #[cfg(feature = "css_ext")]
+            let conf = if flags.show_dom {
+                conf.add_agent_css("body { display: x-raw-dom !important; }")
+                    .unwrap()
+            } else {
+                conf
+            };
             #[cfg(feature = "css")]
             let use_css_colours = !flags.ignore_css_colours;
             #[cfg(not(feature = "css"))]

@@ -97,6 +97,7 @@ impl TextStyle {
 /// spans with sub-strs of that text with associated colours.
 pub type SyntaxHighlighter = Box<dyn for<'a> Fn(&'a str) -> Vec<(TextStyle, &'a str)>>;
 
+use markup5ever_rcdom::Node;
 use render::text_renderer::{
     RenderLine, RenderOptions, RichAnnotation, SubRenderer, TaggedLine, TextRenderer,
 };
@@ -113,9 +114,11 @@ pub use markup5ever_rcdom::{
     RcDom,
 };
 
-use std::cell::Cell;
+use std::cell::{Cell, RefCell};
 use std::cmp::{max, min};
 use std::collections::{BTreeSet, HashMap};
+#[cfg(feature = "css_ext")]
+use std::ops::Range;
 use std::rc::Rc;
 #[cfg(feature = "css_ext")]
 use std::sync::Arc;
@@ -1373,65 +1376,99 @@ struct HtmlContext {
     syntax_highlighters: HighlighterMap,
 }
 
-impl HtmlContext {
-    #[cfg(feature = "css_ext")]
-    // Run plain preformatted text through a highlighter and produce the RenderTree for it.
-    fn render_highlighted_text(
-        &self,
-        computed: &ComputedStyle,
-        text: &str,
-        language: &str,
-    ) -> Option<RenderNode> {
-        let Some(highlighter) = self.syntax_highlighters.get(&language) else {
-            return None;
-        };
-        let highlighted = highlighter(&text);
-
-        let origin = computed.syntax.origin;
-        let spec = computed.syntax.specificity;
-        let important = computed.syntax.important;
-
-        let mut computed = computed.inherit();
-        computed.white_space.maybe_update(
-            false,
-            StyleOrigin::Agent,
-            Default::default(),
-            WhiteSpace::Pre,
-        );
-        computed.internal_pre = true;
-
-        let mut children = Vec::new();
-        for (style, s) in highlighted {
-            let mut cstyle = computed.inherit();
-            cstyle
-                .colour
-                .maybe_update(important, origin, spec, style.fg_colour);
-            if let Some(bgcol) = style.bg_colour {
-                cstyle
-                    .bg_colour
-                    .maybe_update(important, origin, spec, bgcol);
-            }
-            children.push(RenderNode::new_styled(
-                RenderNodeInfo::Text(s.into()),
-                cstyle,
-            ));
-        }
-        Some(RenderNode::new_styled(
-            RenderNodeInfo::Container(children),
-            computed.inherit(),
-        ))
-    }
-}
-
 // Input to render tree conversion.
 struct RenderInput {
     handle: Handle,
     parent_style: Rc<ComputedStyle>,
+    // Overlay styles from syntax highlighting.
+    #[cfg(feature = "css_ext")]
+    extra_styles: RefCell<Vec<(Range<usize>, TextStyle)>>,
+    // Map from node to the length of enclosed text nodes.
+    node_lengths: Rc<RefCell<HashMap<*const Node, usize>>>,
 }
 
 impl RenderInput {
+    fn new(handle: Handle, parent_style: Rc<ComputedStyle>) -> Self {
+        RenderInput {
+            handle,
+            parent_style,
+            #[cfg(feature = "css_ext")]
+            extra_styles: Default::default(),
+            node_lengths: Default::default(),
+        }
+    }
+
+    #[cfg(feature = "css_ext")]
+    fn set_syntax_info(&self, full_text: &str, highlighted: Vec<(TextStyle, &str)>) {
+        let mut node_styles = Vec::new();
+
+        // Turn the returned strings into offsets into full_text.  We assume
+        // we can maintain relative offsets as we step through the tree rendering.
+        for (style, s) in highlighted {
+            fn get_offset(full: &str, sub: &str) -> Option<Range<usize>> {
+                // This looks scary, but if we get this wrong the worst case is
+                // that we end up panicking when using the offsets.
+                let full_start = full.as_ptr() as usize;
+                let full_end = full_start + full.len();
+                let sub_start = sub.as_ptr() as usize;
+                let sub_end = sub_start + sub.len();
+
+                if sub_start >= full_start && sub_end <= full_end {
+                    Some((sub_start - full_start)..(sub_end - full_start))
+                } else {
+                    None
+                }
+            }
+
+            if let Some(offset_range) = get_offset(&full_text, s) {
+                node_styles.push((offset_range, style));
+            } // else we ignore the highlight.
+        }
+        node_styles.sort_by_key(|r| (r.0.start, r.0.end));
+        *self.extra_styles.borrow_mut() = node_styles;
+    }
+
     // Return the children in the right form
     fn children(&self) -> Vec<RenderInput> {
+        #[cfg(feature = "css_ext")]
+        if self.extra_styles.borrow().len() > 0 {
+            let mut offset = 0;
+            let mut result = Vec::new();
+            let mut start_style_index = 0;
+            let node_lengths = self.node_lengths.borrow();
+            let extra_styles = self.extra_styles.borrow();
+            for child in &*self.handle.children.borrow() {
+                let end_offset = offset + node_lengths.get(&Rc::as_ptr(child)).unwrap();
+                let mut child_extra_styles = Vec::new();
+                for es_idx in start_style_index..extra_styles.len() {
+                    let mut style_range = extra_styles[es_idx].0.clone();
+                    if style_range.start >= end_offset {
+                        // We've gone too far.
+                        break;
+                    }
+                    if style_range.end <= offset {
+                        // We don't need to look at this again
+                        start_style_index = es_idx;
+                    }
+                    // This piece must overlap!
+                    // Clip the range to this node.
+                    style_range.start = style_range.start.max(offset) - offset;
+                    style_range.end = style_range.end.min(end_offset) - offset;
+
+                    child_extra_styles.push((style_range, extra_styles[es_idx].1.clone()));
+                }
+                result.push(RenderInput {
+                    handle: Rc::clone(child),
+                    parent_style: Rc::clone(&self.parent_style),
+                    extra_styles: RefCell::new(child_extra_styles),
+                    node_lengths: self.node_lengths.clone(),
+                });
+                offset = end_offset;
+            }
+            return result;
+        }
+
+        // Simple case, and we might not have the node lengths.
         self.handle
             .children
             .borrow()
@@ -1439,8 +1476,49 @@ impl RenderInput {
             .map(|child| RenderInput {
                 handle: child.clone(),
                 parent_style: Rc::clone(&self.parent_style),
+                #[cfg(feature = "css_ext")]
+                extra_styles: Default::default(),
+                node_lengths: self.node_lengths.clone(),
             })
             .collect()
+    }
+
+    #[cfg(feature = "css_ext")]
+    fn do_extract_text(
+        out: &mut String,
+        handle: &Handle,
+        length_map: &mut HashMap<*const Node, usize>,
+    ) {
+        match handle.data {
+            markup5ever_rcdom::NodeData::Text { contents: ref tstr } => {
+                let s: &str = &tstr.borrow();
+                out.push_str(s);
+                length_map.entry(Rc::as_ptr(handle)).or_insert(s.len());
+            }
+            _ => {
+                for child in handle.children.borrow().iter() {
+                    let len_before = out.len();
+                    RenderInput::do_extract_text(out, child, length_map);
+                    let len_after = out.len();
+                    length_map
+                        .entry(Rc::as_ptr(child))
+                        .or_insert(len_after - len_before);
+                }
+            }
+        }
+    }
+
+    #[cfg(feature = "css_ext")]
+    /// Return a full String, and a list of where substrings came from:
+    ///
+    fn extract_raw_text(&self) -> String {
+        let mut result = String::new();
+        RenderInput::do_extract_text(
+            &mut result,
+            &self.handle,
+            &mut *self.node_lengths.borrow_mut(),
+        );
+        result
     }
 }
 
@@ -1460,10 +1538,7 @@ fn dom_to_render_tree_with_context<T: Write>(
     let parent_style = Default::default();
     let result = tree_map_reduce(
         context,
-        RenderInput {
-            handle,
-            parent_style,
-        },
+        RenderInput::new(handle, parent_style),
         |context, input| process_dom_node(input, err_out, context),
     );
 
@@ -1509,10 +1584,7 @@ where
             .children
             .borrow()
             .iter()
-            .map(|child| RenderInput {
-                handle: child.clone(),
-                parent_style: Rc::clone(style),
-            })
+            .map(|child| RenderInput::new(child.clone(), Rc::clone(style)))
             .collect(),
         cons: Box::new(move |ctx, children| {
             if children.is_empty() {
@@ -1631,8 +1703,9 @@ fn process_dom_node<T: Write>(
             let mut frag_from_name_attr = false;
 
             let RenderInput {
-                handle: ref _handle,
+                ref handle,
                 ref parent_style,
+                ..
             } = input;
 
             #[cfg(feature = "css")]
@@ -1641,42 +1714,80 @@ fn process_dom_node<T: Write>(
             let use_doc_css = false;
 
             let computed = {
-                let computed =
-                    context
-                        .style_data
-                        .computed_style(parent_style, _handle, use_doc_css);
+                let computed = context
+                    .style_data
+                    .computed_style(parent_style, handle, use_doc_css);
                 #[cfg(feature = "css")]
                 match computed.display.val() {
                     Some(css::Display::None) => return Ok(Nothing),
                     #[cfg(feature = "css_ext")]
                     Some(css::Display::ExtRawDom) => {
-                        let result_text = RcDom::node_as_dom_string(_handle);
-                        if let Some(synval) = computed.syntax.val() {
-                            // Try to syntax highlight
-                            if let Some(node) = context.render_highlighted_text(
-                                &computed,
-                                &result_text,
-                                &synval.language,
-                            ) {
-                                return Ok(Finished(node));
-                            }
-                        }
+                        use html5ever::interface::{NodeOrText, TreeSink};
+                        use html5ever::{LocalName, QualName};
+                        let mut html_bytes: Vec<u8> = Default::default();
+                        handle.serialize(&mut html_bytes)?;
 
-                        let mut computed = computed;
-                        computed.white_space.maybe_update(
+                        // Make a new DOM object so that we can easily create new
+                        // nodes.  They will be independent.
+                        let dom = RcDom::default();
+
+                        // We'll enclose it in a `<pre>`, so that we have an element in the right
+                        // shape to process.
+                        let html_string = String::from_utf8_lossy(&html_bytes).into_owned();
+                        let pre_node = dom.create_element(
+                            QualName::new(None, ns!(html), LocalName::from("pre")),
+                            vec![],
+                            Default::default(),
+                        );
+                        dom.append(&pre_node, NodeOrText::AppendText(html_string.into()));
+
+                        // Remove the RawDom setting; we don't want to be recursively converting to
+                        // raw DOM.
+                        let mut my_computed = computed;
+                        my_computed.display = Default::default();
+                        // Preformat it
+                        my_computed.white_space.maybe_update(
                             false,
                             StyleOrigin::Agent,
                             Default::default(),
                             WhiteSpace::Pre,
                         );
-                        let text = RenderNode::new(RenderNodeInfo::Text(result_text));
-                        return Ok(Finished(RenderNode::new_styled(
-                            RenderNodeInfo::Block(vec![text]),
-                            computed,
-                        )));
+                        my_computed.internal_pre = true;
+
+                        let new_input = RenderInput {
+                            handle: pre_node,
+                            parent_style: Rc::new(my_computed.clone()),
+                            extra_styles: Default::default(),
+                            node_lengths: Default::default(),
+                        };
+
+                        if let Some(syntax_info) = my_computed.syntax.val() {
+                            if let Some(highlighter) =
+                                context.syntax_highlighters.get(&syntax_info.language)
+                            {
+                                // Do the highlighting here.
+                                let text = new_input.extract_raw_text();
+                                let highlighted = highlighter(&text);
+                                new_input.set_syntax_info(&text, highlighted);
+                            }
+                        }
+                        return Ok(pending(new_input, move |_, cs| {
+                            Some(RenderNode::new_styled(Container(cs), my_computed))
+                        }));
                     }
                     _ => (),
                 }
+                #[cfg(feature = "css_ext")]
+                if let Some(syntax_info) = computed.syntax.val() {
+                    if let Some(highlighter) =
+                        context.syntax_highlighters.get(&syntax_info.language)
+                    {
+                        let extracted_text = input.extract_raw_text();
+                        let highlighted = highlighter(&extracted_text);
+                        input.set_syntax_info(&extracted_text, highlighted);
+                    }
+                }
+
                 computed
             };
 
@@ -1798,35 +1909,17 @@ fn process_dom_node<T: Write>(
                 expanded_name!(html "div") => pending_noempty(input, move |_, cs| {
                     Some(RenderNode::new_styled(Div(cs), computed))
                 }),
-                expanded_name!(html "pre") => {
-                    let mut result = None;
-                    #[cfg(feature = "css_ext")]
-                    {
-                        if let Some(synval) = computed.syntax.val() {
-                            let text = extract_pre_text(&input.handle);
-                            if let Some(node) =
-                                context.render_highlighted_text(&computed, &text, &synval.language)
-                            {
-                                result = Some(TreeMapResult::Finished(node));
-                            }
-                        }
-                    }
-
-                    if result.is_none() {
-                        result = Some(pending(input, move |_, cs| {
-                            let mut computed = computed;
-                            computed.white_space.maybe_update(
-                                false,
-                                StyleOrigin::Agent,
-                                Default::default(),
-                                WhiteSpace::Pre,
-                            );
-                            computed.internal_pre = true;
-                            Some(RenderNode::new_styled(Block(cs), computed))
-                        }))
-                    }
-                    result.unwrap()
-                }
+                expanded_name!(html "pre") => pending(input, move |_, cs| {
+                    let mut computed = computed;
+                    computed.white_space.maybe_update(
+                        false,
+                        StyleOrigin::Agent,
+                        Default::default(),
+                        WhiteSpace::Pre,
+                    );
+                    computed.internal_pre = true;
+                    Some(RenderNode::new_styled(Block(cs), computed))
+                }),
                 expanded_name!(html "br") => Finished(RenderNode::new_styled(Break, computed)),
                 expanded_name!(html "table") => table_to_render_tree(input, computed, err_out),
                 expanded_name!(html "thead") | expanded_name!(html "tbody") => {
@@ -1976,6 +2069,51 @@ fn process_dom_node<T: Write>(
             }
         }
         markup5ever_rcdom::NodeData::Text { contents: ref tstr } => {
+            #[cfg(feature = "css_ext")]
+            if !input.extra_styles.borrow().is_empty() {
+                let mut nodes = Vec::new();
+                let mut offset = 0;
+                for part in &*input.extra_styles.borrow() {
+                    let (start, end) = (part.0.start, part.0.end);
+                    if start > offset {
+                        // Handle the unstyled bit at the start
+                        nodes.push(RenderNode::new(Text((tstr.borrow()[offset..start]).into())));
+                    }
+                    let mut cstyle = input.parent_style.inherit();
+                    cstyle.colour.maybe_update(
+                        // TODO: use the right specificity
+                        cstyle.syntax.important,
+                        cstyle.syntax.origin,
+                        cstyle.syntax.specificity,
+                        part.1.fg_colour,
+                    );
+                    if let Some(bgcol) = part.1.bg_colour {
+                        cstyle.bg_colour.maybe_update(
+                            // TODO: use the right specificity
+                            cstyle.syntax.important,
+                            cstyle.syntax.origin,
+                            cstyle.syntax.specificity,
+                            bgcol,
+                        );
+                    }
+                    // Now the styled part
+                    nodes.push(RenderNode::new_styled(
+                        Text((tstr.borrow()[start..end]).into()),
+                        cstyle,
+                    ));
+                    offset = end;
+                }
+                // the final bit
+                if offset < tstr.borrow().len() {
+                    nodes.push(RenderNode::new(Text((tstr.borrow()[offset..]).into())));
+                }
+                if nodes.len() == 1 {
+                    return Ok(Finished(nodes.pop().unwrap()));
+                } else {
+                    return Ok(Finished(RenderNode::new(RenderNodeInfo::Container(nodes))));
+                }
+            }
+
             Finished(RenderNode::new(Text((&*tstr.borrow()).into())))
         }
         _ => {
@@ -1984,27 +2122,6 @@ fn process_dom_node<T: Write>(
             Nothing
         }
     })
-}
-
-#[cfg(feature = "css_ext")]
-fn do_extract_text(out: &mut String, handle: &Handle) {
-    match handle.data {
-        markup5ever_rcdom::NodeData::Text { contents: ref tstr } => {
-            out.push_str(&tstr.borrow());
-        }
-        _ => {
-            for child in handle.children.borrow().iter() {
-                do_extract_text(out, child);
-            }
-        }
-    }
-}
-
-#[cfg(feature = "css_ext")]
-fn extract_pre_text(handle: &Handle) -> String {
-    let mut result = String::new();
-    do_extract_text(&mut result, handle);
-    result
 }
 
 fn render_tree_to_string<T: Write, D: TextDecorator>(
