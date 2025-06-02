@@ -1,7 +1,7 @@
 use crate::config::Config;
 use crate::render::text_renderer::{PlainDecorator, TaggedString};
 use crate::render::TaggedLineElement;
-use crate::{config, Error, RenderTree};
+use crate::{config, Error};
 
 use super::render::text_renderer::{RichAnnotation, RichDecorator, TaggedLine, TrivialDecorator};
 use super::{from_read, from_read_with_decorator, parse, TextDecorator};
@@ -178,8 +178,9 @@ where
     assert_eq_str!(output, expected);
 }
 
+#[cfg(feature = "css_ext")]
 #[track_caller]
-fn test_html_conf_rendertree<F>(input: &[u8], conf: F, expected: RenderTree)
+fn test_html_conf_rendertree<F>(input: &[u8], conf: F, expected: crate::RenderTree)
 where
     F: Fn(Config<RichDecorator>) -> Config<RichDecorator>,
 {
@@ -3170,6 +3171,7 @@ mod css_ext_tests {
     fn c(ns: &[RenderNode]) -> RenderNode {
         RenderNode::new(RenderNodeInfo::Container(ns.into()))
     }
+    /*
     // Container
     fn c_s(ns: &[RenderNode], st: ComputedStyle) -> RenderNode {
         RenderNode::new_styled(RenderNodeInfo::Container(ns.into()), st)
@@ -3178,16 +3180,19 @@ mod css_ext_tests {
     fn b(ns: &[RenderNode]) -> RenderNode {
         RenderNode::new(RenderNodeInfo::Block(ns.into()))
     }
+    */
     // Container
     fn b_s(ns: &[RenderNode], st: ComputedStyle) -> RenderNode {
         RenderNode::new_styled(RenderNodeInfo::Block(ns.into()), st)
     }
+    /*
     // Pre
     fn pre(text: &str) -> RenderNode {
-        let mut st: ComputedStyle = st().pre();
+        let st: ComputedStyle = st().pre();
 
         RenderNode::new_styled(RenderNodeInfo::Container(vec![t_s(text, st.inherit())]), st)
     }
+    */
     fn d<T: Default>() -> T {
         Default::default()
     }

@@ -170,7 +170,8 @@ where
             let conf = update_config(conf, &flags);
             #[cfg(feature = "css_ext")]
             let conf = if flags.show_dom {
-                conf.add_agent_css("body { display: x-raw-dom !important; }").unwrap()
+                conf.add_agent_css("body { display: x-raw-dom !important; }")
+                    .unwrap()
             } else {
                 conf
             };

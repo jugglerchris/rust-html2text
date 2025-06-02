@@ -170,10 +170,9 @@ impl Node {
                 scripting_enabled: true,
                 traversal_scope: html5ever::serialize::TraversalScope::IncludeNode,
                 create_missing_parent: false,
-            }
+            },
         )
     }
-
 }
 
 impl Drop for Node {
@@ -319,7 +318,7 @@ impl RcDom {
                 scripting_enabled: true,
                 traversal_scope: html5ever::serialize::TraversalScope::IncludeNode,
                 create_missing_parent: false,
-            }
+            },
         )
     }
 

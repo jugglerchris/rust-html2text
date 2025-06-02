@@ -117,6 +117,7 @@ pub use markup5ever_rcdom::{
 use std::cell::{Cell, RefCell};
 use std::cmp::{max, min};
 use std::collections::{BTreeSet, HashMap};
+#[cfg(feature = "css_ext")]
 use std::ops::Range;
 use std::rc::Rc;
 #[cfg(feature = "css_ext")]
@@ -1382,6 +1383,7 @@ struct RenderInput {
     handle: Handle,
     parent_style: Rc<ComputedStyle>,
     // Overlay styles from syntax highlighting.
+    #[cfg(feature = "css_ext")]
     extra_styles: RefCell<Vec<(Range<usize>, TextStyle)>>,
     // Map from node to the length of enclosed text nodes.
     node_lengths: Rc<RefCell<HashMap<*const Node, usize>>>,
@@ -1392,42 +1394,45 @@ impl RenderInput {
         RenderInput {
             handle,
             parent_style,
+            #[cfg(feature = "css_ext")]
             extra_styles: Default::default(),
             node_lengths: Default::default(),
         }
     }
 
+    #[cfg(feature = "css_ext")]
     fn set_syntax_info(&self, full_text: &str, highlighted: Vec<(TextStyle, &str)>) {
-                        let mut node_styles = Vec::new();
+        let mut node_styles = Vec::new();
 
-                        // Turn the returned strings into offsets into full_text.  We assume
-                        // we can maintain relative offsets as we step through the tree rendering.
-                        for (style, s) in highlighted {
-                            fn get_offset(full: &str, sub: &str) -> Option<Range<usize>> {
-                                // This looks scary, but if we get this wrong the worst case is
-                                // that we end up panicking when using the offsets.
-                                let full_start = full.as_ptr() as usize;
-                                let full_end = full_start + full.len();
-                                let sub_start = sub.as_ptr() as usize;
-                                let sub_end = sub_start + sub.len();
+        // Turn the returned strings into offsets into full_text.  We assume
+        // we can maintain relative offsets as we step through the tree rendering.
+        for (style, s) in highlighted {
+            fn get_offset(full: &str, sub: &str) -> Option<Range<usize>> {
+                // This looks scary, but if we get this wrong the worst case is
+                // that we end up panicking when using the offsets.
+                let full_start = full.as_ptr() as usize;
+                let full_end = full_start + full.len();
+                let sub_start = sub.as_ptr() as usize;
+                let sub_end = sub_start + sub.len();
 
-                                if sub_start >= full_start && sub_end <= full_end {
-                                    Some((sub_start - full_start)..(sub_end - full_start))
-                                } else {
-                                    None
-                                }
-                            }
+                if sub_start >= full_start && sub_end <= full_end {
+                    Some((sub_start - full_start)..(sub_end - full_start))
+                } else {
+                    None
+                }
+            }
 
-                            if let Some(offset_range) = get_offset(&full_text, s) {
-                                node_styles.push((offset_range, style));
-                            } // else we ignore the highlight.
-                        }
+            if let Some(offset_range) = get_offset(&full_text, s) {
+                node_styles.push((offset_range, style));
+            } // else we ignore the highlight.
+        }
         node_styles.sort_by_key(|r| (r.0.start, r.0.end));
         *self.extra_styles.borrow_mut() = node_styles;
     }
 
     // Return the children in the right form
     fn children(&self) -> Vec<RenderInput> {
+        #[cfg(feature = "css_ext")]
         if self.extra_styles.borrow().len() > 0 {
             let mut offset = 0;
             let mut result = Vec::new();
@@ -1462,21 +1467,22 @@ impl RenderInput {
                 });
                 offset = end_offset;
             }
-            result
-        } else {
-            // Simple case, and we might not have the node lengths.
-            self.handle
-                .children
-                .borrow()
-                .iter()
-                .map(|child| RenderInput {
-                    handle: child.clone(),
-                    parent_style: Rc::clone(&self.parent_style),
-                    extra_styles: Default::default(),
-                    node_lengths: self.node_lengths.clone(),
-                })
-                .collect()
+            return result;
         }
+
+        // Simple case, and we might not have the node lengths.
+        self.handle
+            .children
+            .borrow()
+            .iter()
+            .map(|child| RenderInput {
+                handle: child.clone(),
+                parent_style: Rc::clone(&self.parent_style),
+                #[cfg(feature = "css_ext")]
+                extra_styles: Default::default(),
+                node_lengths: self.node_lengths.clone(),
+            })
+            .collect()
     }
 
     #[cfg(feature = "css_ext")]
@@ -1719,7 +1725,7 @@ fn process_dom_node<T: Write>(
                     #[cfg(feature = "css_ext")]
                     Some(css::Display::ExtRawDom) => {
                         use html5ever::interface::{NodeOrText, TreeSink};
-                        use html5ever::{QualName, LocalName};
+                        use html5ever::{LocalName, QualName};
                         let mut html_bytes: Vec<u8> = Default::default();
                         handle.serialize(&mut html_bytes)?;
 
@@ -1730,7 +1736,11 @@ fn process_dom_node<T: Write>(
                         // We'll enclose it in a `<pre>`, so that we have an element in the right
                         // shape to process.
                         let html_string = String::from_utf8_lossy(&html_bytes).into_owned();
-                        let pre_node = dom.create_element(QualName::new(None, ns!(html), LocalName::from("pre")), vec![], Default::default());
+                        let pre_node = dom.create_element(
+                            QualName::new(None, ns!(html), LocalName::from("pre")),
+                            vec![],
+                            Default::default(),
+                        );
                         dom.append(&pre_node, NodeOrText::AppendText(html_string.into()));
 
                         // Remove the RawDom setting; we don't want to be recursively converting to
@@ -1754,15 +1764,18 @@ fn process_dom_node<T: Write>(
                         };
 
                         if let Some(syntax_info) = my_computed.syntax.val() {
-                            if let Some(highlighter) = context.syntax_highlighters.get(&syntax_info.language) {
+                            if let Some(highlighter) =
+                                context.syntax_highlighters.get(&syntax_info.language)
+                            {
                                 // Do the highlighting here.
                                 let text = new_input.extract_raw_text();
                                 let highlighted = highlighter(&text);
                                 new_input.set_syntax_info(&text, highlighted);
                             }
                         }
-                        return Ok(pending(new_input, 
-                            move |_, cs| Some(RenderNode::new_styled(Container(cs), my_computed))));
+                        return Ok(pending(new_input, move |_, cs| {
+                            Some(RenderNode::new_styled(Container(cs), my_computed))
+                        }));
                     }
                     _ => (),
                 }
@@ -2058,56 +2071,52 @@ fn process_dom_node<T: Write>(
             }
         }
         markup5ever_rcdom::NodeData::Text { contents: ref tstr } => {
-            if cfg!(feature = "css_ext") {
-                if !input.extra_styles.borrow().is_empty() {
-                    let mut nodes = Vec::new();
-                    let mut offset = 0;
-                    for part in &*input.extra_styles.borrow() {
-                        let (start, end) = (part.0.start, part.0.end);
-                        if start > offset {
-                            // Handle the unstyled bit at the start
-                            nodes
-                                .push(RenderNode::new(Text((tstr.borrow()[offset..start]).into())));
-                        }
-                        let mut cstyle = input.parent_style.inherit();
-                        cstyle.colour.maybe_update(
+            #[cfg(feature = "css_ext")]
+            if !input.extra_styles.borrow().is_empty() {
+                let mut nodes = Vec::new();
+                let mut offset = 0;
+                for part in &*input.extra_styles.borrow() {
+                    let (start, end) = (part.0.start, part.0.end);
+                    if start > offset {
+                        // Handle the unstyled bit at the start
+                        nodes.push(RenderNode::new(Text((tstr.borrow()[offset..start]).into())));
+                    }
+                    let mut cstyle = input.parent_style.inherit();
+                    cstyle.colour.maybe_update(
+                        // TODO: use the right specificity
+                        cstyle.syntax.important,
+                        cstyle.syntax.origin,
+                        cstyle.syntax.specificity,
+                        part.1.fg_colour,
+                    );
+                    if let Some(bgcol) = part.1.bg_colour {
+                        cstyle.bg_colour.maybe_update(
                             // TODO: use the right specificity
                             cstyle.syntax.important,
                             cstyle.syntax.origin,
                             cstyle.syntax.specificity,
-                            part.1.fg_colour,
+                            bgcol,
                         );
-                        if let Some(bgcol) = part.1.bg_colour {
-                            cstyle.bg_colour.maybe_update(
-                                // TODO: use the right specificity
-                                cstyle.syntax.important,
-                                cstyle.syntax.origin,
-                                cstyle.syntax.specificity,
-                                bgcol,
-                            );
-                        }
-                        // Now the styled part
-                        nodes.push(RenderNode::new_styled(
-                            Text((tstr.borrow()[start..end]).into()),
-                            cstyle,
-                        ));
-                        offset = end;
                     }
-                    // the final bit
-                    if offset < tstr.borrow().len() {
-                        nodes.push(RenderNode::new(Text((tstr.borrow()[offset..]).into())));
-                    }
-                    if nodes.len() == 1 {
-                        Finished(nodes.pop().unwrap())
-                    } else {
-                        Finished(RenderNode::new(RenderNodeInfo::Container(nodes)))
-                    }
-                } else {
-                    Finished(RenderNode::new(Text((&*tstr.borrow()).into())))
+                    // Now the styled part
+                    nodes.push(RenderNode::new_styled(
+                        Text((tstr.borrow()[start..end]).into()),
+                        cstyle,
+                    ));
+                    offset = end;
                 }
-            } else {
-                Finished(RenderNode::new(Text((&*tstr.borrow()).into())))
+                // the final bit
+                if offset < tstr.borrow().len() {
+                    nodes.push(RenderNode::new(Text((tstr.borrow()[offset..]).into())));
+                }
+                if nodes.len() == 1 {
+                    return Ok(Finished(nodes.pop().unwrap()));
+                } else {
+                    return Ok(Finished(RenderNode::new(RenderNodeInfo::Container(nodes))));
+                }
             }
+
+            Finished(RenderNode::new(Text((&*tstr.borrow()).into())))
         }
         _ => {
             // NodeData doesn't have a Debug impl.
