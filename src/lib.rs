@@ -630,7 +630,7 @@ impl RenderTable {
                 colno += cell.colspan;
             }
         }
-        let size = sizes.iter().map(|s| s.size).sum(); // Include borders?
+        let size = sizes.iter().map(|s| s.size).sum::<usize>() + self.num_columns.saturating_sub(1);
         let min_width = sizes.iter().map(|s| s.min_width).sum::<usize>() + self.num_columns - 1;
         let result = SizeEstimate {
             size,

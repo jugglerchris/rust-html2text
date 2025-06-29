@@ -1456,13 +1456,9 @@ hi
     .take(rpt - 3)
     .collect::<Vec<_>>()
     .concat()
-        + r#"──┬────
-hi│hi  
-  │////
-  │──  
-  │hi  
-  │──  
-──┴────
+        + r#"──┬──┬───
+hi│hi│hi 
+──┴──┴───
 "# + &"──────────\n".repeat(rpt - 3);
     test_html(html.as_bytes(), &result, 10);
 }
