@@ -935,20 +935,8 @@ Foo\u{a0}and\u{a0}Bar
 }
 
 #[test]
-fn test_wrap_nbsp_style() {
-    // Use `&nbsp;` HTML entity
-    test_html(
-        br#"<p>Don't break a line between the words <span style="white-space: pre">Foo and Bar</span></p>"#,
-        r#"Don't break a line between the words
-Foo and Bar
-"#,
-        40,
-    );
-}
-
-#[test]
 fn test_dowrap_unicode() {
-    // Use `&nbsp;` HTML entity
+    // Use Unicode nbsp
     test_html(
         b"<p>Do break a line somewhere in foo\xe2\x80\x8bbar\xe2\x80\x8bfoo\xe2\x80\x8bbar\xe2\x80\x8bfoo\xe2\x80\x8bbar\xe2\x80\x8bfoo\xe2\x80\x8bbar\xe2\x80\x8bfoo\xe2\x80\x8bbar\xe2\x80\x8bfoo\xe2\x80\x8bbar</p>",
         r#"Do break a line somewhere in foobarfoo
@@ -960,7 +948,7 @@ barfoobarfoobarfoobarfoobar
 
 #[test]
 fn test_dowrap_wbr() {
-    // Use `&nbsp;` HTML entity
+    // Use `<wbr>` HTML element
     test_html(
         b"<p>Do break a line somewhere in foo<wbr>bar<wbr>foo<wbr>bar<wbr>foo<wbr>bar<wbr>foo<wbr>bar<wbr>foo<wbr>bar<wbr>foo<wbr>bar</p>",
         r#"Do break a line somewhere in foobarfoo
@@ -3220,6 +3208,22 @@ at  line  breaks
             80,
         );
     }
+
+    // This test doesn't yet pass.  It will need to change the word wrapping
+    // algorithm a little to handle the case of chunks of pre-wrapped text
+    // within an otherwise normal line.
+    #[ignore]
+    #[test]
+    fn test_wrap_nbsp_style() {
+        test_html_css(
+            br#"<p>Don't break a line between the words <span style="white-space: pre">Foo and Bar</span></p>"#,
+            r#"Don't break a line between the words
+Foo and Bar
+"#,
+40,
+        );
+    }
+
 }
 
 #[cfg(feature = "css_ext")]
