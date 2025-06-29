@@ -11,6 +11,12 @@ Possible log types:
 
 ### Latest
 
+### 0.15.2
+
+- [fixed] Fix whitespace-only tables being shown as "─" (thanks fuelen)
+- [fixed] Fix wrapping with non-breaking spaces, zero-width spaces, and
+  some similar equivalents.
+
 ### 0.15.1
 
 - [added] CSS: Support basic attribute selectors (`div[attr="bar"]`).
