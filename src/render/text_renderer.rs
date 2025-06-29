@@ -595,7 +595,10 @@ impl<T: Clone + Eq + Debug + Default> WrappedBlock<T> {
                 self.flush_word(ws_mode)?;
             }
 
-            if !c.always_takes_space() {
+            if c == '\u{200b}' {
+                // This is a zero-width space.  As we're doing the formatting, we can just omit it.
+                continue;
+            } else if !c.always_takes_space() {
                 // We're just building up whitespace.
                 if ws_mode.preserve_whitespace() {
                     match c {
@@ -657,7 +660,7 @@ impl<T: Clone + Eq + Debug + Default> WrappedBlock<T> {
                     }
                 }
             } else {
-                // Non-(collapsible) whitespace character: add to the current word.
+                // Non-whitespace character: add to the current word.
                 if let Some(cwidth) = UnicodeWidthChar::width(c) {
                     self.wordlen += cwidth;
                     // Special case: detect wrapping preformatted line to switch

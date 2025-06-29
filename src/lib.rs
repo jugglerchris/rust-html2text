@@ -73,12 +73,17 @@ trait WhitespaceExt {
 
 impl WhitespaceExt for char {
     fn always_takes_space(&self) -> bool {
-        !self.is_whitespace() || (*self == '\u{00A0}')
+        match *self {
+            '\u{A0}' => true,
+            c if !c.is_whitespace() => true,
+            _ => false,
+        }
     }
 
     fn is_wordbreak_point(&self) -> bool {
         match *self {
             '\u{00A0}' => false,
+            '\u{200b}' => true,
             c if c.is_whitespace() => true,
             _ => false,
         }
