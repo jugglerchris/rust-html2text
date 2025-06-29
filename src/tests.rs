@@ -947,6 +947,30 @@ Foo and Bar
 }
 
 #[test]
+fn test_dowrap_unicode() {
+    // Use `&nbsp;` HTML entity
+    test_html(
+        b"<p>Do break a line somewhere in foo\xe2\x80\x8bbar\xe2\x80\x8bfoo\xe2\x80\x8bbar\xe2\x80\x8bfoo\xe2\x80\x8bbar\xe2\x80\x8bfoo\xe2\x80\x8bbar\xe2\x80\x8bfoo\xe2\x80\x8bbar\xe2\x80\x8bfoo\xe2\x80\x8bbar</p>",
+        r#"Do break a line somewhere in foobarfoo
+barfoobarfoobarfoobarfoobar
+"#,
+        40,
+    );
+}
+
+#[test]
+fn test_dowrap_wbr() {
+    // Use `&nbsp;` HTML entity
+    test_html(
+        b"<p>Do break a line somewhere in foo<wbr>bar<wbr>foo<wbr>bar<wbr>foo<wbr>bar<wbr>foo<wbr>bar<wbr>foo<wbr>bar<wbr>foo<wbr>bar</p>",
+        r#"Do break a line somewhere in foobarfoo
+barfoobarfoobarfoobarfoobar
+"#,
+        40,
+    );
+}
+
+#[test]
 fn test_nested_ul() {
     test_html(
         br"
