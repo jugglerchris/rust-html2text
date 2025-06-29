@@ -3208,10 +3208,6 @@ at  line  breaks
         );
     }
 
-    // This test doesn't yet pass.  It will need to change the word wrapping
-    // algorithm a little to handle the case of chunks of pre-wrapped text
-    // within an otherwise normal line.
-//    #[ignore]
     #[test]
     fn test_wrap_nbsp_style() {
         test_html_css(
