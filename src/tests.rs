@@ -911,6 +911,42 @@ full screen width
 }
 
 #[test]
+fn test_wrap_nbsp_unicode() {
+    // Use nbsp unicode character
+    test_html(
+        b"<p>Don't break a line between the words Foo\xc2\xa0and\xc2\xa0Bar</p>",
+        r#"Don't break a line between the words
+Foo and Bar
+"#,
+        40,
+    );
+}
+
+#[test]
+fn test_wrap_nbsp_ent() {
+    // Use `&nbsp;` HTML entity
+    test_html(
+        br#"<p>Don't break a line between the words Foo&nbsp;and&nbsp;Bar</p>"#,
+        r#"Don't break a line between the words
+Foo and Bar
+"#,
+        40,
+    );
+}
+
+#[test]
+fn test_wrap_nbsp_style() {
+    // Use `&nbsp;` HTML entity
+    test_html(
+        br#"<p>Don't break a line between the words <span style="white-space: pre">Foo and Bar</span></p>"#,
+        r#"Don't break a line between the words
+Foo and Bar
+"#,
+        40,
+    );
+}
+
+#[test]
 fn test_nested_ul() {
     test_html(
         br"
