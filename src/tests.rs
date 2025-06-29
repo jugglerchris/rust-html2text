@@ -1952,6 +1952,25 @@ fn test_table_empty_single_row_empty_cell() {
 }
 
 #[test]
+fn test_table_empty_single_row_ws_cell() {
+    test_html(
+        br##"
+   <table><tr><td> </td></tr></table>
+"##,
+        r#""#,
+        12,
+    );
+    test_html(
+        br##"
+   <table><tr><td>
+</td></tr></table>
+"##,
+        r#""#,
+        12,
+    );
+}
+
+#[test]
 fn test_renderer_zero_width() {
     test_html_err(
         br##"<ul><li><table><tr><td>x</td></tr></table></li></ul>

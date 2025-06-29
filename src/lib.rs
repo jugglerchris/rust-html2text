@@ -60,6 +60,32 @@ mod macros;
 pub mod css;
 pub mod render;
 
+/// Extra methods on chars for dealing with special cases with wrapping and whitespace.
+trait WhitespaceExt {
+    /// Returns whether this character always takes space. This is true for non-whitespace and
+    /// non-breaking spaces.
+    fn always_takes_space(&self) -> bool;
+}
+
+impl WhitespaceExt for char {
+    fn always_takes_space(&self) -> bool {
+        !self.is_whitespace() || (*self == '\u{00A0}')
+    }
+}
+
+/// Extra methods for strings
+trait StrExt {
+    /// Trims leading/trailing whitespace expect for hard spaces.
+    fn trim_collapsible_ws(&self) -> &str;
+}
+
+impl StrExt for str {
+    fn trim_collapsible_ws(&self) -> &str {
+        self.trim_matches(|c: char| !c.always_takes_space())
+    }
+}
+
+
 #[cfg(feature = "css_ext")]
 /// Text style information.
 #[derive(Clone, Debug)]
@@ -727,20 +753,22 @@ impl RenderNode {
                 use unicode_width::UnicodeWidthChar;
                 let mut len = 0;
                 let mut in_whitespace = false;
-                for c in t.trim().chars() {
-                    let is_ws = c.is_whitespace();
-                    if !is_ws {
+                for c in t.trim_collapsible_ws().chars() {
+                    let is_collapsible_ws = !c.always_takes_space();
+                    if !is_collapsible_ws {
                         len += UnicodeWidthChar::width(c).unwrap_or(0);
                         // Count the preceding whitespace as one.
                         if in_whitespace {
                             len += 1;
                         }
                     }
-                    in_whitespace = is_ws;
+                    in_whitespace = is_collapsible_ws;
                 }
-                // Add one for preceding whitespace.
-                if let Some(true) = t.chars().next().map(|c| c.is_whitespace()) {
-                    len += 1;
+                // Add one for preceding whitespace, unless the node is otherwise empty.
+                if let Some(true) = t.chars().next().map(|c| !c.always_takes_space()) {
+                    if len > 0 {
+                        len += 1;
+                    }
                 }
                 if let Img(_, _) = self.info {
                     len += 2;
@@ -2528,7 +2556,6 @@ fn render_table_tree<T: Write, D: TextDecorator>(
             colno += cell.colspan;
         }
     }
-    // TODO: remove empty columns
     let tot_size: usize = col_sizes.iter().map(|est| est.size).sum();
     let min_size: usize = col_sizes.iter().map(|est| est.min_width).sum::<usize>()
         + col_sizes.len().saturating_sub(1);
