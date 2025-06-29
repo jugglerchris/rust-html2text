@@ -911,6 +911,54 @@ full screen width
 }
 
 #[test]
+fn test_wrap_nbsp_unicode() {
+    // Use nbsp unicode character
+    test_html(
+        b"<p>Don't break a line between the words Foo\xc2\xa0and\xc2\xa0Bar</p>",
+        "Don't break a line between the words
+Foo\u{a0}and\u{a0}Bar
+",
+        40,
+    );
+}
+
+#[test]
+fn test_wrap_nbsp_ent() {
+    // Use `&nbsp;` HTML entity
+    test_html(
+        br#"<p>Don't break a line between the words Foo&nbsp;and&nbsp;Bar</p>"#,
+        "Don't break a line between the words
+Foo\u{a0}and\u{a0}Bar
+",
+        40,
+    );
+}
+
+#[test]
+fn test_dowrap_unicode() {
+    // Use Unicode nbsp
+    test_html(
+        b"<p>Do break a line somewhere in foo\xe2\x80\x8bbar\xe2\x80\x8bfoo\xe2\x80\x8bbar\xe2\x80\x8bfoo\xe2\x80\x8bbar\xe2\x80\x8bfoo\xe2\x80\x8bbar\xe2\x80\x8bfoo\xe2\x80\x8bbar\xe2\x80\x8bfoo\xe2\x80\x8bbar</p>",
+        r#"Do break a line somewhere in foobarfoo
+barfoobarfoobarfoobarfoobar
+"#,
+        40,
+    );
+}
+
+#[test]
+fn test_dowrap_wbr() {
+    // Use `<wbr>` HTML element
+    test_html(
+        b"<p>Do break a line somewhere in foo<wbr>bar<wbr>foo<wbr>bar<wbr>foo<wbr>bar<wbr>foo<wbr>bar<wbr>foo<wbr>bar<wbr>foo<wbr>bar</p>",
+        r#"Do break a line somewhere in foobarfoo
+barfoobarfoobarfoobarfoobar
+"#,
+        40,
+    );
+}
+
+#[test]
 fn test_nested_ul() {
     test_html(
         br"
@@ -1407,7 +1455,6 @@ fn test_em_strong() {
 }
 
 #[test]
-#[ignore] // Not yet fixed!
 fn test_nbsp_indent() {
     test_html(
         br##"
@@ -1415,10 +1462,10 @@ fn test_nbsp_indent() {
    <div>&nbsp;Indented</div>
    <div>&nbsp;&nbsp;Indented again</div>
 "##,
-        r#"Top
-Indented
-Indented again
-"#,
+        "Top
+\u{a0}Indented
+\u{a0}\u{a0}Indented again
+",
         21,
     );
 }
@@ -1456,13 +1503,9 @@ hi
     .take(rpt - 3)
     .collect::<Vec<_>>()
     .concat()
-        + r#"──┬────
-hi│hi  
-  │////
-  │──  
-  │hi  
-  │──  
-──┴────
+        + r#"──┬──┬───
+hi│hi│hi 
+──┴──┴───
 "# + &"──────────\n".repeat(rpt - 3);
     test_html(html.as_bytes(), &result, 10);
 }
@@ -1621,7 +1664,7 @@ Bar
 
 #[test]
 fn test_pre_emptyline() {
-    test_html(br#"<pre>X<span id="i"> </span></pre>"#, "X\n", 10);
+    test_html(br#"<pre>X<span id="i"> </span></pre>"#, "X \n", 10);
 }
 
 #[test]
@@ -1952,6 +1995,25 @@ fn test_table_empty_single_row_empty_cell() {
 }
 
 #[test]
+fn test_table_empty_single_row_ws_cell() {
+    test_html(
+        br##"
+   <table><tr><td> </td></tr></table>
+"##,
+        r#""#,
+        12,
+    );
+    test_html(
+        br##"
+   <table><tr><td>
+</td></tr></table>
+"##,
+        r#""#,
+        12,
+    );
+}
+
+#[test]
 fn test_renderer_zero_width() {
     test_html_err(
         br##"<ul><li><table><tr><td>x</td></tr></table></li></ul>
@@ -2002,12 +2064,12 @@ fn test_issue_54_oob() {
     </table>
 </body>
 "##,
-        r#"─┬──────┬─
- │Blah  │ 
+        "─┬──────┬─
+\u{a0}│Blah  │\u{a0}
  │blah  │ 
  │blah  │ 
 ─┴──────┴─
-"#,
+",
         10,
     );
 }
@@ -3143,6 +3205,17 @@ at  line  breaks
             r#"Hello [world]!
 "#,
             80,
+        );
+    }
+
+    #[test]
+    fn test_wrap_nbsp_style() {
+        test_html_css(
+            br#"<p>Don't break a line between the words <span style="white-space: pre">Foo and Bar</span></p>"#,
+            r#"Don't break a line between the words
+Foo and Bar
+"#,
+40,
         );
     }
 }

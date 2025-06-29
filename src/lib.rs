@@ -60,6 +60,48 @@ mod macros;
 pub mod css;
 pub mod render;
 
+/// Extra methods on chars for dealing with special cases with wrapping and whitespace.
+trait WhitespaceExt {
+    /// Returns whether this character always takes space. This is true for non-whitespace and
+    /// non-breaking spaces.
+    fn always_takes_space(&self) -> bool;
+
+    /// Returns true if a word before this character is allowed. This includes most whitespace
+    /// (but not non-breaking space).
+    fn is_wordbreak_point(&self) -> bool;
+}
+
+impl WhitespaceExt for char {
+    fn always_takes_space(&self) -> bool {
+        match *self {
+            '\u{A0}' => true,
+            c if !c.is_whitespace() => true,
+            _ => false,
+        }
+    }
+
+    fn is_wordbreak_point(&self) -> bool {
+        match *self {
+            '\u{00A0}' => false,
+            '\u{200b}' => true,
+            c if c.is_whitespace() => true,
+            _ => false,
+        }
+    }
+}
+
+/// Extra methods for strings
+trait StrExt {
+    /// Trims leading/trailing whitespace expect for hard spaces.
+    fn trim_collapsible_ws(&self) -> &str;
+}
+
+impl StrExt for str {
+    fn trim_collapsible_ws(&self) -> &str {
+        self.trim_matches(|c: char| !c.always_takes_space())
+    }
+}
+
 #[cfg(feature = "css_ext")]
 /// Text style information.
 #[derive(Clone, Debug)]
@@ -604,7 +646,7 @@ impl RenderTable {
                 colno += cell.colspan;
             }
         }
-        let size = sizes.iter().map(|s| s.size).sum(); // Include borders?
+        let size = sizes.iter().map(|s| s.size).sum::<usize>() + self.num_columns.saturating_sub(1);
         let min_width = sizes.iter().map(|s| s.min_width).sum::<usize>() + self.num_columns - 1;
         let result = SizeEstimate {
             size,
@@ -727,20 +769,22 @@ impl RenderNode {
                 use unicode_width::UnicodeWidthChar;
                 let mut len = 0;
                 let mut in_whitespace = false;
-                for c in t.trim().chars() {
-                    let is_ws = c.is_whitespace();
-                    if !is_ws {
+                for c in t.trim_collapsible_ws().chars() {
+                    let is_collapsible_ws = !c.always_takes_space();
+                    if !is_collapsible_ws {
                         len += UnicodeWidthChar::width(c).unwrap_or(0);
                         // Count the preceding whitespace as one.
                         if in_whitespace {
                             len += 1;
                         }
                     }
-                    in_whitespace = is_ws;
+                    in_whitespace = is_collapsible_ws;
                 }
-                // Add one for preceding whitespace.
-                if let Some(true) = t.chars().next().map(|c| c.is_whitespace()) {
-                    len += 1;
+                // Add one for preceding whitespace, unless the node is otherwise empty.
+                if let Some(true) = t.chars().next().map(|c| !c.always_takes_space()) {
+                    if len > 0 {
+                        len += 1;
+                    }
                 }
                 if let Img(_, _) = self.info {
                     len += 2;
@@ -882,27 +926,31 @@ impl RenderNode {
         indent: usize,
         style: &ComputedStyle,
     ) -> std::result::Result<(), std::fmt::Error> {
-        write!(f, "{:indent$}[Style:", "")?;
+        use std::fmt::Write;
+        let mut stylestr = String::new();
 
         #[cfg(feature = "css")]
         {
             if let Some(col) = style.colour.val() {
-                write!(f, " colour={:?}", col)?;
+                write!(&mut stylestr, " colour={:?}", col)?;
             }
             if let Some(col) = style.bg_colour.val() {
-                write!(f, " bg_colour={:?}", col)?;
+                write!(&mut stylestr, " bg_colour={:?}", col)?;
             }
             if let Some(val) = style.display.val() {
-                write!(f, " disp={:?}", val)?;
+                write!(&mut stylestr, " disp={:?}", val)?;
             }
         }
         if let Some(ws) = style.white_space.val() {
-            write!(f, " white_space={:?}", ws)?;
+            write!(&mut stylestr, " white_space={:?}", ws)?;
         }
         if style.internal_pre {
-            write!(f, " internal_pre")?;
+            write!(&mut stylestr, " internal_pre")?;
         }
-        writeln!(f)
+        if !stylestr.is_empty() {
+            writeln!(f, "{:indent$}[Style:{stylestr}", "")?;
+        }
+        Ok(())
     }
     fn write_self(
         &self,
@@ -1921,6 +1969,9 @@ fn process_dom_node<T: Write>(
                     Some(RenderNode::new_styled(Block(cs), computed))
                 }),
                 expanded_name!(html "br") => Finished(RenderNode::new_styled(Break, computed)),
+                expanded_name!(html "wbr") => {
+                    Finished(RenderNode::new_styled(Text("\u{200b}".into()), computed))
+                }
                 expanded_name!(html "table") => table_to_render_tree(input, computed, err_out),
                 expanded_name!(html "thead") | expanded_name!(html "tbody") => {
                     tbody_to_render_tree(input, computed, err_out)
@@ -2524,7 +2575,6 @@ fn render_table_tree<T: Write, D: TextDecorator>(
             colno += cell.colspan;
         }
     }
-    // TODO: remove empty columns
     let tot_size: usize = col_sizes.iter().map(|est| est.size).sum();
     let min_size: usize = col_sizes.iter().map(|est| est.min_width).sum::<usize>()
         + col_sizes.len().saturating_sub(1);
