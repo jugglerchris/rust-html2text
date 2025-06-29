@@ -3223,7 +3223,6 @@ Foo and Bar
 40,
         );
     }
-
 }
 
 #[cfg(feature = "css_ext")]

@@ -102,7 +102,6 @@ impl StrExt for str {
     }
 }
 
-
 #[cfg(feature = "css_ext")]
 /// Text style information.
 #[derive(Clone, Debug)]
@@ -1970,6 +1969,9 @@ fn process_dom_node<T: Write>(
                     Some(RenderNode::new_styled(Block(cs), computed))
                 }),
                 expanded_name!(html "br") => Finished(RenderNode::new_styled(Break, computed)),
+                expanded_name!(html "wbr") => {
+                    Finished(RenderNode::new_styled(Text("\u{200b}".into()), computed))
+                }
                 expanded_name!(html "table") => table_to_render_tree(input, computed, err_out),
                 expanded_name!(html "thead") | expanded_name!(html "tbody") => {
                     tbody_to_render_tree(input, computed, err_out)
