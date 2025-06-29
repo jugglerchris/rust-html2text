@@ -1455,7 +1455,6 @@ fn test_em_strong() {
 }
 
 #[test]
-#[ignore] // Not yet fixed!
 fn test_nbsp_indent() {
     test_html(
         br##"
@@ -1463,10 +1462,10 @@ fn test_nbsp_indent() {
    <div>&nbsp;Indented</div>
    <div>&nbsp;&nbsp;Indented again</div>
 "##,
-        r#"Top
-Indented
-Indented again
-"#,
+        "Top
+\u{a0}Indented
+\u{a0}\u{a0}Indented again
+",
         21,
     );
 }
