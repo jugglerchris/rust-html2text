@@ -5,6 +5,7 @@
 
 use crate::Colour;
 use crate::WhiteSpace;
+use crate::WhitespaceExt as _;
 
 use super::Renderer;
 use super::Result;
@@ -590,11 +591,11 @@ impl<T: Clone + Eq + Debug + Default> WrappedBlock<T> {
                 self.wslen,
                 self.line
             );
-            if c.is_whitespace() && self.wordlen > 0 {
+            if c.is_wordbreak_point() && self.wordlen > 0 {
                 self.flush_word(ws_mode)?;
             }
 
-            if c.is_whitespace() {
+            if !c.always_takes_space() {
                 // We're just building up whitespace.
                 if ws_mode.preserve_whitespace() {
                     match c {
@@ -656,7 +657,7 @@ impl<T: Clone + Eq + Debug + Default> WrappedBlock<T> {
                     }
                 }
             } else {
-                // Non-whitespace character: add to the current word.
+                // Non-(collapsible) whitespace character: add to the current word.
                 if let Some(cwidth) = UnicodeWidthChar::width(c) {
                     self.wordlen += cwidth;
                     // Special case: detect wrapping preformatted line to switch

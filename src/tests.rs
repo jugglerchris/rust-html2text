@@ -915,9 +915,9 @@ fn test_wrap_nbsp_unicode() {
     // Use nbsp unicode character
     test_html(
         b"<p>Don't break a line between the words Foo\xc2\xa0and\xc2\xa0Bar</p>",
-        r#"Don't break a line between the words
-Foo and Bar
-"#,
+        "Don't break a line between the words
+Foo\u{a0}and\u{a0}Bar
+",
         40,
     );
 }
@@ -927,9 +927,9 @@ fn test_wrap_nbsp_ent() {
     // Use `&nbsp;` HTML entity
     test_html(
         br#"<p>Don't break a line between the words Foo&nbsp;and&nbsp;Bar</p>"#,
-        r#"Don't break a line between the words
-Foo and Bar
-"#,
+        "Don't break a line between the words
+Foo\u{a0}and\u{a0}Bar
+",
         40,
     );
 }
@@ -2077,12 +2077,12 @@ fn test_issue_54_oob() {
     </table>
 </body>
 "##,
-        r#"─┬──────┬─
- │Blah  │ 
+        "─┬──────┬─
+\u{a0}│Blah  │\u{a0}
  │blah  │ 
  │blah  │ 
 ─┴──────┴─
-"#,
+",
         10,
     );
 }

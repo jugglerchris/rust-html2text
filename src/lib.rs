@@ -65,11 +65,23 @@ trait WhitespaceExt {
     /// Returns whether this character always takes space. This is true for non-whitespace and
     /// non-breaking spaces.
     fn always_takes_space(&self) -> bool;
+
+    /// Returns true if a word before this character is allowed. This includes most whitespace
+    /// (but not non-breaking space).
+    fn is_wordbreak_point(&self) -> bool;
 }
 
 impl WhitespaceExt for char {
     fn always_takes_space(&self) -> bool {
         !self.is_whitespace() || (*self == '\u{00A0}')
+    }
+
+    fn is_wordbreak_point(&self) -> bool {
+        match *self {
+            '\u{00A0}' => false,
+            c if c.is_whitespace() => true,
+            _ => false,
+        }
     }
 }
 
