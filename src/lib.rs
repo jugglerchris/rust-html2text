@@ -882,27 +882,31 @@ impl RenderNode {
         indent: usize,
         style: &ComputedStyle,
     ) -> std::result::Result<(), std::fmt::Error> {
-        write!(f, "{:indent$}[Style:", "")?;
+        use std::fmt::Write;
+        let mut stylestr = String::new();
 
         #[cfg(feature = "css")]
         {
             if let Some(col) = style.colour.val() {
-                write!(f, " colour={:?}", col)?;
+                write!(&mut stylestr, " colour={:?}", col)?;
             }
             if let Some(col) = style.bg_colour.val() {
-                write!(f, " bg_colour={:?}", col)?;
+                write!(&mut stylestr, " bg_colour={:?}", col)?;
             }
             if let Some(val) = style.display.val() {
-                write!(f, " disp={:?}", val)?;
+                write!(&mut stylestr, " disp={:?}", val)?;
             }
         }
         if let Some(ws) = style.white_space.val() {
-            write!(f, " white_space={:?}", ws)?;
+            write!(&mut stylestr, " white_space={:?}", ws)?;
         }
         if style.internal_pre {
-            write!(f, " internal_pre")?;
+            write!(&mut stylestr, " internal_pre")?;
         }
-        writeln!(f)
+        if !stylestr.is_empty() {
+            writeln!(f, "{:indent$}[Style:{stylestr}", "")?;
+        }
+        Ok(())
     }
     fn write_self(
         &self,
