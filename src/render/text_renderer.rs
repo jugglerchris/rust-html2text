@@ -581,6 +581,8 @@ impl<T: Clone + Eq + Debug + Default> WrappedBlock<T> {
         // 2a. If the word gets too long for the line
         // 2b. If we get to more whitespace, output the first whitespace and the word
         //     and continue.
+        //
+        // In "pre" mode, we treat whitespace other than newlines as word characters.
         let mut tag = if self.pre_wrapped { wrap_tag } else { main_tag };
         for c in text.chars() {
             html_trace!(
@@ -591,7 +593,7 @@ impl<T: Clone + Eq + Debug + Default> WrappedBlock<T> {
                 self.wslen,
                 self.line
             );
-            if c.is_wordbreak_point() && self.wordlen > 0 {
+            if c.is_wordbreak_point() && self.wordlen > 0 && ws_mode != WhiteSpace::Pre {
                 self.flush_word(ws_mode)?;
             }
 
@@ -599,12 +601,10 @@ impl<T: Clone + Eq + Debug + Default> WrappedBlock<T> {
                 // This is a zero-width space.  As we're doing the formatting, we can just omit it.
                 continue;
             } else if !c.always_takes_space() {
-                // We're just building up whitespace.
                 if ws_mode.preserve_whitespace() {
                     match c {
                         '\n' => {
-                            // End of line.  We have no words here, so just finish
-                            // the line.
+                            self.flush_word(ws_mode)?;
                             self.force_flush_line();
                             self.wslen = 0;
                             self.spacetag = None;
@@ -613,8 +613,11 @@ impl<T: Clone + Eq + Debug + Default> WrappedBlock<T> {
                             tag = main_tag;
                         }
                         '\t' => {
+                            // Flush the word.
+                            self.flush_word(ws_mode)?;
+
                             let tab_stop = 8;
-                            let mut pos = self.line.len + self.wslen;
+                            let mut pos = self.line.len + self.wordlen + self.wslen;
                             let mut at_least_one_space = false;
                             while pos % tab_stop != 0 || !at_least_one_space {
                                 if pos >= self.width {
@@ -628,7 +631,13 @@ impl<T: Clone + Eq + Debug + Default> WrappedBlock<T> {
                             }
                         }
                         _ => {
-                            if let Some(cwidth) = UnicodeWidthChar::width(c) {
+                            if let Some(_) = UnicodeWidthChar::width(c) {
+                                // Add the character, unless we're in prewrap mode and character
+                                // is leading whitespace.
+                                if !(ws_mode == WhiteSpace::PreWrap && self.wordlen == 0 && self.line.len == 0) {
+                                    self.word.push_char(c, tag);
+                                }
+                                /*
                                 if (self.line.len + self.wslen + cwidth) > self.width {
                                     // In any case we can discard whitespace we've
                                     // built up, as it will be at the end of the line.
@@ -648,6 +657,7 @@ impl<T: Clone + Eq + Debug + Default> WrappedBlock<T> {
                                     self.spacetag = Some(tag.clone());
                                     self.wslen += cwidth;
                                 }
+                                */
                             }
                         }
                     }

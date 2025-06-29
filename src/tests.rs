@@ -1664,7 +1664,7 @@ Bar
 
 #[test]
 fn test_pre_emptyline() {
-    test_html(br#"<pre>X<span id="i"> </span></pre>"#, "X\n", 10);
+    test_html(br#"<pre>X<span id="i"> </span></pre>"#, "X \n", 10);
 }
 
 #[test]
@@ -3211,7 +3211,7 @@ at  line  breaks
     // This test doesn't yet pass.  It will need to change the word wrapping
     // algorithm a little to handle the case of chunks of pre-wrapped text
     // within an otherwise normal line.
-    #[ignore]
+//    #[ignore]
     #[test]
     fn test_wrap_nbsp_style() {
         test_html_css(
