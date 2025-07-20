@@ -9,8 +9,7 @@ use nom::{
     combinator::{fail, map, opt, recognize},
     error::ErrorKind,
     multi::{many0, many1, separated_list0},
-    AsChar, IResult,
-    Parser
+    AsChar, IResult, Parser,
 };
 
 #[derive(Debug, PartialEq)]
@@ -426,7 +425,8 @@ pub(crate) fn parse_declaration(text: &str) -> IResult<&str, Option<Declaration>
         tag(":"),
         skip_optional_whitespace,
         parse_value,
-    ).parse(text)?;
+    )
+        .parse(text)?;
     let decl = match prop.0.as_str() {
         "background-color" => {
             if let Ok(value) = parse_color(&value.tokens) {
@@ -623,7 +623,8 @@ fn parse_number(text: &str) -> IResult<&str, f32> {
     let (rest, (sign, val)) = (
         opt(alt((tag("-"), tag("+")))),
         alt((parse_integer, parse_decimal)),
-    ).parse(rest)?;
+    )
+        .parse(rest)?;
     Ok((
         rest,
         match sign {
@@ -824,11 +825,9 @@ fn parse_content(value: &RawValue) -> Result<String, nom::Err<nom::error::Error<
 }
 
 pub(crate) fn parse_rules(text: &str) -> IResult<&str, Vec<Declaration>> {
-    separated_list0(
-        (tag(";"), skip_optional_whitespace),
-        parse_declaration,
-    ).parse(text)
-    .map(|(rest, v)| (rest, v.into_iter().flatten().collect()))
+    separated_list0((tag(";"), skip_optional_whitespace), parse_declaration)
+        .parse(text)
+        .map(|(rest, v)| (rest, v.into_iter().flatten().collect()))
 }
 
 fn parse_class(text: &str) -> IResult<&str, SelectorComponent> {
@@ -868,7 +867,8 @@ fn parse_attr(text: &str) -> IResult<&str, SelectorComponent> {
                 op: super::AttrOperator::Equal,
             },
         ),
-    )).parse(text)
+    ))
+    .parse(text)
 }
 
 #[derive(Eq, PartialEq, Copy, Clone)]
@@ -939,7 +939,8 @@ fn parse_nth_child_args(text: &str) -> IResult<&str, SelectorComponent> {
             let b = <i32 as FromStr>::from_str(b_val).unwrap() * b_sign.val();
             (0, b)
         }),
-    )).parse(rest)?;
+    ))
+    .parse(rest)?;
 
     let (rest, _) = (skip_optional_whitespace, tag(")")).parse(rest)?;
 
@@ -989,7 +990,8 @@ fn parse_simple_selector_component(text: &str) -> IResult<&str, SelectorComponen
         parse_hash,
         map(parse_ident, SelectorComponent::Element),
         parse_pseudo_class,
-    )).parse(text)
+    ))
+    .parse(text)
 }
 
 fn parse_selector_with_element(text: &str) -> IResult<&str, Vec<SelectorComponent>> {
@@ -1008,7 +1010,8 @@ pub(crate) fn parse_pseudo_element(text: &str) -> IResult<&str, Option<PseudoEle
     opt(alt((
         map(tag("::before"), |_| PseudoElement::Before),
         map(tag("::after"), |_| PseudoElement::After),
-    ))).parse(text)
+    )))
+    .parse(text)
 }
 
 pub(crate) fn parse_selector(text: &str) -> IResult<&str, Selector> {
@@ -1016,7 +1019,8 @@ pub(crate) fn parse_selector(text: &str) -> IResult<&str, Selector> {
         parse_selector_with_element,
         parse_selector_without_element,
         fail(),
-    )).parse(text)?;
+    ))
+    .parse(text)?;
     // Reverse.  Also remove any leading/trailing CombDescendant, as leading/trailing whitespace
     // shouldn't count as a descendent combinator.
     if let Some(&SelectorComponent::CombDescendant) = components.last() {
@@ -1051,7 +1055,8 @@ fn parse_ruleset(text: &str) -> IResult<&str, RuleSet> {
         skip_optional_whitespace,
         tag("}"),
         skip_optional_whitespace,
-    ).parse(rest)?;
+    )
+        .parse(rest)?;
     Ok((
         rest,
         RuleSet {
@@ -1132,7 +1137,8 @@ fn parse_at_rule(text: &str) -> IResult<&str, ()> {
         tag("@"),
         skip_optional_whitespace,
         parse_ident,
-    ).parse(text)?;
+    )
+        .parse(text)?;
 
     skip_to_end_of_statement(rest)
 }
