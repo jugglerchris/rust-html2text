@@ -115,6 +115,17 @@ impl<T: Debug + PartialEq> TaggedString<T> {
     }
 }
 
+impl<T> TaggedString<T> {
+    /// Converts to a TaggedString with a different tag type, given a
+    /// function that transforms the tag.
+    pub fn map_tag<U>(self, f: &impl Fn(T) -> U) -> TaggedString<U> {
+        TaggedString {
+            s: self.s,
+            tag: f(self.tag),
+        }
+    }
+}
+
 /// An element of a line of tagged text: either a TaggedString or a
 /// marker appearing in between document characters.
 #[derive(Clone, Debug, PartialEq)]
@@ -133,6 +144,15 @@ impl<T> TaggedLineElement<T> {
         match self {
             TaggedLineElement::Str(_) => true,
             TaggedLineElement::FragmentStart(_) => false,
+        }
+    }
+
+    /// Converts to a TaggedLineElement with a different tag type, given a
+    /// function that transforms the tag.
+    pub fn map_tag<U>(self, f: &impl Fn(T) -> U) -> TaggedLineElement<U> {
+        match self {
+            TaggedLineElement::Str(ts) => TaggedLineElement::Str(ts.map_tag(f)),
+            TaggedLineElement::FragmentStart(s) => TaggedLineElement::FragmentStart(s.clone()),
         }
     }
 }
@@ -271,6 +291,15 @@ impl<T: Debug + Eq + PartialEq + Clone + Default> TaggedLine<T> {
         }
     }
 
+    /// Converts to a TaggedLine with a different tag type, given a
+    /// function that transforms the tag.
+    pub fn map_tag<U>(self, f: &impl Fn(T) -> U) -> TaggedLine<U> {
+        TaggedLine {
+            v: self.v.into_iter().map(|e| e.map_tag(f)).collect(),
+            len: self.len,
+        }
+    }
+
     /// Remove the contained items
     fn remove_items(&mut self) -> impl Iterator<Item = TaggedLineElement<T>> {
         self.len = 0;
@@ -394,15 +423,20 @@ impl<T> IntoIterator for TaggedLine<T> {
     }
 }
 
+/// A type that extends an arbitrary tag with a WhiteSpace, and
+/// provides a conversion back to the original tag.
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+struct WithWhiteSpace<T>(T, WhiteSpace);
+
 /// A type to build up wrapped text, allowing extra metadata for
 /// spans.
 #[derive(Debug, Clone)]
 struct WrappedBlock<T> {
     width: usize,
     text: Vec<TaggedLine<T>>,
-    line: TaggedLine<T>,
-    spacetag: Option<T>, // Tag for the whitespace before the current word
-    word: TaggedLine<T>, // The current word (with no whitespace).
+    line: TaggedLine<WithWhiteSpace<T>>,
+    spacetag: Option<WithWhiteSpace<T>>, // Tag for the whitespace before the current word
+    word: TaggedLine<WithWhiteSpace<T>>, // The current word
     wordlen: usize,
     wslen: usize,
     pre_wrapped: bool, // If true, we've been forced to wrap a <pre> line.
@@ -433,7 +467,7 @@ impl<T: Clone + Eq + Debug + Default> WrappedBlock<T> {
         }
     }
 
-    fn flush_word(&mut self, ws_mode: WhiteSpace) -> Result<()> {
+    fn flush_word(&mut self) -> Result<()> {
         use self::TaggedLineElement::Str;
 
         /* Finish the word. */
@@ -444,6 +478,15 @@ impl<T: Clone + Eq + Debug + Default> WrappedBlock<T> {
         );
 
         if !self.word.is_empty() {
+            let ws_mode = self
+                .word
+                .v
+                .iter()
+                .find_map(|e| match e {
+                    TaggedLineElement::Str(ts) => Some(ts.tag.1),
+                    _ => None,
+                })
+                .unwrap_or(WhiteSpace::Normal);
             self.pre_wrapped = false;
             let space_in_line = self.width - self.line.len;
             let space_needed = self.wslen + self.wordlen;
@@ -461,8 +504,8 @@ impl<T: Clone + Eq + Debug + Default> WrappedBlock<T> {
                 html_trace!("linelen increased by wordlen to {}", self.line.len);
             } else {
                 html_trace!("Not enough space");
-                match ws_mode {
-                    WhiteSpace::Pre => {
+                match self.spacetag {
+                    Some(WithWhiteSpace(_, WhiteSpace::Pre)) => {
                         // We're not word-wrapping, so output any portion that still
                         // fits.
                         if self.wslen >= space_in_line {
@@ -474,12 +517,12 @@ impl<T: Clone + Eq + Debug + Default> WrappedBlock<T> {
                             self.wslen = 0;
                         }
                     }
-                    WhiteSpace::Normal => {
+                    Some(WithWhiteSpace(_, WhiteSpace::Normal)) => {
                         // We're word-wrapping, so discard any whitespace.
                         self.spacetag = None;
                         self.wslen = 0;
                     }
-                    WhiteSpace::PreWrap => {
+                    Some(WithWhiteSpace(_, WhiteSpace::PreWrap)) => {
                         // Preserving whitespace except at wrap points.
                         self.spacetag = None;
                         self.wslen = 0;
@@ -489,6 +532,7 @@ impl<T: Clone + Eq + Debug + Default> WrappedBlock<T> {
                         // And remove spaces at the end of the line.
                         self.line.remove_trailing_spaces();
                     }
+                    None => (),
                 }
                 /* Start a new line */
                 self.flush_line();
@@ -589,13 +633,17 @@ impl<T: Clone + Eq + Debug + Default> WrappedBlock<T> {
         let mut tmp_line = TaggedLine::new();
         mem::swap(&mut tmp_line, &mut self.line);
         if self.pad_blocks {
-            tmp_line.pad_to(self.width, &self.default_tag);
+            tmp_line.pad_to(
+                self.width,
+                &WithWhiteSpace(self.default_tag.clone(), WhiteSpace::Normal),
+            );
         }
-        self.text.push(tmp_line);
+        self.text
+            .push(tmp_line.map_tag(&|ww: WithWhiteSpace<T>| ww.0));
     }
 
     fn flush(&mut self) -> Result<()> {
-        self.flush_word(WhiteSpace::Normal)?;
+        self.flush_word()?;
         self.flush_line();
         Ok(())
     }
@@ -620,7 +668,11 @@ impl<T: Clone + Eq + Debug + Default> WrappedBlock<T> {
     /// If there are any pending fragment starts, return them.
     pub fn take_trailing_fragments(&mut self) -> Vec<TaggedLineElement<T>> {
         if self.word.is_empty() {
-            std::mem::take(&mut self.word).v
+            std::mem::take(&mut self.word)
+                .v
+                .into_iter()
+                .map(|e| e.map_tag(&|ww: WithWhiteSpace<T>| ww.0))
+                .collect()
         } else {
             Default::default()
         }
@@ -662,7 +714,7 @@ impl<T: Clone + Eq + Debug + Default> WrappedBlock<T> {
                 self.line
             );
             if c.is_wordbreak_point() && self.wordlen > 0 && ws_mode != WhiteSpace::Pre {
-                self.flush_word(ws_mode)?;
+                self.flush_word()?;
             }
 
             if c == '\u{200b}' {
@@ -672,7 +724,7 @@ impl<T: Clone + Eq + Debug + Default> WrappedBlock<T> {
                 if ws_mode.preserve_whitespace() {
                     match c {
                         '\n' => {
-                            self.flush_word(ws_mode)?;
+                            self.flush_word()?;
                             self.force_flush_line();
                             self.wslen = 0;
                             self.spacetag = None;
@@ -682,7 +734,7 @@ impl<T: Clone + Eq + Debug + Default> WrappedBlock<T> {
                         }
                         '\t' => {
                             // Flush the word.
-                            self.flush_word(ws_mode)?;
+                            self.flush_word()?;
 
                             let tab_stop = 8;
                             let mut pos = self.line.len + self.wordlen + self.wslen;
@@ -692,7 +744,8 @@ impl<T: Clone + Eq + Debug + Default> WrappedBlock<T> {
                                     self.flush_line();
                                     pos = 0;
                                 } else {
-                                    self.line.push_char(' ', tag);
+                                    self.line
+                                        .push_char(' ', &WithWhiteSpace(tag.clone(), ws_mode));
                                     pos += 1;
                                     at_least_one_space = true;
                                 }
@@ -700,10 +753,15 @@ impl<T: Clone + Eq + Debug + Default> WrappedBlock<T> {
                         }
                         _ => {
                             if let Some(cwidth) = UnicodeWidthChar::width(c) {
-                                // Add the character, unless we're in prewrap mode and character
-                                // is leading whitespace.
-                                self.word.push_char(c, tag);
-                                self.wordlen += cwidth;
+                                if self.word.is_empty() && char::is_whitespace(c) {
+                                    self.wslen += cwidth;
+                                    self.spacetag = Some(WithWhiteSpace(tag.clone(), ws_mode));
+                                } else {
+                                    // Add the character.
+                                    self.word
+                                        .push_char(c, &WithWhiteSpace(tag.clone(), ws_mode));
+                                    self.wordlen += cwidth;
+                                }
                             }
                         }
                     }
@@ -711,7 +769,7 @@ impl<T: Clone + Eq + Debug + Default> WrappedBlock<T> {
                     // If not preserving whitespace, everything is collapsed,
                     // and the line won't start with whitespace.
                     if self.line.len > 0 && self.wslen == 0 {
-                        self.spacetag = Some(tag.clone());
+                        self.spacetag = Some(WithWhiteSpace(tag.clone(), ws_mode));
                         self.wslen = 1;
                     }
                 }
@@ -727,7 +785,8 @@ impl<T: Clone + Eq + Debug + Default> WrappedBlock<T> {
                         self.pre_wrapped = true;
                         tag = wrap_tag;
                     }
-                    self.word.push_char(c, tag);
+                    self.word
+                        .push_char(c, &WithWhiteSpace(tag.clone(), ws_mode));
                 }
             }
         }
@@ -735,7 +794,8 @@ impl<T: Clone + Eq + Debug + Default> WrappedBlock<T> {
     }
 
     fn add_element(&mut self, elt: TaggedLineElement<T>) {
-        self.word.push(elt);
+        self.word
+            .push(elt.map_tag(&|t| WithWhiteSpace(t, WhiteSpace::Normal))); // FIXME
     }
 
     fn text_len(&self) -> usize {

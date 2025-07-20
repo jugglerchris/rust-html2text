@@ -3061,6 +3061,19 @@ at  line  breaks
                     .unwrap()
             },
         );
+
+        test_html_conf(
+            br#"<p class="prewrap">The last line shouldn't have a space at the start</p>"#,
+            r#"The last line shouldn't
+have a space at the
+start
+"#,
+            23,
+            |conf| {
+                conf.add_css(r#".prewrap { white-space: pre-wrap; }"#)
+                    .unwrap()
+            },
+        );
     }
 
     #[test]
