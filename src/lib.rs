@@ -189,6 +189,7 @@ impl WhiteSpace {
             WhiteSpace::Pre | WhiteSpace::PreWrap => true,
         }
     }
+    #[allow(unused)]
     pub fn do_wrap(&self) -> bool {
         match self {
             WhiteSpace::Normal | WhiteSpace::PreWrap => true,

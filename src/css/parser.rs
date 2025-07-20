@@ -9,8 +9,8 @@ use nom::{
     combinator::{fail, map, opt, recognize},
     error::ErrorKind,
     multi::{many0, many1, separated_list0},
-    sequence::tuple,
     AsChar, IResult,
+    Parser
 };
 
 #[derive(Debug, PartialEq)]
@@ -190,15 +190,15 @@ pub(crate) struct PropertyName(String);
 fn match_comment(text: &str) -> IResult<&str, ()> {
     let (rest, _) = tag("/*")(text)?;
     let (rest, _) = take_until("*/")(rest)?;
-    map(tag("*/"), |_t| ())(rest)
+    map(tag("*/"), |_t| ()).parse(rest)
 }
 
 fn match_whitespace_item(text: &str) -> IResult<&str, ()> {
-    alt((map(complete::one_of(" \t\r\n\x0c"), |_c| ()), match_comment))(text)
+    alt((map(complete::one_of(" \t\r\n\x0c"), |_c| ()), match_comment)).parse(text)
 }
 
 fn skip_optional_whitespace(text: &str) -> IResult<&str, ()> {
-    map(many0(match_whitespace_item), |_res| ())(text)
+    map(many0(match_whitespace_item), |_res| ()).parse(text)
 }
 
 fn nmstart_char(s: &str) -> IResult<&str, char> {
@@ -208,7 +208,7 @@ fn nmstart_char(s: &str) -> IResult<&str, char> {
             '_' | 'a'..='z' | 'A'..='Z' => Ok((iter.as_str(), c.to_ascii_lowercase())),
             _ => IResult::Err(nom::Err::Error(nom::error::Error::new(s, ErrorKind::Fail))),
         },
-        None => fail(s),
+        None => fail().parse(s),
     }
 }
 
@@ -229,7 +229,7 @@ fn nmchar_char(s: &str) -> IResult<&str, char> {
             }
             _ => IResult::Err(nom::Err::Error(nom::error::Error::new(s, ErrorKind::Fail))),
         },
-        None => fail(s),
+        None => fail().parse(s),
     }
 }
 
@@ -265,17 +265,17 @@ fn ident_escape(s: &str) -> IResult<&str, char> {
 }
 
 fn nmstart(text: &str) -> IResult<&str, char> {
-    alt((nmstart_char, ident_escape))(text)
+    alt((nmstart_char, ident_escape)).parse(text)
 }
 
 fn nmchar(text: &str) -> IResult<&str, char> {
-    alt((nmchar_char, ident_escape))(text)
+    alt((nmchar_char, ident_escape)).parse(text)
 }
 
 fn parse_ident(text: &str) -> IResult<&str, String> {
     let (rest, _) = skip_optional_whitespace(text)?;
     let mut name = Vec::new();
-    let (rest, dash) = opt(tag("-"))(rest)?;
+    let (rest, dash) = opt(tag("-")).parse(rest)?;
     if dash.is_some() {
         name.push('-');
     }
@@ -283,7 +283,7 @@ fn parse_ident(text: &str) -> IResult<&str, String> {
     let (rest, start) = nmstart(rest)?;
     name.push(start);
 
-    let (rest, chars) = many0(nmchar)(rest)?;
+    let (rest, chars) = many0(nmchar).parse(rest)?;
     name.extend(chars);
     Ok((rest, name.into_iter().collect()))
 }
@@ -291,7 +291,7 @@ fn parse_ident(text: &str) -> IResult<&str, String> {
 fn parse_identstring(text: &str) -> IResult<&str, String> {
     let (rest, _) = skip_optional_whitespace(text)?;
 
-    let (rest, name) = many1(nmchar)(rest)?;
+    let (rest, name) = many1(nmchar).parse(rest)?;
     Ok((rest, name.into_iter().collect()))
 }
 
@@ -304,7 +304,7 @@ fn parse_token(text: &str) -> IResult<&str, Token> {
     let (rest, _) = skip_optional_whitespace(text)?;
     let mut chars = rest.chars();
     match chars.next() {
-        None => fail(rest),
+        None => fail().parse(rest),
         Some('"') | Some('\'') => parse_string_token(rest),
         Some('#') => match parse_identstring(&rest[1..]) {
             Ok((rest, id)) => Ok((rest, Token::Hash(id.into()))),
@@ -373,14 +373,14 @@ fn parse_token(text: &str) -> IResult<&str, Token> {
 fn parse_token_not_semicolon(text: &str) -> IResult<&str, Token> {
     let (rest, token) = parse_token(text)?;
     if token == Token::Semicolon {
-        fail(text)
+        fail().parse(text)
     } else {
         Ok((rest, token))
     }
 }
 
 fn parse_value(text: &str) -> IResult<&str, RawValue> {
-    let (rest, mut tokens) = many0(parse_token_not_semicolon)(text)?;
+    let (rest, mut tokens) = many0(parse_token_not_semicolon).parse(text)?;
     let mut important = false;
     if let [.., Token::Delim('!'), Token::Ident(x)] = &tokens[..] {
         if x == "important" {
@@ -420,13 +420,13 @@ fn parse_faulty_color(
 }
 
 pub(crate) fn parse_declaration(text: &str) -> IResult<&str, Option<Declaration>> {
-    let (rest, (prop, _ws1, _colon, _ws2, value)) = tuple((
+    let (rest, (prop, _ws1, _colon, _ws2, value)) = (
         parse_property_name,
         skip_optional_whitespace,
         tag(":"),
         skip_optional_whitespace,
         parse_value,
-    ))(text)?;
+    ).parse(text)?;
     let decl = match prop.0.as_str() {
         "background-color" => {
             if let Ok(value) = parse_color(&value.tokens) {
@@ -614,16 +614,16 @@ fn parse_integer(text: &str) -> IResult<&str, f32> {
 }
 
 fn parse_decimal(text: &str) -> IResult<&str, f32> {
-    let (rest, valstr) = recognize(tuple((digit0, tag("."), digit1)))(text)?;
+    let (rest, valstr) = recognize((digit0, tag("."), digit1)).parse(text)?;
     Ok((rest, <f32 as FromStr>::from_str(valstr).unwrap()))
 }
 
 fn parse_number(text: &str) -> IResult<&str, f32> {
     let (rest, _) = skip_optional_whitespace(text)?;
-    let (rest, (sign, val)) = tuple((
+    let (rest, (sign, val)) = (
         opt(alt((tag("-"), tag("+")))),
         alt((parse_integer, parse_decimal)),
-    ))(rest)?;
+    ).parse(rest)?;
     Ok((
         rest,
         match sign {
@@ -635,7 +635,7 @@ fn parse_number(text: &str) -> IResult<&str, f32> {
 }
 
 fn parse_numeric_token(text: &str) -> IResult<&str, Token> {
-    let (rest, num) = recognize(parse_number)(text)?;
+    let (rest, num) = recognize(parse_number).parse(text)?;
     let match_pct: IResult<_, _> = tag("%")(rest);
     if let Ok((rest_p, _)) = match_pct {
         return Ok((rest_p, Token::Percentage(num.into())));
@@ -661,7 +661,7 @@ fn parse_string_token(text: &str) -> IResult<&str, Token> {
     let mut s = String::new();
     let end_char = chars.next().unwrap().1;
     if !(end_char == '"' || end_char == '\'') {
-        return fail(text);
+        return fail().parse(text);
     }
 
     loop {
@@ -699,7 +699,7 @@ fn parse_quoted_string(text: &str) -> IResult<&str, String> {
 
     match result {
         Token::String(s) => Ok((rest, s.to_string())),
-        _ => fail("Invalid string"),
+        _ => fail().parse("Invalid string"),
     }
 }
 
@@ -708,7 +708,7 @@ fn parse_unit(text: &str) -> IResult<&str, LengthUnit> {
     let (rest, word) = alpha0(text)?;
     Ok((rest, match word {
         _ => {
-            return fail(text);
+            return fail().parse(text);
         }
     }))
 }
@@ -825,9 +825,9 @@ fn parse_content(value: &RawValue) -> Result<String, nom::Err<nom::error::Error<
 
 pub(crate) fn parse_rules(text: &str) -> IResult<&str, Vec<Declaration>> {
     separated_list0(
-        tuple((tag(";"), skip_optional_whitespace)),
+        (tag(";"), skip_optional_whitespace),
         parse_declaration,
-    )(text)
+    ).parse(text)
     .map(|(rest, v)| (rest, v.into_iter().flatten().collect()))
 }
 
@@ -839,7 +839,7 @@ fn parse_class(text: &str) -> IResult<&str, SelectorComponent> {
 
 fn parse_attr(text: &str) -> IResult<&str, SelectorComponent> {
     alt((
-        map(tuple((tag("["), parse_ident, tag("]"))), |(_, name, _)| {
+        map((tag("["), parse_ident, tag("]")), |(_, name, _)| {
             SelectorComponent::Attr {
                 name,
                 value: None,
@@ -847,13 +847,13 @@ fn parse_attr(text: &str) -> IResult<&str, SelectorComponent> {
             }
         }),
         map(
-            tuple((
+            (
                 tag("["),
                 parse_ident,
                 tag("="),
                 parse_quoted_string,
                 tag("]"),
-            )),
+            ),
             |(_, name, _, value, _)| SelectorComponent::Attr {
                 name,
                 value: Some(value),
@@ -861,14 +861,14 @@ fn parse_attr(text: &str) -> IResult<&str, SelectorComponent> {
             },
         ),
         map(
-            tuple((tag("["), parse_ident, tag("="), parse_ident, tag("]"))),
+            (tag("["), parse_ident, tag("="), parse_ident, tag("]")),
             |(_, name, _, value, _)| SelectorComponent::Attr {
                 name,
                 value: Some(value),
                 op: super::AttrOperator::Equal,
             },
         ),
-    ))(text)
+    )).parse(text)
 }
 
 #[derive(Eq, PartialEq, Copy, Clone)]
@@ -897,7 +897,7 @@ fn sign(text: &str) -> IResult<&str, Sign> {
     match text.chars().next() {
         Some('-') => Ok((&text[1..], Sign::Neg)),
         Some('+') => Ok((&text[1..], Sign::Plus)),
-        _ => fail(text),
+        _ => fail().parse(text),
     }
 }
 
@@ -910,14 +910,14 @@ fn parse_nth_child_args(text: &str) -> IResult<&str, SelectorComponent> {
         map(tag("odd"), |_| (2, 1)),
         // The case where both a and b are specified
         map(
-            tuple((
+            (
                 opt_sign,
                 opt(digit1),
                 tag("n"),
                 skip_optional_whitespace,
                 sign,
                 digit1,
-            )),
+            ),
             |(a_sign, a_opt_val, _, _, b_sign, b_val)| {
                 let a =
                     <i32 as FromStr>::from_str(a_opt_val.unwrap_or("1")).unwrap() * a_sign.val();
@@ -927,7 +927,7 @@ fn parse_nth_child_args(text: &str) -> IResult<&str, SelectorComponent> {
         ),
         // Just a
         map(
-            tuple((opt_sign, opt(digit1), tag("n"))),
+            (opt_sign, opt(digit1), tag("n")),
             |(a_sign, a_opt_val, _)| {
                 let a =
                     <i32 as FromStr>::from_str(a_opt_val.unwrap_or("1")).unwrap() * a_sign.val();
@@ -935,13 +935,13 @@ fn parse_nth_child_args(text: &str) -> IResult<&str, SelectorComponent> {
             },
         ),
         // Just b
-        map(tuple((opt_sign, digit1)), |(b_sign, b_val)| {
+        map((opt_sign, digit1), |(b_sign, b_val)| {
             let b = <i32 as FromStr>::from_str(b_val).unwrap() * b_sign.val();
             (0, b)
         }),
-    ))(rest)?;
+    )).parse(rest)?;
 
-    let (rest, _) = tuple((skip_optional_whitespace, tag(")")))(rest)?;
+    let (rest, _) = (skip_optional_whitespace, tag(")")).parse(rest)?;
 
     let sel = Selector {
         components: vec![SelectorComponent::Star],
@@ -958,7 +958,7 @@ fn parse_pseudo_class(text: &str) -> IResult<&str, SelectorComponent> {
             let (rest, component) = parse_nth_child_args(rest)?;
             Ok((rest, component))
         }
-        _ => fail(text),
+        _ => fail().parse(text),
     }
 }
 
@@ -970,17 +970,17 @@ fn parse_hash(text: &str) -> IResult<&str, SelectorComponent> {
 
 // Match some (not zero) whitespace
 fn parse_ws(text: &str) -> IResult<&str, ()> {
-    map(many1(match_whitespace_item), |_| ())(text)
+    map(many1(match_whitespace_item), |_| ()).parse(text)
 }
 
 fn parse_simple_selector_component(text: &str) -> IResult<&str, SelectorComponent> {
     alt((
         map(
-            tuple((skip_optional_whitespace, tag(">"), skip_optional_whitespace)),
+            (skip_optional_whitespace, tag(">"), skip_optional_whitespace),
             |_| SelectorComponent::CombChild,
         ),
         map(
-            tuple((skip_optional_whitespace, tag("*"), skip_optional_whitespace)),
+            (skip_optional_whitespace, tag("*"), skip_optional_whitespace),
             |_| SelectorComponent::Star,
         ),
         map(parse_ws, |_| SelectorComponent::CombDescendant),
@@ -989,34 +989,34 @@ fn parse_simple_selector_component(text: &str) -> IResult<&str, SelectorComponen
         parse_hash,
         map(parse_ident, SelectorComponent::Element),
         parse_pseudo_class,
-    ))(text)
+    )).parse(text)
 }
 
 fn parse_selector_with_element(text: &str) -> IResult<&str, Vec<SelectorComponent>> {
     let (rest, ident) = parse_ident(text)?;
-    let (rest, extras) = many0(parse_simple_selector_component)(rest)?;
+    let (rest, extras) = many0(parse_simple_selector_component).parse(rest)?;
     let mut result = vec![SelectorComponent::Element(ident)];
     result.extend(extras);
     Ok((rest, result))
 }
 
 fn parse_selector_without_element(text: &str) -> IResult<&str, Vec<SelectorComponent>> {
-    many1(parse_simple_selector_component)(text)
+    many1(parse_simple_selector_component).parse(text)
 }
 
 pub(crate) fn parse_pseudo_element(text: &str) -> IResult<&str, Option<PseudoElement>> {
     opt(alt((
         map(tag("::before"), |_| PseudoElement::Before),
         map(tag("::after"), |_| PseudoElement::After),
-    )))(text)
+    ))).parse(text)
 }
 
 pub(crate) fn parse_selector(text: &str) -> IResult<&str, Selector> {
     let (rest, mut components) = alt((
         parse_selector_with_element,
         parse_selector_without_element,
-        fail,
-    ))(text)?;
+        fail(),
+    )).parse(text)?;
     // Reverse.  Also remove any leading/trailing CombDescendant, as leading/trailing whitespace
     // shouldn't count as a descendent combinator.
     if let Some(&SelectorComponent::CombDescendant) = components.last() {
@@ -1040,8 +1040,8 @@ pub(crate) fn parse_selector(text: &str) -> IResult<&str, Selector> {
 fn parse_ruleset(text: &str) -> IResult<&str, RuleSet> {
     let (rest, _) = skip_optional_whitespace(text)?;
     let (rest, selectors) =
-        separated_list0(tuple((tag(","), skip_optional_whitespace)), parse_selector)(rest)?;
-    let (rest, (_ws1, _bra, _ws2, declarations, _ws3, _optsemi, _ws4, _ket, _ws5)) = tuple((
+        separated_list0((tag(","), skip_optional_whitespace), parse_selector).parse(rest)?;
+    let (rest, (_ws1, _bra, _ws2, declarations, _ws3, _optsemi, _ws4, _ket, _ws5)) = (
         skip_optional_whitespace,
         tag("{"),
         skip_optional_whitespace,
@@ -1051,7 +1051,7 @@ fn parse_ruleset(text: &str) -> IResult<&str, RuleSet> {
         skip_optional_whitespace,
         tag("}"),
         skip_optional_whitespace,
-    ))(rest)?;
+    ).parse(rest)?;
     Ok((
         rest,
         RuleSet {
@@ -1118,7 +1118,7 @@ fn skip_to_end_of_statement(text: &str) -> IResult<&str, ()> {
                     }
                 } else {
                     // Unbalanced brackets
-                    return fail(rest);
+                    return fail().parse(rest);
                 }
             }
         }
@@ -1127,22 +1127,22 @@ fn skip_to_end_of_statement(text: &str) -> IResult<&str, ()> {
 }
 
 fn parse_at_rule(text: &str) -> IResult<&str, ()> {
-    let (rest, _) = tuple((
+    let (rest, _) = (
         skip_optional_whitespace,
         tag("@"),
         skip_optional_whitespace,
         parse_ident,
-    ))(text)?;
+    ).parse(text)?;
 
     skip_to_end_of_statement(rest)
 }
 
 fn parse_statement(text: &str) -> IResult<&str, Option<RuleSet>> {
-    alt((map(parse_ruleset, Some), map(parse_at_rule, |_| None)))(text)
+    alt((map(parse_ruleset, Some), map(parse_at_rule, |_| None))).parse(text)
 }
 
 pub(crate) fn parse_stylesheet(text: &str) -> IResult<&str, Vec<RuleSet>> {
-    let (rest, items) = many0(parse_statement)(text)?;
+    let (rest, items) = many0(parse_statement).parse(text)?;
     Ok((rest, items.into_iter().flatten().collect()))
 }
 
