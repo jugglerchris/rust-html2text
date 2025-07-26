@@ -11,6 +11,11 @@ Possible log types:
 
 ### Latest
 
+### 0.15.3
+
+- [fixed] Parse `<noscript>` tags as if scripting is disabled (thanks craigchiang)
+- [fixed] Treat inline `<svg>` as images (thanks craigchiang)
+
 ### 0.15.2
 
 - [fixed] Fix whitespace-only tables being shown as "─" (thanks fuelen)
