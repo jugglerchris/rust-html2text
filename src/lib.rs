@@ -2810,6 +2810,7 @@ pub mod config {
             use html5ever::tendril::TendrilSink;
             let opts = super::ParseOpts {
                 tree_builder: super::TreeBuilderOpts {
+                    scripting_enabled: false,
                     ..Default::default()
                 },
                 ..Default::default()
