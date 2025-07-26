@@ -679,6 +679,8 @@ enum RenderNodeInfo {
     Code(Vec<RenderNode>),
     /// An image (src, title)
     Img(String, String),
+    /// An inline SVG (title)
+    Svg(String),
     /// A block element with children
     Block(Vec<RenderNode>),
     /// A header (h1, h2, ...) with children
@@ -766,7 +768,7 @@ impl RenderNode {
 
         // Otherwise, make an estimate.
         let estimate = match self.info {
-            Text(ref t) | Img(_, ref t) => {
+            Text(ref t) | Img(_, ref t) | Svg(ref t) => {
                 use unicode_width::UnicodeWidthChar;
                 let mut len = 0;
                 let mut in_whitespace = false;
@@ -880,7 +882,7 @@ impl RenderNode {
 
         // Otherwise, make an estimate.
         match self.info {
-            Text(ref t) | Img(_, ref t) => {
+            Text(ref t) | Img(_, ref t) | Svg(ref t) => {
                 let len = t.trim().len();
                 len == 0
             }
@@ -983,6 +985,9 @@ impl RenderNode {
             RenderNodeInfo::Img(src, title) => {
                 writeln!(f, "{:indent$}Img src={:?} title={:?}:", "", src, title)?;
             }
+            RenderNodeInfo::Svg(title) => {
+                writeln!(f, "{:indent$}Svg title={:?}:", "", title)?;
+            }
             RenderNodeInfo::Block(v) => {
                 self.write_container("Block", v, f, indent)?;
             }
@@ -1067,7 +1072,7 @@ fn precalc_size_estimate<'a, D: TextDecorator>(
         return TreeMapResult::Nothing;
     }
     match node.info {
-        Text(_) | Img(_, _) | Break | FragStart(_) => {
+        Text(_) | Img(_, _) | Svg(_) | Break | FragStart(_) => {
             let _ = node.calc_size_estimate(context, decorator);
             TreeMapResult::Nothing
         }
@@ -1935,6 +1940,36 @@ fn process_dom_node<T: Write>(
                         Nothing
                     }
                 }
+                expanded_name!(svg "svg") => {
+                    // Inline SVG: look for a <title> child for the title.
+                    let mut title = None;
+
+                    for node in input.handle.children.borrow().iter() {
+                        if let markup5ever_rcdom::NodeData::Element { ref name, .. } = node.data {
+                            if matches!(name.expanded(), expanded_name!(svg "title")) {
+                                let mut title_str = String::new();
+                                for subnode in node.children.borrow().iter() {
+                                    if let markup5ever_rcdom::NodeData::Text { ref contents } = subnode.data {
+                                        title_str.push_str(&contents.borrow());
+                                    }
+                                }
+                                title = Some(title_str);
+                            } else {
+                                // The first item has to be <title>
+                                break;
+                            }
+                        }
+                    }
+
+                    if let Some(title) = title {
+                        Finished(RenderNode::new_styled(
+                            Svg(title.into()),
+                            computed,
+                        ))
+                    } else {
+                        Nothing
+                    }
+                }
                 expanded_name!(html "h1")
                 | expanded_name!(html "h2")
                 | expanded_name!(html "h3")
@@ -2339,6 +2374,11 @@ fn do_render_node<T: Write, D: TextDecorator>(
         }
         Img(src, title) => {
             renderer.add_image(&src, &title)?;
+            pushed_style.unwind(renderer);
+            Finished(None)
+        }
+        Svg(title) => {
+            renderer.add_image("", &title)?;
             pushed_style.unwind(renderer);
             Finished(None)
         }

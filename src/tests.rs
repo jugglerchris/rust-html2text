@@ -1079,6 +1079,35 @@ fn test_img_alt() {
 }
 
 #[test]
+fn test_svg() {
+    test_html(
+        br"<p>Hello <svg><title>world</title></svg></p>",
+        "Hello [world]\n",
+        80,
+    );
+    test_html(
+        br"<p>Hello<svg><style>blah</style></svg></p>",
+        "Hello\n",
+        80,
+    );
+}
+
+#[test]
+fn test_noscript() {
+    test_html(
+        br"<p>Hello</p>
+        <noscript><p><strong>There</strong></p></noscript>",
+        "Hello\n\n**There**\n",
+        80,
+    );
+    test_html(
+        br"<p>Hello<svg></svg></p>",
+        "Hello\n",
+        80,
+    );
+}
+
+#[test]
 fn test_br() {
     test_html(br"<p>Hello<br/>World</p>", "Hello\nWorld\n", 20);
 }
