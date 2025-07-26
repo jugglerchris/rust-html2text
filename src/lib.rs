@@ -1949,7 +1949,9 @@ fn process_dom_node<T: Write>(
                             if matches!(name.expanded(), expanded_name!(svg "title")) {
                                 let mut title_str = String::new();
                                 for subnode in node.children.borrow().iter() {
-                                    if let markup5ever_rcdom::NodeData::Text { ref contents } = subnode.data {
+                                    if let markup5ever_rcdom::NodeData::Text { ref contents } =
+                                        subnode.data
+                                    {
                                         title_str.push_str(&contents.borrow());
                                     }
                                 }
@@ -1962,10 +1964,7 @@ fn process_dom_node<T: Write>(
                     }
 
                     if let Some(title) = title {
-                        Finished(RenderNode::new_styled(
-                            Svg(title.into()),
-                            computed,
-                        ))
+                        Finished(RenderNode::new_styled(Svg(title.into()), computed))
                     } else {
                         Nothing
                     }

@@ -1100,11 +1100,7 @@ fn test_noscript() {
         "Hello\n\n**There**\n",
         80,
     );
-    test_html(
-        br"<p>Hello<svg></svg></p>",
-        "Hello\n",
-        80,
-    );
+    test_html(br"<p>Hello<svg></svg></p>", "Hello\n", 80);
 }
 
 #[test]
