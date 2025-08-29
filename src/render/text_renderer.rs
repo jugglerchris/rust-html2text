@@ -1433,6 +1433,31 @@ fn filter_text_strikeout(s: &str) -> Option<String> {
     Some(result)
 }
 
+// State for a cell we're outputting to the lines.
+struct LineSet<A> {
+    // The cell's width
+    width: usize,
+    // The cell's rowspan
+    rowspan: usize,
+    // The remaining lines.
+    lines: Vec<RenderLine<A>>,
+}
+impl<A> LineSet<A> {
+    fn cell_height(&self) -> usize {
+        let tot_lines = self.lines.len();
+        if self.rowspan == 1 {
+            tot_lines
+        } else {
+            // Divide the height by the rowspan
+            // We are only counting the space between the horizontal borders,
+            // so want subtract those before dividing.  However we also want
+            // to round up, so it turns out that we would add the same value
+            // back, which neatly cancels out.
+            tot_lines / self.rowspan
+        }
+    }
+}
+
 impl<D: TextDecorator> Renderer for SubRenderer<D> {
     fn add_empty_line(&mut self) -> Result<()> {
         html_trace!("add_empty_line()");
@@ -1618,7 +1643,7 @@ impl<D: TextDecorator> Renderer for SubRenderer<D> {
 
     fn append_columns_with_borders<I>(&mut self, cols: I, collapse: bool) -> Result<()>
     where
-        I: IntoIterator<Item = Self>,
+        I: IntoIterator<Item = (Self, usize)>,
         Self: Sized,
     {
         use self::TaggedLineElement::Str;
@@ -1631,13 +1656,14 @@ impl<D: TextDecorator> Renderer for SubRenderer<D> {
 
         let mut line_sets = cols
             .into_iter()
-            .map(|sub_r| {
+            .map(|(sub_r, rowspan)| {
                 let width = sub_r.width;
                 tot_width += width;
                 html_trace!("Adding column:\n{}", sub_r.to_string());
-                Ok((
+                Ok(LineSet {
                     width,
-                    sub_r
+                    rowspan,
+                    lines: sub_r
                         .into_lines()?
                         .into_iter()
                         .map(|mut line| {
@@ -1652,9 +1678,9 @@ impl<D: TextDecorator> Renderer for SubRenderer<D> {
                             line
                         })
                         .collect(),
-                ))
+                })
             })
-            .collect::<Result<Vec<(usize, Vec<RenderLine<_>>)>>>()?;
+            .collect::<Result<Vec<LineSet<_>>>>()?;
 
         tot_width += line_sets.len().saturating_sub(1);
 
@@ -1664,7 +1690,8 @@ impl<D: TextDecorator> Renderer for SubRenderer<D> {
         if let Some(RenderLine::Line(prev_border)) = self.lines.back_mut() {
             let mut pos = 0;
             html_trace!("Merging with last line:\n{}", prev_border.to_string());
-            for &(w, _) in &line_sets[..line_sets.len() - 1] {
+            for ls in &line_sets[..line_sets.len() - 1] {
+                let w = ls.width;
                 html_trace!("pos={}, w={}", pos, w);
                 prev_border.join_below(pos + w);
                 next_border.join_above(pos + w);
@@ -1685,7 +1712,9 @@ impl<D: TextDecorator> Renderer for SubRenderer<D> {
             html_trace!("Collapsing borders.");
             /* Collapse any top border */
             let mut pos = 0;
-            for &mut (w, ref mut sublines) in &mut line_sets {
+            for ls in &mut line_sets {
+                let w = ls.width;
+                let sublines = &mut ls.lines;
                 let starts_border = matches!(sublines.first(), Some(RenderLine::Line(_)));
                 if starts_border {
                     html_trace!("Starts border");
@@ -1710,7 +1739,9 @@ impl<D: TextDecorator> Renderer for SubRenderer<D> {
 
             /* Collapse any bottom border */
             let mut pos = 0;
-            for (col_no, &mut (w, ref mut sublines)) in line_sets.iter_mut().enumerate() {
+            for (col_no, ls) in line_sets.iter_mut().enumerate() {
+                let w = ls.width;
+                let sublines = &mut ls.lines;
                 if let Some(RenderLine::Line(line)) = sublines.last() {
                     html_trace!("Ends border");
                     next_border.merge_from_above(line, pos);
@@ -1721,13 +1752,13 @@ impl<D: TextDecorator> Renderer for SubRenderer<D> {
             }
         }
 
-        let cell_height = line_sets.iter().map(|(_, v)| v.len()).max().unwrap_or(0);
+        let cell_height = line_sets.iter().map(|ls| ls.cell_height()).max().unwrap_or(0);
         let spaces: String = (0..tot_width).map(|_| ' ').collect();
         let last_cellno = line_sets.len() - 1;
-        let mut line = TaggedLine::new();
         for i in 0..cell_height {
-            for (cellno, &mut (width, ref mut ls)) in line_sets.iter_mut().enumerate() {
-                match ls.get_mut(i) {
+            let mut line = TaggedLine::new();
+            for (cellno, ls) in line_sets.iter_mut().enumerate() {
+                match ls.lines.get_mut(i) {
                     Some(RenderLine::Text(tline)) => line.consume(tline),
                     Some(RenderLine::Line(bord)) => line.push(Str(TaggedString {
                         s: bord.to_string(),
@@ -1736,7 +1767,7 @@ impl<D: TextDecorator> Renderer for SubRenderer<D> {
                     None => line.push(Str(TaggedString {
                         s: column_padding[cellno]
                             .clone()
-                            .unwrap_or_else(|| spaces[0..width].to_string()),
+                            .unwrap_or_else(|| spaces[0..ls.width].to_string()),
                         tag: self.ann_stack.clone(),
                     })),
                 }
@@ -1752,7 +1783,6 @@ impl<D: TextDecorator> Renderer for SubRenderer<D> {
                 }
             }
             self.add_line(RenderLine::Text(line));
-            line = TaggedLine::new();
         }
         if self.options.draw_borders {
             self.add_line(RenderLine::Line(next_border));

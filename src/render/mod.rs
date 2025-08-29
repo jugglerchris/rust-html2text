@@ -87,7 +87,7 @@ pub(crate) trait Renderer {
     /// with the surrounding one.
     fn append_columns_with_borders<I>(&mut self, cols: I, collapse: bool) -> Result<()>
     where
-        I: IntoIterator<Item = Self>,
+        I: IntoIterator<Item = (Self, usize)>,
         Self: Sized;
 
     /// Append a set of sub renderers joined vertically with lines, for tables

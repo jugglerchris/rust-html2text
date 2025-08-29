@@ -2719,12 +2719,16 @@ fn render_table_row<T: Write, D: TextDecorator>(
     pushed_style: PushedStyleInfo,
     _err_out: &mut T,
 ) -> TreeMapResult<'static, TextRenderer<D>, RenderNode, Option<SubRenderer<D>>> {
+    let rowspans: Vec<usize> = row.cells().map(|cell| cell.rowspan).collect();
     TreeMapResult::PendingChildren {
         children: row.into_cells(false),
-        cons: Box::new(|builders, children| {
+        cons: Box::new(move |builders, children| {
             let children: Vec<_> = children.into_iter().map(Option::unwrap).collect();
             if children.iter().any(|c| !c.empty()) {
-                builders.append_columns_with_borders(children, true)?;
+                builders.append_columns_with_borders(
+                    children.into_iter().zip(rowspans.into_iter()),
+                    true,
+                )?;
             }
             pushed_style.unwind(builders);
             Ok(Some(None))
