@@ -104,7 +104,7 @@ pub struct TaggedString<T> {
     pub tag: T,
 }
 
-impl<T: Debug + PartialEq> TaggedString<T> {
+impl<T> TaggedString<T> {
     /// Returns the tagged string’s display width in columns.
     ///
     /// See [`unicode_width::UnicodeWidthStr::width`][] for more information.
@@ -153,6 +153,22 @@ impl<T> TaggedLineElement<T> {
         match self {
             TaggedLineElement::Str(ts) => TaggedLineElement::Str(ts.map_tag(f)),
             TaggedLineElement::FragmentStart(s) => TaggedLineElement::FragmentStart(s.clone()),
+        }
+    }
+
+    /// Return the text width of this element.
+    pub fn width(&self) -> usize {
+        match self {
+            TaggedLineElement::Str(tagged_string) => tagged_string.width(),
+            TaggedLineElement::FragmentStart(_) => 0usize,
+        }
+    }
+
+    /// Return the text content of this element.
+    pub fn as_str(&self) -> &str {
+        match self {
+            TaggedLineElement::Str(tagged_string) => &tagged_string.s,
+            TaggedLineElement::FragmentStart(_) => "",
         }
     }
 }
@@ -943,12 +959,18 @@ enum BorderSegHoriz {
 
 /// A dividing line between table rows which tracks intersections
 /// with vertical lines.
+///
+/// It may also have actual text, when cells span multiple rows
+/// and extend through the row.
 #[derive(Clone, Debug)]
 pub(crate) struct BorderHoriz<T> {
     /// The segments for the line.
     segments: Vec<BorderSegHoriz>,
     /// The tag associated with the lines
     tag: T,
+    /// Parts of text which punch a hole through the line,
+    /// with their positions.
+    holes: Vec<(usize, TaggedLineElement<T>)>,
 }
 
 impl<T: Clone> BorderHoriz<T> {
@@ -957,6 +979,7 @@ impl<T: Clone> BorderHoriz<T> {
         BorderHoriz {
             segments: vec![BorderSegHoriz::Straight; width],
             tag,
+            holes: Default::default(),
         }
     }
 
@@ -965,6 +988,7 @@ impl<T: Clone> BorderHoriz<T> {
         BorderHoriz {
             segments: vec![linetype; width],
             tag,
+            holes: Default::default(),
         }
     }
 
@@ -1039,19 +1063,51 @@ impl<T: Clone> BorderHoriz<T> {
             .collect()
     }
 
+    /// Add a chunk of text on top of the line.
+    fn add_text_span(&mut self, pos: usize, t: TaggedLineElement<T>) {
+        self.holes.push((pos, t));
+    }
+
     /// Turn into a string with drawing characters
     #[allow(clippy::inherent_to_string)]
     fn to_string(&self) -> String {
-        self.segments
-            .iter()
-            .map(|seg| match seg {
-                BorderSegHoriz::Straight => '─',
-                BorderSegHoriz::StraightVert => '/',
-                BorderSegHoriz::JoinAbove => '┴',
-                BorderSegHoriz::JoinBelow => '┬',
-                BorderSegHoriz::JoinCross => '┼',
-            })
-            .collect::<String>()
+        let seg_to_char = |seg| match seg {
+            BorderSegHoriz::Straight => '─',
+            BorderSegHoriz::StraightVert => '/',
+            BorderSegHoriz::JoinAbove => '┴',
+            BorderSegHoriz::JoinBelow => '┬',
+            BorderSegHoriz::JoinCross => '┼',
+        };
+
+        let mut result = String::new();
+        let mut pos = 0usize;
+
+        for (holepos, hole) in &self.holes {
+            for seg in &self.segments[pos..*holepos] {
+                result.push(seg_to_char(*seg));
+            }
+            pos = *holepos;
+            result.push_str(hole.as_str());
+            pos += hole.width();
+        }
+        for seg in &self.segments[pos..] {
+            result.push(seg_to_char(*seg));
+        }
+        result
+    }
+}
+
+impl<T: Clone + Debug + Eq + Default> BorderHoriz<T> {
+    fn into_tagged_line(self) -> TaggedLine<T> {
+        use self::TaggedLineElement::Str;
+        assert!(self.holes.is_empty());
+        let mut tagged = TaggedLine::new();
+        let tag = self.tag.clone();
+        tagged.push(Str(TaggedString {
+            s: self.to_string(),
+            tag,
+        }));
+        tagged
     }
 }
 
@@ -1077,19 +1133,10 @@ impl<T: PartialEq + Eq + Clone + Debug + Default> RenderLine<T> {
     /// Convert into a `TaggedLine<T>`, if necessary squashing the
     /// BorderHoriz into one.
     pub fn into_tagged_line(self) -> TaggedLine<T> {
-        use self::TaggedLineElement::Str;
 
         match self {
             RenderLine::Text(tagged) => tagged,
-            RenderLine::Line(border) => {
-                let mut tagged = TaggedLine::new();
-                let tag = border.tag.clone();
-                tagged.push(Str(TaggedString {
-                    s: border.to_string(),
-                    tag,
-                }));
-                tagged
-            }
+            RenderLine::Line(border) => border.into_tagged_line(),
         }
     }
 
@@ -1098,7 +1145,7 @@ impl<T: PartialEq + Eq + Clone + Debug + Default> RenderLine<T> {
     fn has_content(&self) -> bool {
         match self {
             RenderLine::Text(line) => !line.is_empty(),
-            RenderLine::Line(_) => false,
+            RenderLine::Line(bord) => bord.holes.is_empty(),
         }
     }
 }
@@ -1783,6 +1830,30 @@ impl<D: TextDecorator> Renderer for SubRenderer<D> {
                 }
             }
             self.add_line(RenderLine::Text(line));
+        }
+        // Handle overhanging cells
+        {
+            let mut pos = 0;
+            for ls in &line_sets {
+                if ls.rowspan > 1 {
+                    if let Some(l) = ls.lines.get(cell_height) {
+                        let mut tmppos = pos;
+                        for ts in l.clone().into_tagged_line() {
+                            let w = ts.width();
+                            next_border.add_text_span(tmppos, ts);
+                            tmppos += w;
+                        }
+                    } else {
+                        next_border.add_text_span(pos,
+                            TaggedLineElement::Str(
+                                TaggedString {
+                                    s: " ".repeat(ls.width).into(),
+                                    tag: next_border.tag.clone(),
+                                }));
+                    }
+                }
+                pos += ls.width + 1;
+            }
         }
         if self.options.draw_borders {
             self.add_line(RenderLine::Line(next_border));
