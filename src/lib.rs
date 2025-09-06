@@ -469,6 +469,7 @@ struct RenderTableCell {
     content: Vec<RenderNode>,
     size_estimate: Cell<Option<SizeEstimate>>,
     col_width: Option<usize>, // Actual width to use
+    x_pos: Option<usize>,             // X location
     style: ComputedStyle,
     is_dummy: bool,
 }
@@ -497,6 +498,7 @@ impl RenderTableCell {
             content: Default::default(),
             size_estimate: Cell::new(Some(SizeEstimate::default())),
             col_width: None,
+            x_pos: None,
             style: Default::default(),
             is_dummy: true,
         }
@@ -513,11 +515,11 @@ struct RenderTableRow {
 
 impl RenderTableRow {
     /// Return a mutable iterator over the cells.
-    fn cells(&self) -> std::slice::Iter<RenderTableCell> {
+    fn cells(&self) -> std::slice::Iter<'_, RenderTableCell> {
         self.cells.iter()
     }
     /// Return a mutable iterator over the cells.
-    fn cells_mut(&mut self) -> std::slice::IterMut<RenderTableCell> {
+    fn cells_mut(&mut self) -> std::slice::IterMut<'_, RenderTableCell> {
         self.cells.iter_mut()
     }
     /// Return an iterator which returns cells by values (removing
@@ -537,6 +539,7 @@ impl RenderTableRow {
         let mut result = Vec::new();
         let mut colno = 0;
         let col_sizes = self.col_sizes.unwrap();
+        let mut x_pos = 0;
         for mut cell in self.cells {
             let colspan = cell.colspan;
             let col_width = if vertical {
@@ -546,7 +549,10 @@ impl RenderTableRow {
             };
             // Skip any zero-width columns
             if col_width > 0 {
-                cell.col_width = Some(col_width + cell.colspan - 1);
+                let this_col_width = col_width + cell.colspan - 1;
+                cell.col_width = Some(this_col_width);
+                cell.x_pos = Some(x_pos);
+                x_pos += this_col_width + 1;
                 let style = cell.style.clone();
                 result.push(RenderNode::new_styled(
                     RenderNodeInfo::TableCell(cell),
@@ -653,7 +659,7 @@ impl RenderTable {
     }
 
     /// Return an iterator over the rows.
-    fn rows(&self) -> std::slice::Iter<RenderTableRow> {
+    fn rows(&self) -> std::slice::Iter<'_, RenderTableRow> {
         self.rows.iter()
     }
 
@@ -1310,6 +1316,7 @@ fn td_to_render_tree<'a, T: Write>(
                 content: children,
                 size_estimate: Cell::new(None),
                 col_width: None,
+                x_pos: None,
                 style,
                 is_dummy: false,
             }),
@@ -2699,7 +2706,7 @@ fn render_table_tree<T: Write, D: TextDecorator>(
                 .saturating_sub(1)
     };
 
-    renderer.start_block()?;
+    renderer.start_table()?;
 
     if table_width != 0 && renderer.options.draw_borders {
         renderer.add_horizontal_border_width(table_width)?;
@@ -2720,11 +2727,12 @@ fn render_table_row<T: Write, D: TextDecorator>(
     _err_out: &mut T,
 ) -> TreeMapResult<'static, TextRenderer<D>, RenderNode, Option<SubRenderer<D>>> {
     let rowspans: Vec<usize> = row.cells().map(|cell| cell.rowspan).collect();
+    let have_overhang = row.cells().any(|cell| cell.is_dummy);
     TreeMapResult::PendingChildren {
         children: row.into_cells(false),
         cons: Box::new(move |builders, children| {
             let children: Vec<_> = children.into_iter().map(Option::unwrap).collect();
-            if children.iter().any(|c| !c.empty()) {
+            if have_overhang || children.iter().any(|c| !c.empty()) {
                 builders.append_columns_with_borders(
                     children.into_iter().zip(rowspans.into_iter()),
                     true,

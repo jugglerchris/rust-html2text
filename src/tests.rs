@@ -2458,11 +2458,10 @@ foo
 fn test_rowspan1() {
     test_html(br#"<table>
     <tr><th>H0</th><th>H1</th><th>H2</th><th>H3</th><th>H4</th></tr>
-    <tr><td>X</td><td rowspan=3>Boo
+    <tr><td>X</td><td rowspan=2>Boo
             Foo</td><td colspan=3>oh no</td></tr>
-    <tr><td>X123213</td><td rowspan=2 colspan=2>O</td><td rowspan=3>one two</td></tr>
-    <tr></tr>
-    <tr><td>X</td><td colspan=3>Hmm oh</td></tr>
+    <tr><td>X123213</td><td rowspan=1 colspan=2>O</td><td rowspan=2>one two</td></tr>
+    <tr><td>Y</td><td colspan=3>Hmm oh</td></tr>
 </table>"#, r#"────┬────┬──┬──┬────
 H0  │H1  │H2│H3│H4  
 ────┼────┼──┴──┴────
@@ -2471,7 +2470,29 @@ X   │Boo │oh no
 X123│    │O    │one 
 213 │    │     │two 
 ────┼────┴─────┤    
-X   │Hmm oh    │
+Y   │Hmm oh    │    
+────┴──────────┴────
+"#, 20);
+}
+
+#[test]
+fn test_rowspan2_emptyrow() {
+    test_html(br#"<table>
+    <tr><th>H0</th><th>H1</th><th>H2</th><th>H3</th><th>H4</th></tr>
+    <tr><td>X</td><td rowspan=3>Boo
+            Foo</td><td colspan=3>oh no</td></tr>
+    <tr><td>X123213</td><td rowspan=2 colspan=2>O</td><td rowspan=3>one two</td></tr>
+    <tr></tr>
+    <tr><td>Y</td><td colspan=3>Hmm oh</td></tr>
+</table>"#, r#"────┬────┬──┬──┬────
+H0  │H1  │H2│H3│H4  
+────┼────┼──┴──┴────
+X   │Boo │oh no     
+────┤Foo ├─────┬────
+X123│    │O    │one 
+213 │    │     │two 
+────┼────┴─────┤    
+Y   │Hmm oh    │
 ────┴──────────┴────  
 "#, 20);
 }

@@ -10,6 +10,7 @@ use crate::WhitespaceExt as _;
 use super::Renderer;
 use super::Result;
 use super::TooNarrow;
+use std::collections::VecDeque;
 use std::mem;
 use std::ops::Deref;
 use std::ops::DerefMut;
@@ -20,7 +21,7 @@ use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
 /// Context to use during tree parsing.
 /// This mainly gives access to a Renderer, but needs to be able to push
 /// new ones on for nested structures.
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub(crate) struct TextRenderer<D: TextDecorator> {
     subrender: Vec<SubRenderer<D>>,
     links: Vec<String>,
@@ -955,8 +956,57 @@ enum BorderSegHoriz {
     /// Horizontal line, but separating two table cells from a row
     /// which wouldn't fit next to each other.
     StraightVert,
+    /// Vertical bar with join to the left
+    JoinLeft,
+    /// Vertical bar with join to the right
+    JoinRight,
+    /// Top left corner
+    CornerTL,
+    /// Top right corner
+    CornerTR,
+    /// Bottom left corner
+    CornerBL,
+    /// Bottom right corner
+    CornerBR,
 }
 
+impl BorderSegHoriz {
+    /// Chop any join to the left of this cell.
+    pub fn chop_left(&mut self) {
+        use BorderSegHoriz::*;
+        match *self {
+            Straight => {}
+            JoinBelow => { *self = CornerTL; }
+            JoinAbove => { *self = CornerBL; }
+            JoinCross => { *self = JoinRight; }
+            StraightVert => {}
+            JoinLeft => { *self = StraightVert; }
+            JoinRight => {}
+            CornerTL => { *self = StraightVert; }
+            CornerTR => {}
+            CornerBL => { *self = StraightVert; }
+            CornerBR => {}
+        }
+    }
+
+    /// Chop any join to the right of this cell.
+    pub fn chop_right(&mut self) {
+        use BorderSegHoriz::*;
+        match *self {
+            Straight => {}
+            JoinBelow => { *self = CornerTR; }
+            JoinAbove => { *self = CornerBR; }
+            JoinCross => { *self = JoinLeft; }
+            StraightVert => {}
+            JoinLeft => {}
+            JoinRight => { *self = StraightVert; }
+            CornerTL => {}
+            CornerTR => { *self = StraightVert; }
+            CornerBL => {}
+            CornerBR => { *self = StraightVert; }
+        }
+    }
+}
 /// A dividing line between table rows which tracks intersections
 /// with vertical lines.
 ///
@@ -1009,6 +1059,12 @@ impl<T: Clone> BorderHoriz<T> {
             Straight | JoinAbove => JoinAbove,
             JoinBelow | JoinCross => JoinCross,
             StraightVert => StraightVert,
+            JoinLeft => JoinLeft,
+            JoinRight => JoinRight,
+            CornerTL => JoinRight,
+            CornerTR => JoinLeft,
+            CornerBL => CornerBL,
+            CornerBR => CornerBR,
         }
     }
 
@@ -1021,33 +1077,45 @@ impl<T: Clone> BorderHoriz<T> {
             Straight | JoinBelow => JoinBelow,
             JoinAbove | JoinCross => JoinCross,
             StraightVert => StraightVert,
+            JoinLeft => JoinLeft,
+            JoinRight => JoinRight,
+            CornerTL => CornerTL,
+            CornerTR => CornerTR,
+            CornerBL => JoinRight,
+            CornerBR => JoinLeft,
         }
     }
 
     /// Merge a (possibly partial) border line below into this one.
     fn merge_from_below(&mut self, other: &BorderHoriz<T>, pos: usize) {
         use self::BorderSegHoriz::*;
+        eprintln!("merge_from_below({}, {pos})", other.to_string());
+        eprintln!("  before: {}", self.to_string());
         for (idx, seg) in other.segments.iter().enumerate() {
             match *seg {
-                Straight | StraightVert => (),
-                JoinAbove | JoinBelow | JoinCross => {
+                Straight | StraightVert | JoinLeft | JoinRight | CornerTL | CornerTR => (),
+                JoinAbove | JoinBelow | JoinCross | CornerBL | CornerBR => {
                     self.join_below(idx + pos);
                 }
             }
         }
+        eprintln!("  after: {}", self.to_string());
     }
 
     /// Merge a (possibly partial) border line above into this one.
     fn merge_from_above(&mut self, other: &BorderHoriz<T>, pos: usize) {
         use self::BorderSegHoriz::*;
+        eprintln!("merge_from_above({}, {pos})", other.to_string());
+        eprintln!("  before: {}", self.to_string());
         for (idx, seg) in other.segments.iter().enumerate() {
             match *seg {
-                Straight | StraightVert => (),
-                JoinAbove | JoinBelow | JoinCross => {
+                Straight | StraightVert | JoinLeft | JoinRight | CornerBL | CornerBR => (),
+                JoinAbove | JoinBelow | JoinCross | CornerTL | CornerTR => {
                     self.join_above(idx + pos);
                 }
             }
         }
+        eprintln!("  after: {}", self.to_string());
     }
 
     /// Return a string of spaces and vertical lines which would match
@@ -1057,15 +1125,24 @@ impl<T: Clone> BorderHoriz<T> {
         self.segments
             .iter()
             .map(|seg| match *seg {
-                Straight | JoinBelow | StraightVert => ' ',
-                JoinAbove | JoinCross => '│',
+                Straight | JoinBelow | StraightVert | JoinLeft | JoinRight | CornerTL | CornerTR => ' ',
+                JoinAbove | JoinCross | CornerBL | CornerBR => '│',
             })
             .collect()
     }
 
     /// Add a chunk of text on top of the line.
-    fn add_text_span(&mut self, pos: usize, t: TaggedLineElement<T>) {
+    fn add_text_span(&mut self, pos: usize, t: TaggedLineElement<T>) where T: Debug {
+        eprintln!("add_text_span({pos}, {t:?}");
+        eprintln!("  before: {}", self.to_string());
+        // Adjust the line pieces on either side.
+        if pos > 0 {
+            self.segments.get_mut(pos-1).map(|seg| seg.chop_right());
+        }
+        let rpos = pos + t.width();
+        self.segments.get_mut(rpos).map(|seg| seg.chop_left());
         self.holes.push((pos, t));
+        eprintln!("  after: {}", self.to_string());
     }
 
     /// Turn into a string with drawing characters
@@ -1077,6 +1154,12 @@ impl<T: Clone> BorderHoriz<T> {
             BorderSegHoriz::JoinAbove => '┴',
             BorderSegHoriz::JoinBelow => '┬',
             BorderSegHoriz::JoinCross => '┼',
+            BorderSegHoriz::JoinLeft => '┤',
+            BorderSegHoriz::JoinRight => '├',
+            BorderSegHoriz::CornerTL => '┌',
+            BorderSegHoriz::CornerTR => '┐',
+            BorderSegHoriz::CornerBL => '└',
+            BorderSegHoriz::CornerBR => '┘',
         };
 
         let mut result = String::new();
@@ -1090,8 +1173,10 @@ impl<T: Clone> BorderHoriz<T> {
             result.push_str(hole.as_str());
             pos += hole.width();
         }
-        for seg in &self.segments[pos..] {
-            result.push(seg_to_char(*seg));
+        if pos < self.segments.len() {
+            for seg in &self.segments[pos..] {
+                result.push(seg_to_char(*seg));
+            }
         }
         result
     }
@@ -1152,7 +1237,6 @@ impl<T: PartialEq + Eq + Clone + Debug + Default> RenderLine<T> {
 
 /// A renderer which just outputs plain text with
 /// annotations depending on a decorator.
-#[derive(Clone)]
 pub(crate) struct SubRenderer<D: TextDecorator> {
     /// Text width
     width: usize,
@@ -1173,6 +1257,10 @@ pub(crate) struct SubRenderer<D: TextDecorator> {
     pre_depth: usize,
     /// The current stack of whitespace wrapping setting
     ws_stack: Vec<WhiteSpace>,
+
+    /// Parts of table cells which overhang from the last row
+    /// (because of rowspan)
+    overhang_cells: Vec<LineSet<D::Annotation>>,
 }
 
 impl<D: TextDecorator> std::fmt::Debug for SubRenderer<D> {
@@ -1310,6 +1398,7 @@ impl<D: TextDecorator> SubRenderer<D> {
             pre_depth: 0,
             text_filter_stack: Vec::new(),
             pending_frags: Default::default(),
+            overhang_cells: Default::default(),
         }
     }
 
@@ -1481,13 +1570,28 @@ fn filter_text_strikeout(s: &str) -> Option<String> {
 }
 
 // State for a cell we're outputting to the lines.
+#[derive(Default, Debug)]
 struct LineSet<A> {
+    // The cell's horizontal character position
+    pos: usize,
     // The cell's width
     width: usize,
     // The cell's rowspan
     rowspan: usize,
     // The remaining lines.
-    lines: Vec<RenderLine<A>>,
+    lines: VecDeque<RenderLine<Vec<A>>>,
+}
+
+impl<A: PartialEq + Eq + Clone + Debug + Default> std::fmt::Display for LineSet<A> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let lines = self.lines.iter().map(|l| l.to_string()).collect::<Vec<_>>();
+        f.debug_struct("LineSet")
+            .field("pos", &self.pos)
+            .field("width", &self.width)
+            .field("rowspan", &self.rowspan)
+            .field("lines", &lines)
+            .finish()
+    }
 }
 impl<A> LineSet<A> {
     fn cell_height(&self) -> usize {
@@ -1536,6 +1640,11 @@ impl<D: TextDecorator> Renderer for SubRenderer<D> {
         html_trace_quiet!("start_block; at_block_end <- false");
         self.at_block_end = false;
         Ok(())
+    }
+
+    fn start_table(&mut self) -> Result<()> {
+        //debug_assert!(self.overhang_cells.is_empty());
+        self.start_block()
     }
 
     fn new_line(&mut self) -> Result<()> {
@@ -1705,9 +1814,11 @@ impl<D: TextDecorator> Renderer for SubRenderer<D> {
             .into_iter()
             .map(|(sub_r, rowspan)| {
                 let width = sub_r.width;
-                tot_width += width;
+                let pos = tot_width;
+                tot_width += width + 1;
                 html_trace!("Adding column:\n{}", sub_r.to_string());
                 Ok(LineSet {
+                    pos,
                     width,
                     rowspan,
                     lines: sub_r
@@ -1729,7 +1840,63 @@ impl<D: TextDecorator> Renderer for SubRenderer<D> {
             })
             .collect::<Result<Vec<LineSet<_>>>>()?;
 
-        tot_width += line_sets.len().saturating_sub(1);
+        {
+            // Character position from line sets.
+            let mut lidx = 0;
+            let mut lpos = 0;
+            let mut lnextpos = 0;
+            eprintln!("line_sets: [");
+            for ls in &line_sets {
+                eprintln!("  {ls}");
+            }
+            eprintln!("]");
+            eprintln!("overhanging: [");
+            for ls in &self.overhang_cells {
+                eprintln!("  {ls}");
+            }
+            eprintln!("]");
+            for ls in std::mem::take(&mut self.overhang_cells) {
+                while lidx < line_sets.len() && dbg!(line_sets[dbg!(lidx)].pos) < dbg!(ls.pos) {
+                    lpos = line_sets[lidx].pos;
+                    lnextpos = lpos + line_sets[lidx].width + 1;
+                    lidx += 1;
+                }
+                if dbg!(lidx) >= dbg!(line_sets.len()) {
+                    // This row doesn't extend this far.
+                    if lnextpos < ls.pos {
+                        // We need padding
+                        line_sets.push(LineSet {
+                            pos: lnextpos,
+                            width: ls.pos.saturating_sub(lnextpos + 1),
+                            rowspan: 1,
+                            lines: Default::default(),
+                        });
+                    }
+                    if ls.pos + ls.width > tot_width {
+                        // +1 because we subtract one later
+                        tot_width = ls.pos + ls.width + 1;
+                    }
+                    line_sets.push(ls);
+                } else {
+                    //debug_assert_eq!(ls.width, line_sets[lidx].width);
+                    line_sets[lidx] = ls;
+                }
+            }
+        }
+        eprintln!("After overhang handling");
+            eprintln!("line_sets: [");
+            for ls in &line_sets {
+                eprintln!("  {ls}");
+            }
+            eprintln!("]");
+            eprintln!("overhanging: [");
+            for ls in &self.overhang_cells {
+                eprintln!("  {ls}");
+            }
+            eprintln!("]");
+
+        tot_width -= 1;
+        dbg!(tot_width);
 
         let mut next_border = BorderHoriz::new(tot_width, self.ann_stack.clone());
 
@@ -1762,13 +1929,13 @@ impl<D: TextDecorator> Renderer for SubRenderer<D> {
             for ls in &mut line_sets {
                 let w = ls.width;
                 let sublines = &mut ls.lines;
-                let starts_border = matches!(sublines.first(), Some(RenderLine::Line(_)));
+                let starts_border = matches!(sublines.front(), Some(RenderLine::Line(_)));
                 if starts_border {
                     html_trace!("Starts border");
                     if let &mut RenderLine::Line(ref mut prev_border) =
                         self.lines.back_mut().expect("No previous line")
                     {
-                        if let RenderLine::Line(line) = sublines.remove(0) {
+                        if let Some(RenderLine::Line(line)) = sublines.pop_front() {
                             html_trace!(
                                 "prev border:\n{}\n, pos={}, line:\n{}",
                                 prev_border.to_string(),
@@ -1789,11 +1956,11 @@ impl<D: TextDecorator> Renderer for SubRenderer<D> {
             for (col_no, ls) in line_sets.iter_mut().enumerate() {
                 let w = ls.width;
                 let sublines = &mut ls.lines;
-                if let Some(RenderLine::Line(line)) = sublines.last() {
+                if let Some(RenderLine::Line(line)) = sublines.back() {
                     html_trace!("Ends border");
                     next_border.merge_from_above(line, pos);
                     column_padding[col_no] = Some(line.to_vertical_lines_above());
-                    sublines.pop();
+                    sublines.pop_back();
                 }
                 pos += w + 1;
             }
@@ -1834,9 +2001,9 @@ impl<D: TextDecorator> Renderer for SubRenderer<D> {
         // Handle overhanging cells
         {
             let mut pos = 0;
-            for ls in &line_sets {
+            for mut ls in line_sets.into_iter() {
                 if ls.rowspan > 1 {
-                    if let Some(l) = ls.lines.get(cell_height) {
+                    if let Some(l) = dbg!(&ls.lines).get(cell_height) {
                         let mut tmppos = pos;
                         for ts in l.clone().into_tagged_line() {
                             let w = ts.width();
@@ -1851,6 +2018,20 @@ impl<D: TextDecorator> Renderer for SubRenderer<D> {
                                     tag: next_border.tag.clone(),
                                 }));
                     }
+                    {
+                        // TODO: use VecDeque::truncate_front() when available.
+                        let new_len = ls.lines.len().saturating_sub(cell_height+1);
+                        while ls.lines.len() > new_len {
+                            ls.lines.pop_front();
+                        }
+                    }
+                    self.overhang_cells.push(
+                        LineSet {
+                            pos: ls.pos,
+                            width: ls.width,
+                            rowspan: ls.rowspan - 1,
+                            lines: ls.lines,
+                    });
                 }
                 pos += ls.width + 1;
             }
