@@ -2455,6 +2455,28 @@ foo
 }
 
 #[test]
+fn test_rowspan1() {
+    test_html(br#"<table>
+    <tr><th>H0</th><th>H1</th><th>H2</th><th>H3</th><th>H4</th></tr>
+    <tr><td>X</td><td rowspan=3>Boo
+            Foo</td><td colspan=3>oh no</td></tr>
+    <tr><td>X123213</td><td rowspan=2 colspan=2>O</td><td rowspan=3>one two</td></tr>
+    <tr></tr>
+    <tr><td>X</td><td colspan=3>Hmm oh</td></tr>
+</table>"#, r#"────┬────┬──┬──┬────
+H0  │H1  │H2│H3│H4  
+────┼────┼──┴──┴────
+X   │Boo │oh no     
+────┤Foo ├─────┬────
+X123│    │O    │one 
+213 │    │     │two 
+────┼────┴─────┤    
+X   │Hmm oh    │
+────┴──────────┴────  
+"#, 20);
+}
+
+#[test]
 fn test_issue_187() {
     let html = br#"<div><table><tbody><tr><td><div><table><tbody><tr><td><div><pre>na na na na na na na na na na na na na na na</p></div></td></tr>/<tbody></table></div></td></tr>/<tbody></table></div>"#;
     let _ = crate::config::plain().string_from_read(&html[..], 17);
