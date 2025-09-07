@@ -946,16 +946,18 @@ pub trait TextDecorator {
 #[derive(Copy, Clone, Debug)]
 enum BorderSegHoriz {
     /// Pure horizontal line
-    Straight,
+    Horiz,
     /// Joined with a line above
     JoinAbove,
     /// Joins with a line below
     JoinBelow,
     /// Joins both ways
     JoinCross,
+    /// Vertical bar
+    Vert,
     /// Horizontal line, but separating two table cells from a row
     /// which wouldn't fit next to each other.
-    StraightVert,
+    HorizVert,
     /// Vertical bar with join to the left
     JoinLeft,
     /// Vertical bar with join to the right
@@ -975,17 +977,17 @@ impl BorderSegHoriz {
     pub fn chop_left(&mut self) {
         use BorderSegHoriz::*;
         match *self {
-            Straight => {}
+            Horiz | HorizVert => {}
             JoinBelow => { *self = CornerTL; }
             JoinAbove => { *self = CornerBL; }
             JoinCross => { *self = JoinRight; }
-            StraightVert => {}
-            JoinLeft => { *self = StraightVert; }
+            Vert => {}
+            JoinLeft => { *self = Vert; }
             JoinRight => {}
-            CornerTL => { *self = StraightVert; }
-            CornerTR => {}
-            CornerBL => { *self = StraightVert; }
-            CornerBR => {}
+            CornerTL => {}
+            CornerTR => { *self = Vert; }
+            CornerBL => {}
+            CornerBR => { *self = Vert; }
         }
     }
 
@@ -993,17 +995,17 @@ impl BorderSegHoriz {
     pub fn chop_right(&mut self) {
         use BorderSegHoriz::*;
         match *self {
-            Straight => {}
+            Horiz | HorizVert => {}
             JoinBelow => { *self = CornerTR; }
             JoinAbove => { *self = CornerBR; }
             JoinCross => { *self = JoinLeft; }
-            StraightVert => {}
+            Vert => {}
             JoinLeft => {}
-            JoinRight => { *self = StraightVert; }
-            CornerTL => {}
-            CornerTR => { *self = StraightVert; }
-            CornerBL => {}
-            CornerBR => { *self = StraightVert; }
+            JoinRight => { *self = Vert; }
+            CornerTL => { *self = Vert; }
+            CornerTR => {}
+            CornerBL => { *self = Vert; }
+            CornerBR => {}
         }
     }
 }
@@ -1027,7 +1029,7 @@ impl<T: Clone> BorderHoriz<T> {
     /// Create a new blank border line.
     pub fn new(width: usize, tag: T) -> Self {
         BorderHoriz {
-            segments: vec![BorderSegHoriz::Straight; width],
+            segments: vec![BorderSegHoriz::Horiz; width],
             tag,
             holes: Default::default(),
         }
@@ -1046,7 +1048,7 @@ impl<T: Clone> BorderHoriz<T> {
     fn stretch_to(&mut self, width: usize) {
         use self::BorderSegHoriz::*;
         while width > self.segments.len() {
-            self.segments.push(Straight);
+            self.segments.push(Horiz);
         }
     }
 
@@ -1056,15 +1058,16 @@ impl<T: Clone> BorderHoriz<T> {
         self.stretch_to(x + 1);
         let prev = self.segments[x];
         self.segments[x] = match prev {
-            Straight | JoinAbove => JoinAbove,
+            Horiz | JoinAbove => JoinAbove,
             JoinBelow | JoinCross => JoinCross,
-            StraightVert => StraightVert,
+            Vert => Vert,
             JoinLeft => JoinLeft,
             JoinRight => JoinRight,
             CornerTL => JoinRight,
             CornerTR => JoinLeft,
             CornerBL => CornerBL,
             CornerBR => CornerBR,
+            HorizVert => HorizVert,
         }
     }
 
@@ -1074,15 +1077,16 @@ impl<T: Clone> BorderHoriz<T> {
         self.stretch_to(x + 1);
         let prev = self.segments[x];
         self.segments[x] = match prev {
-            Straight | JoinBelow => JoinBelow,
+            Horiz | JoinBelow => JoinBelow,
             JoinAbove | JoinCross => JoinCross,
-            StraightVert => StraightVert,
+            Vert => Vert,
             JoinLeft => JoinLeft,
             JoinRight => JoinRight,
             CornerTL => CornerTL,
             CornerTR => CornerTR,
             CornerBL => JoinRight,
             CornerBR => JoinLeft,
+            HorizVert => HorizVert,
         }
     }
 
@@ -1093,7 +1097,7 @@ impl<T: Clone> BorderHoriz<T> {
         eprintln!("  before: {}", self.to_string());
         for (idx, seg) in other.segments.iter().enumerate() {
             match *seg {
-                Straight | StraightVert | JoinLeft | JoinRight | CornerTL | CornerTR => (),
+                Horiz | Vert | JoinLeft | JoinRight | CornerTL | CornerTR | HorizVert => (),
                 JoinAbove | JoinBelow | JoinCross | CornerBL | CornerBR => {
                     self.join_below(idx + pos);
                 }
@@ -1109,7 +1113,7 @@ impl<T: Clone> BorderHoriz<T> {
         eprintln!("  before: {}", self.to_string());
         for (idx, seg) in other.segments.iter().enumerate() {
             match *seg {
-                Straight | StraightVert | JoinLeft | JoinRight | CornerBL | CornerBR => (),
+                Horiz | Vert | JoinLeft | JoinRight | CornerBL | CornerBR | HorizVert => (),
                 JoinAbove | JoinBelow | JoinCross | CornerTL | CornerTR => {
                     self.join_above(idx + pos);
                 }
@@ -1125,7 +1129,7 @@ impl<T: Clone> BorderHoriz<T> {
         self.segments
             .iter()
             .map(|seg| match *seg {
-                Straight | JoinBelow | StraightVert | JoinLeft | JoinRight | CornerTL | CornerTR => ' ',
+                Horiz | JoinBelow | Vert | JoinLeft | JoinRight | CornerTL | CornerTR | HorizVert => ' ',
                 JoinAbove | JoinCross | CornerBL | CornerBR => '│',
             })
             .collect()
@@ -1149,8 +1153,9 @@ impl<T: Clone> BorderHoriz<T> {
     #[allow(clippy::inherent_to_string)]
     fn to_string(&self) -> String {
         let seg_to_char = |seg| match seg {
-            BorderSegHoriz::Straight => '─',
-            BorderSegHoriz::StraightVert => '/',
+            BorderSegHoriz::Horiz => '─',
+            BorderSegHoriz::Vert => '│',
+            BorderSegHoriz::HorizVert => '/',
             BorderSegHoriz::JoinAbove => '┴',
             BorderSegHoriz::JoinBelow => '┬',
             BorderSegHoriz::JoinCross => '┼',
@@ -2060,7 +2065,7 @@ impl<D: TextDecorator> Renderer for SubRenderer<D> {
             } else if self.options.draw_borders {
                 let border = BorderHoriz::new_type(
                     width,
-                    BorderSegHoriz::StraightVert,
+                    BorderSegHoriz::HorizVert,
                     self.ann_stack.clone(),
                 );
                 self.add_horizontal_line(border)?;
