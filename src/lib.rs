@@ -627,6 +627,17 @@ impl RenderTable {
                 col_positions.insert(col);
                 new_cells.push(cell);
             }
+            // Handle remaining overhanging cells
+            while let Some(mut hanging) = overhang_cells.pop() {
+                new_cells.push(RenderTableCell::dummy(hanging.2));
+                col += hanging.2;
+                col_positions.insert(col);
+                if hanging.0 > 1 {
+                    hanging.0 -= 1;
+                    next_overhang_cells.push(hanging);
+                }
+            }
+
             row.cells = new_cells;
             overhang_cells = std::mem::take(&mut next_overhang_cells);
             overhang_cells.reverse();

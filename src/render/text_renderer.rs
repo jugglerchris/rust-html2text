@@ -1843,7 +1843,6 @@ impl<D: TextDecorator> Renderer for SubRenderer<D> {
         {
             // Character position from line sets.
             let mut lidx = 0;
-            let mut lpos = 0;
             let mut lnextpos = 0;
             eprintln!("line_sets: [");
             for ls in &line_sets {
@@ -1857,7 +1856,7 @@ impl<D: TextDecorator> Renderer for SubRenderer<D> {
             eprintln!("]");
             for ls in std::mem::take(&mut self.overhang_cells) {
                 while lidx < line_sets.len() && dbg!(line_sets[dbg!(lidx)].pos) < dbg!(ls.pos) {
-                    lpos = line_sets[lidx].pos;
+                    let lpos = line_sets[lidx].pos;
                     lnextpos = lpos + line_sets[lidx].width + 1;
                     lidx += 1;
                 }
