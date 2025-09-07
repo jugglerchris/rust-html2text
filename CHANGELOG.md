@@ -11,6 +11,10 @@ Possible log types:
 
 ### Latest
 
+### 0.15.5
+
+- [fixed] Fix an assertion and some missing styles with rowspan cells in rich mode.
+
 ### 0.15.4
 
 - [added] Support handling `rowspan` in tables.

@@ -245,7 +245,7 @@ checksum = "9229cfe53dfd69f0609a49f65461bd93001ea1ef889cd5529dd176593f5338a1"
 
 [[package]]
 name = "html2text"
-version = "0.15.4"
+version = "0.15.5"
 dependencies = [
  "argparse",
  "backtrace",
