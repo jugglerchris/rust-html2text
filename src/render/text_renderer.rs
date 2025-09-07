@@ -1185,6 +1185,12 @@ impl<T: Clone> BorderHoriz<T> {
         }
         result
     }
+
+    fn extend_to(&mut self, len: usize) {
+        while self.segments.len() < len {
+            self.segments.push(BorderSegHoriz::Horiz);
+        }
+    }
 }
 
 impl<T: Clone + Debug + Eq + Default> BorderHoriz<T> {
@@ -1903,18 +1909,26 @@ impl<D: TextDecorator> Renderer for SubRenderer<D> {
         dbg!(tot_width);
 
         let mut next_border = BorderHoriz::new(tot_width, self.ann_stack.clone());
+        eprintln!("next_border: {}", next_border.to_string());
 
         // Join the vertical lines to all the borders
         if let Some(RenderLine::Line(prev_border)) = self.lines.back_mut() {
+            eprintln!("prev_border: {}", prev_border.to_string());
             let mut pos = 0;
             html_trace!("Merging with last line:\n{}", prev_border.to_string());
             for ls in &line_sets[..line_sets.len() - 1] {
                 let w = ls.width;
                 html_trace!("pos={}, w={}", pos, w);
+                eprintln!("pos={pos} w={w}");
                 prev_border.join_below(pos + w);
                 next_border.join_above(pos + w);
                 pos += w + 1;
             }
+            if let Some(ls) = line_sets.last() {
+                // Stretch the previous border if this row is wider.
+                prev_border.extend_to(pos + ls.width);
+            }
+            eprintln!("adjusted prev_border: {}", prev_border.to_string());
         }
 
         // If we're collapsing bottom borders, then the bottom border of a

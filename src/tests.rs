@@ -354,12 +354,11 @@ fn test_colspan_large() {
      </tr>
    </table>
 "##,
-        // FIXME: The extra long line blow is not ideal
         r#"─┬─┬─
 1│2│3
 ─┴─┼─
 12 │3
-─┬─┴─
+─┬─┴──
 1│23  
 ─┴────
 "#,
@@ -2495,6 +2494,32 @@ X123│    │O    │one
 ────┼────┴─────┤    
 Y   │Hmm oh    │    
 ────┴──────────┴────
+"#, 20);
+}
+
+#[test]
+fn test_rowspan3_shortrow() {
+    test_html(br#"<table>
+    <tr><th>H0</th><th>H1</th><th>H2</th><th>H3</th><th>H4</th></tr>
+    <tr><td>foo</td></tr>
+    <tr><td>X</td><td rowspan=2>B
+            F b b o t the</td><td colspan=3>oh no</td></tr>
+    <tr><td>Y</td><td rowspan=1 colspan=2>O</td><td rowspan=2>one two thr fou fiv</td></tr>
+    <tr><td>W</td><td colspan=2>Hmm oh</td></tr>
+</table>"#, r#"───┬────┬──┬──┬─────
+H0 │H1  │H2│H3│H4   
+───┴────┴──┴──┴─────
+foo
+───┬────┬───────────
+X  │B F │oh no      
+   │b b │           
+───┤o t ├─────┬─────
+Y  │the │O    │one  
+   │    │     │two  
+───┼────┴──┬──┤thr  
+W  │Hmm oh │  │fou  
+   │       │  │fiv  
+───┴───────┴──┴─────
 "#, 20);
 }
 
