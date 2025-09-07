@@ -35,6 +35,9 @@ pub(crate) trait Renderer {
     /// Start a new block.
     fn start_block(&mut self) -> Result<()>;
 
+    /// Start a new table.
+    fn start_table(&mut self) -> Result<()>;
+
     /// Mark the end of a block.
     fn end_block(&mut self);
 
@@ -87,7 +90,7 @@ pub(crate) trait Renderer {
     /// with the surrounding one.
     fn append_columns_with_borders<I>(&mut self, cols: I, collapse: bool) -> Result<()>
     where
-        I: IntoIterator<Item = Self>,
+        I: IntoIterator<Item = (Self, usize)>,
         Self: Sized;
 
     /// Append a set of sub renderers joined vertically with lines, for tables

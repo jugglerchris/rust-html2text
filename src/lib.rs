@@ -465,10 +465,13 @@ impl SizeEstimate {
 /// Render tree table cell
 struct RenderTableCell {
     colspan: usize,
+    rowspan: usize,
     content: Vec<RenderNode>,
     size_estimate: Cell<Option<SizeEstimate>>,
     col_width: Option<usize>, // Actual width to use
+    x_pos: Option<usize>,     // X location
     style: ComputedStyle,
+    is_dummy: bool,
 }
 
 impl RenderTableCell {
@@ -485,6 +488,21 @@ impl RenderTableCell {
         };
         size
     }
+
+    /// Make a placeholder cell to cover for a cell above with
+    /// larger rowspan.
+    pub fn dummy(colspan: usize) -> Self {
+        RenderTableCell {
+            colspan,
+            rowspan: 1,
+            content: Default::default(),
+            size_estimate: Cell::new(Some(SizeEstimate::default())),
+            col_width: None,
+            x_pos: None,
+            style: Default::default(),
+            is_dummy: true,
+        }
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -497,12 +515,17 @@ struct RenderTableRow {
 
 impl RenderTableRow {
     /// Return a mutable iterator over the cells.
-    fn cells(&self) -> std::slice::Iter<RenderTableCell> {
+    fn cells(&self) -> std::slice::Iter<'_, RenderTableCell> {
         self.cells.iter()
     }
     /// Return a mutable iterator over the cells.
-    fn cells_mut(&mut self) -> std::slice::IterMut<RenderTableCell> {
+    fn cells_mut(&mut self) -> std::slice::IterMut<'_, RenderTableCell> {
         self.cells.iter_mut()
+    }
+    /// Return an iterator which returns cells by values (removing
+    /// them from the row).
+    fn cells_drain(&mut self) -> impl Iterator<Item = RenderTableCell> {
+        std::mem::take(&mut self.cells).into_iter()
     }
     /// Count the number of cells in the row.
     /// Takes into account colspan.
@@ -516,6 +539,7 @@ impl RenderTableRow {
         let mut result = Vec::new();
         let mut colno = 0;
         let col_sizes = self.col_sizes.unwrap();
+        let mut x_pos = 0;
         for mut cell in self.cells {
             let colspan = cell.colspan;
             let col_width = if vertical {
@@ -525,7 +549,10 @@ impl RenderTableRow {
             };
             // Skip any zero-width columns
             if col_width > 0 {
-                cell.col_width = Some(col_width + cell.colspan - 1);
+                let this_col_width = col_width + cell.colspan - 1;
+                cell.col_width = Some(this_col_width);
+                cell.x_pos = Some(x_pos);
+                x_pos += this_col_width + 1;
                 let style = cell.style.clone();
                 result.push(RenderNode::new_styled(
                     RenderNodeInfo::TableCell(cell),
@@ -567,13 +594,53 @@ impl RenderTable {
 
         // This will include 0 and the index after the last colspan.
         let mut col_positions = BTreeSet::new();
+        // Cells which have a rowspan > 1 from previous rows.
+        // Each element is (rows_left, colpos, colspan)
+        // Before each row, the overhangs are in reverse order so that
+        // they can be popped off.
+        let mut overhang_cells: Vec<(usize, usize, usize)> = Vec::new();
+        let mut next_overhang_cells = Vec::new();
         col_positions.insert(0);
-        for row in &rows {
+        for row in &mut rows {
             let mut col = 0;
-            for cell in row.cells() {
+            let mut new_cells = Vec::new();
+
+            for cell in row.cells_drain() {
+                while let Some(hanging) = overhang_cells.last() {
+                    if hanging.1 <= col {
+                        new_cells.push(RenderTableCell::dummy(hanging.2));
+                        col += hanging.2;
+                        col_positions.insert(col);
+                        let mut used = overhang_cells.pop().unwrap();
+                        if used.0 > 1 {
+                            used.0 -= 1;
+                            next_overhang_cells.push(used);
+                        }
+                    } else {
+                        break;
+                    }
+                }
+                if cell.rowspan > 1 {
+                    next_overhang_cells.push((cell.rowspan - 1, col, cell.colspan));
+                }
                 col += cell.colspan;
                 col_positions.insert(col);
+                new_cells.push(cell);
             }
+            // Handle remaining overhanging cells
+            while let Some(mut hanging) = overhang_cells.pop() {
+                new_cells.push(RenderTableCell::dummy(hanging.2));
+                col += hanging.2;
+                col_positions.insert(col);
+                if hanging.0 > 1 {
+                    hanging.0 -= 1;
+                    next_overhang_cells.push(hanging);
+                }
+            }
+
+            row.cells = new_cells;
+            overhang_cells = std::mem::take(&mut next_overhang_cells);
+            overhang_cells.reverse();
         }
 
         let colmap: HashMap<_, _> = col_positions
@@ -603,7 +670,7 @@ impl RenderTable {
     }
 
     /// Return an iterator over the rows.
-    fn rows(&self) -> std::slice::Iter<RenderTableRow> {
+    fn rows(&self) -> std::slice::Iter<'_, RenderTableRow> {
         self.rows.iter()
     }
 
@@ -1243,11 +1310,16 @@ fn td_to_render_tree<'a, T: Write>(
     _err_out: &mut T,
 ) -> TreeMapResult<'a, HtmlContext, RenderInput, RenderNode> {
     let mut colspan = 1;
+    let mut rowspan = 1;
     if let Element { ref attrs, .. } = input.handle.data {
         for attr in attrs.borrow().iter() {
             if &attr.name.local == "colspan" {
                 let v: &str = &attr.value;
                 colspan = v.parse().unwrap_or(1);
+            }
+            if &attr.name.local == "rowspan" {
+                let v: &str = &attr.value;
+                rowspan = v.parse().unwrap_or(1);
             }
         }
     }
@@ -1256,10 +1328,13 @@ fn td_to_render_tree<'a, T: Write>(
         Some(RenderNode::new_styled(
             RenderNodeInfo::TableCell(RenderTableCell {
                 colspan,
+                rowspan,
                 content: children,
                 size_estimate: Cell::new(None),
                 col_width: None,
+                x_pos: None,
                 style,
+                is_dummy: false,
             }),
             computed,
         ))
@@ -2681,7 +2756,7 @@ fn render_table_tree<T: Write, D: TextDecorator>(
                 .saturating_sub(1)
     };
 
-    renderer.start_block()?;
+    renderer.start_table()?;
 
     if table_width != 0 && renderer.options.draw_borders {
         renderer.add_horizontal_border_width(table_width)?;
@@ -2701,12 +2776,17 @@ fn render_table_row<T: Write, D: TextDecorator>(
     pushed_style: PushedStyleInfo,
     _err_out: &mut T,
 ) -> TreeMapResult<'static, TextRenderer<D>, RenderNode, Option<SubRenderer<D>>> {
+    let rowspans: Vec<usize> = row.cells().map(|cell| cell.rowspan).collect();
+    let have_overhang = row.cells().any(|cell| cell.is_dummy);
     TreeMapResult::PendingChildren {
         children: row.into_cells(false),
-        cons: Box::new(|builders, children| {
+        cons: Box::new(move |builders, children| {
             let children: Vec<_> = children.into_iter().map(Option::unwrap).collect();
-            if children.iter().any(|c| !c.empty()) {
-                builders.append_columns_with_borders(children, true)?;
+            if have_overhang || children.iter().any(|c| !c.empty()) {
+                builders.append_columns_with_borders(
+                    children.into_iter().zip(rowspans.into_iter()),
+                    true,
+                )?;
             }
             pushed_style.unwind(builders);
             Ok(Some(None))
