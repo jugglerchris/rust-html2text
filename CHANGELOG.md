@@ -11,6 +11,10 @@ Possible log types:
 
 ### Latest
 
+### 0.15.4
+
+- [added] Support handling `rowspan` in tables.
+
 ### 0.15.3
 
 - [fixed] Parse `<noscript>` tags as if scripting is disabled (thanks craigchiang)
