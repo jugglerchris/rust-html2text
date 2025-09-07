@@ -1168,10 +1168,8 @@ impl<T: Clone> BorderHoriz<T> {
         self.holes.push((pos, t));
     }
 
-    /// Turn into a string with drawing characters
-    #[allow(clippy::inherent_to_string)]
-    fn to_string(&self) -> String {
-        let seg_to_char = |seg| match seg {
+    fn seg_to_char(seg: BorderSegHoriz) -> char {
+        match seg {
             BorderSegHoriz::Horiz => '─',
             BorderSegHoriz::Vert => '│',
             BorderSegHoriz::HorizVert => '/',
@@ -1184,14 +1182,18 @@ impl<T: Clone> BorderHoriz<T> {
             BorderSegHoriz::CornerTR => '┐',
             BorderSegHoriz::CornerBL => '└',
             BorderSegHoriz::CornerBR => '┘',
-        };
+        }
+    }
 
+    /// Turn into a string with drawing characters
+    #[allow(clippy::inherent_to_string)]
+    fn to_string(&self) -> String {
         let mut result = String::new();
         let mut pos = 0usize;
 
         for (holepos, hole) in &self.holes {
             for seg in &self.segments[pos..*holepos] {
-                result.push(seg_to_char(*seg));
+                result.push(Self::seg_to_char(*seg));
             }
             pos = *holepos;
             result.push_str(hole.as_str());
@@ -1199,7 +1201,7 @@ impl<T: Clone> BorderHoriz<T> {
         }
         if pos < self.segments.len() {
             for seg in &self.segments[pos..] {
-                result.push(seg_to_char(*seg));
+                result.push(Self::seg_to_char(*seg));
             }
         }
         result
@@ -1215,14 +1217,36 @@ impl<T: Clone> BorderHoriz<T> {
 impl<T: Clone + Debug + Eq + Default> BorderHoriz<T> {
     fn into_tagged_line(self) -> TaggedLine<T> {
         use self::TaggedLineElement::Str;
-        assert!(self.holes.is_empty());
-        let mut tagged = TaggedLine::new();
+        let mut pos = 0usize;
+        let mut result = TaggedLine::new();
         let tag = self.tag.clone();
-        tagged.push(Str(TaggedString {
-            s: self.to_string(),
-            tag,
-        }));
-        tagged
+
+        for (holepos, hole) in self.holes {
+            if holepos > pos {
+                let mut s = String::new();
+                for seg in &self.segments[pos..holepos] {
+                    s.push(Self::seg_to_char(*seg));
+                }
+                result.push(Str(TaggedString {
+                    s,
+                    tag: tag.clone(),
+                }));
+                pos = holepos;
+            }
+            pos += hole.width();
+            result.push(hole);
+        }
+        if pos < self.segments.len() {
+            let mut s = String::new();
+            for seg in &self.segments[pos..] {
+                s.push(Self::seg_to_char(*seg));
+            }
+            result.push(Str(TaggedString {
+                s,
+                tag: tag.clone(),
+            }));
+        }
+        result
     }
 }
 
