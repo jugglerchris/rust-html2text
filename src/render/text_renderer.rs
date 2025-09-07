@@ -1093,8 +1093,6 @@ impl<T: Clone> BorderHoriz<T> {
     /// Merge a (possibly partial) border line below into this one.
     fn merge_from_below(&mut self, other: &BorderHoriz<T>, pos: usize) {
         use self::BorderSegHoriz::*;
-        eprintln!("merge_from_below({}, {pos})", other.to_string());
-        eprintln!("  before: {}", self.to_string());
         for (idx, seg) in other.segments.iter().enumerate() {
             match *seg {
                 Horiz | Vert | JoinLeft | JoinRight | CornerTL | CornerTR | HorizVert => (),
@@ -1103,14 +1101,11 @@ impl<T: Clone> BorderHoriz<T> {
                 }
             }
         }
-        eprintln!("  after: {}", self.to_string());
     }
 
     /// Merge a (possibly partial) border line above into this one.
     fn merge_from_above(&mut self, other: &BorderHoriz<T>, pos: usize) {
         use self::BorderSegHoriz::*;
-        eprintln!("merge_from_above({}, {pos})", other.to_string());
-        eprintln!("  before: {}", self.to_string());
         for (idx, seg) in other.segments.iter().enumerate() {
             match *seg {
                 Horiz | Vert | JoinLeft | JoinRight | CornerBL | CornerBR | HorizVert => (),
@@ -1119,7 +1114,6 @@ impl<T: Clone> BorderHoriz<T> {
                 }
             }
         }
-        eprintln!("  after: {}", self.to_string());
     }
 
     /// Return a string of spaces and vertical lines which would match
@@ -1137,8 +1131,6 @@ impl<T: Clone> BorderHoriz<T> {
 
     /// Add a chunk of text on top of the line.
     fn add_text_span(&mut self, pos: usize, t: TaggedLineElement<T>) where T: Debug {
-        eprintln!("add_text_span({pos}, {t:?}");
-        eprintln!("  before: {}", self.to_string());
         // Adjust the line pieces on either side.
         if pos > 0 {
             self.segments.get_mut(pos-1).map(|seg| seg.chop_right());
@@ -1146,7 +1138,6 @@ impl<T: Clone> BorderHoriz<T> {
         let rpos = pos + t.width();
         self.segments.get_mut(rpos).map(|seg| seg.chop_left());
         self.holes.push((pos, t));
-        eprintln!("  after: {}", self.to_string());
     }
 
     /// Turn into a string with drawing characters
@@ -1855,23 +1846,13 @@ impl<D: TextDecorator> Renderer for SubRenderer<D> {
             // Character position from line sets.
             let mut lidx = 0;
             let mut lnextpos = 0;
-            eprintln!("line_sets: [");
-            for ls in &line_sets {
-                eprintln!("  {ls}");
-            }
-            eprintln!("]");
-            eprintln!("overhanging: [");
-            for ls in &self.overhang_cells {
-                eprintln!("  {ls}");
-            }
-            eprintln!("]");
             for ls in std::mem::take(&mut self.overhang_cells) {
-                while lidx < line_sets.len() && dbg!(line_sets[dbg!(lidx)].pos) < dbg!(ls.pos) {
+                while lidx < line_sets.len() && line_sets[lidx].pos < ls.pos {
                     let lpos = line_sets[lidx].pos;
                     lnextpos = lpos + line_sets[lidx].width + 1;
                     lidx += 1;
                 }
-                if dbg!(lidx) >= dbg!(line_sets.len()) {
+                if lidx >= line_sets.len() {
                     // This row doesn't extend this far.
                     if lnextpos < ls.pos {
                         // We need padding
@@ -1893,33 +1874,18 @@ impl<D: TextDecorator> Renderer for SubRenderer<D> {
                 }
             }
         }
-        eprintln!("After overhang handling");
-            eprintln!("line_sets: [");
-            for ls in &line_sets {
-                eprintln!("  {ls}");
-            }
-            eprintln!("]");
-            eprintln!("overhanging: [");
-            for ls in &self.overhang_cells {
-                eprintln!("  {ls}");
-            }
-            eprintln!("]");
 
         tot_width -= 1;
-        dbg!(tot_width);
 
         let mut next_border = BorderHoriz::new(tot_width, self.ann_stack.clone());
-        eprintln!("next_border: {}", next_border.to_string());
 
         // Join the vertical lines to all the borders
         if let Some(RenderLine::Line(prev_border)) = self.lines.back_mut() {
-            eprintln!("prev_border: {}", prev_border.to_string());
             let mut pos = 0;
             html_trace!("Merging with last line:\n{}", prev_border.to_string());
             for ls in &line_sets[..line_sets.len() - 1] {
                 let w = ls.width;
                 html_trace!("pos={}, w={}", pos, w);
-                eprintln!("pos={pos} w={w}");
                 prev_border.join_below(pos + w);
                 next_border.join_above(pos + w);
                 pos += w + 1;
@@ -1928,7 +1894,6 @@ impl<D: TextDecorator> Renderer for SubRenderer<D> {
                 // Stretch the previous border if this row is wider.
                 prev_border.extend_to(pos + ls.width);
             }
-            eprintln!("adjusted prev_border: {}", prev_border.to_string());
         }
 
         // If we're collapsing bottom borders, then the bottom border of a
@@ -2021,7 +1986,7 @@ impl<D: TextDecorator> Renderer for SubRenderer<D> {
             let mut pos = 0;
             for mut ls in line_sets.into_iter() {
                 if ls.rowspan > 1 {
-                    if let Some(l) = dbg!(&ls.lines).get(cell_height) {
+                    if let Some(l) = (&ls.lines).get(cell_height) {
                         let mut tmppos = pos;
                         for ts in l.clone().into_tagged_line() {
                             let w = ts.width();
