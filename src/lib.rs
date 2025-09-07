@@ -469,7 +469,7 @@ struct RenderTableCell {
     content: Vec<RenderNode>,
     size_estimate: Cell<Option<SizeEstimate>>,
     col_width: Option<usize>, // Actual width to use
-    x_pos: Option<usize>,             // X location
+    x_pos: Option<usize>,     // X location
     style: ComputedStyle,
     is_dummy: bool,
 }

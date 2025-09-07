@@ -978,16 +978,28 @@ impl BorderSegHoriz {
         use BorderSegHoriz::*;
         match *self {
             Horiz | HorizVert => {}
-            JoinBelow => { *self = CornerTL; }
-            JoinAbove => { *self = CornerBL; }
-            JoinCross => { *self = JoinRight; }
+            JoinBelow => {
+                *self = CornerTL;
+            }
+            JoinAbove => {
+                *self = CornerBL;
+            }
+            JoinCross => {
+                *self = JoinRight;
+            }
             Vert => {}
-            JoinLeft => { *self = Vert; }
+            JoinLeft => {
+                *self = Vert;
+            }
             JoinRight => {}
             CornerTL => {}
-            CornerTR => { *self = Vert; }
+            CornerTR => {
+                *self = Vert;
+            }
             CornerBL => {}
-            CornerBR => { *self = Vert; }
+            CornerBR => {
+                *self = Vert;
+            }
         }
     }
 
@@ -996,15 +1008,27 @@ impl BorderSegHoriz {
         use BorderSegHoriz::*;
         match *self {
             Horiz | HorizVert => {}
-            JoinBelow => { *self = CornerTR; }
-            JoinAbove => { *self = CornerBR; }
-            JoinCross => { *self = JoinLeft; }
+            JoinBelow => {
+                *self = CornerTR;
+            }
+            JoinAbove => {
+                *self = CornerBR;
+            }
+            JoinCross => {
+                *self = JoinLeft;
+            }
             Vert => {}
             JoinLeft => {}
-            JoinRight => { *self = Vert; }
-            CornerTL => { *self = Vert; }
+            JoinRight => {
+                *self = Vert;
+            }
+            CornerTL => {
+                *self = Vert;
+            }
             CornerTR => {}
-            CornerBL => { *self = Vert; }
+            CornerBL => {
+                *self = Vert;
+            }
             CornerBR => {}
         }
     }
@@ -1123,17 +1147,21 @@ impl<T: Clone> BorderHoriz<T> {
         self.segments
             .iter()
             .map(|seg| match *seg {
-                Horiz | JoinBelow | Vert | JoinLeft | JoinRight | CornerTL | CornerTR | HorizVert => ' ',
+                Horiz | JoinBelow | Vert | JoinLeft | JoinRight | CornerTL | CornerTR
+                | HorizVert => ' ',
                 JoinAbove | JoinCross | CornerBL | CornerBR => '│',
             })
             .collect()
     }
 
     /// Add a chunk of text on top of the line.
-    fn add_text_span(&mut self, pos: usize, t: TaggedLineElement<T>) where T: Debug {
+    fn add_text_span(&mut self, pos: usize, t: TaggedLineElement<T>)
+    where
+        T: Debug,
+    {
         // Adjust the line pieces on either side.
         if pos > 0 {
-            self.segments.get_mut(pos-1).map(|seg| seg.chop_right());
+            self.segments.get_mut(pos - 1).map(|seg| seg.chop_right());
         }
         let rpos = pos + t.width();
         self.segments.get_mut(rpos).map(|seg| seg.chop_left());
@@ -1220,7 +1248,6 @@ impl<T: PartialEq + Eq + Clone + Debug + Default> RenderLine<T> {
     /// Convert into a `TaggedLine<T>`, if necessary squashing the
     /// BorderHoriz into one.
     pub fn into_tagged_line(self) -> TaggedLine<T> {
-
         match self {
             RenderLine::Text(tagged) => tagged,
             RenderLine::Line(border) => border.into_tagged_line(),
@@ -1949,7 +1976,11 @@ impl<D: TextDecorator> Renderer for SubRenderer<D> {
             }
         }
 
-        let cell_height = line_sets.iter().map(|ls| ls.cell_height()).max().unwrap_or(0);
+        let cell_height = line_sets
+            .iter()
+            .map(|ls| ls.cell_height())
+            .max()
+            .unwrap_or(0);
         let spaces: String = (0..tot_width).map(|_| ' ').collect();
         let last_cellno = line_sets.len() - 1;
         for i in 0..cell_height {
@@ -1994,26 +2025,26 @@ impl<D: TextDecorator> Renderer for SubRenderer<D> {
                             tmppos += w;
                         }
                     } else {
-                        next_border.add_text_span(pos,
-                            TaggedLineElement::Str(
-                                TaggedString {
-                                    s: " ".repeat(ls.width).into(),
-                                    tag: next_border.tag.clone(),
-                                }));
+                        next_border.add_text_span(
+                            pos,
+                            TaggedLineElement::Str(TaggedString {
+                                s: " ".repeat(ls.width).into(),
+                                tag: next_border.tag.clone(),
+                            }),
+                        );
                     }
                     {
                         // TODO: use VecDeque::truncate_front() when available.
-                        let new_len = ls.lines.len().saturating_sub(cell_height+1);
+                        let new_len = ls.lines.len().saturating_sub(cell_height + 1);
                         while ls.lines.len() > new_len {
                             ls.lines.pop_front();
                         }
                     }
-                    self.overhang_cells.push(
-                        LineSet {
-                            pos: ls.pos,
-                            width: ls.width,
-                            rowspan: ls.rowspan - 1,
-                            lines: ls.lines,
+                    self.overhang_cells.push(LineSet {
+                        pos: ls.pos,
+                        width: ls.width,
+                        rowspan: ls.rowspan - 1,
+                        lines: ls.lines,
                     });
                 }
                 pos += ls.width + 1;
@@ -2042,11 +2073,8 @@ impl<D: TextDecorator> Renderer for SubRenderer<D> {
             if first {
                 first = false;
             } else if self.options.draw_borders {
-                let border = BorderHoriz::new_type(
-                    width,
-                    BorderSegHoriz::HorizVert,
-                    self.ann_stack.clone(),
-                );
+                let border =
+                    BorderHoriz::new_type(width, BorderSegHoriz::HorizVert, self.ann_stack.clone());
                 self.add_horizontal_line(border)?;
             }
             self.append_subrender(col, std::iter::repeat(""))?;
