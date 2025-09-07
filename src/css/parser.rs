@@ -299,7 +299,7 @@ fn parse_property_name(text: &str) -> IResult<&str, PropertyName> {
 }
 
 // For now ignore whitespace
-fn parse_token(text: &str) -> IResult<&str, Token> {
+fn parse_token(text: &str) -> IResult<&str, Token<'_>> {
     let (rest, _) = skip_optional_whitespace(text)?;
     let mut chars = rest.chars();
     match chars.next() {
@@ -369,7 +369,7 @@ fn parse_token(text: &str) -> IResult<&str, Token> {
     }
 }
 
-fn parse_token_not_semicolon(text: &str) -> IResult<&str, Token> {
+fn parse_token_not_semicolon(text: &str) -> IResult<&str, Token<'_>> {
     let (rest, token) = parse_token(text)?;
     if token == Token::Semicolon {
         fail().parse(text)
@@ -378,7 +378,7 @@ fn parse_token_not_semicolon(text: &str) -> IResult<&str, Token> {
     }
 }
 
-fn parse_value(text: &str) -> IResult<&str, RawValue> {
+fn parse_value(text: &str) -> IResult<&str, RawValue<'_>> {
     let (rest, mut tokens) = many0(parse_token_not_semicolon).parse(text)?;
     let mut important = false;
     if let [.., Token::Delim('!'), Token::Ident(x)] = &tokens[..] {
@@ -635,7 +635,7 @@ fn parse_number(text: &str) -> IResult<&str, f32> {
     ))
 }
 
-fn parse_numeric_token(text: &str) -> IResult<&str, Token> {
+fn parse_numeric_token(text: &str) -> IResult<&str, Token<'_>> {
     let (rest, num) = recognize(parse_number).parse(text)?;
     let match_pct: IResult<_, _> = tag("%")(rest);
     if let Ok((rest_p, _)) = match_pct {
@@ -647,7 +647,7 @@ fn parse_numeric_token(text: &str) -> IResult<&str, Token> {
     }
 }
 
-fn parse_ident_like(text: &str) -> IResult<&str, Token> {
+fn parse_ident_like(text: &str) -> IResult<&str, Token<'_>> {
     let (rest, ident) = parse_ident(text)?;
     // If the next character is '(', then it's a function token
     let match_bracket: IResult<_, _> = tag("(")(rest);
@@ -657,7 +657,7 @@ fn parse_ident_like(text: &str) -> IResult<&str, Token> {
     }
 }
 
-fn parse_string_token(text: &str) -> IResult<&str, Token> {
+fn parse_string_token(text: &str) -> IResult<&str, Token<'_>> {
     let mut chars = text.char_indices();
     let mut s = String::new();
     let end_char = chars.next().unwrap().1;
