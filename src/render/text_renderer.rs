@@ -1410,7 +1410,7 @@ fn get_wrapping_or_insert<'w, D: TextDecorator>(
     wrapping: &'w mut Option<WrappedBlock<Vec<D::Annotation>>>,
     options: &RenderOptions,
     width: usize,
-    default_tag: &Vec<D::Annotation>,
+    default_tag: &[D::Annotation],
 ) -> &'w mut WrappedBlock<Vec<D::Annotation>> {
     wrapping.get_or_insert_with(|| {
         let wwidth = match options.wrap_width {
@@ -1421,7 +1421,7 @@ fn get_wrapping_or_insert<'w, D: TextDecorator>(
             wwidth,
             options.pad_block_width,
             options.allow_width_overflow,
-            default_tag.clone(),
+            default_tag.to_owned(),
         )
     })
 }
@@ -2041,7 +2041,7 @@ impl<D: TextDecorator> Renderer for SubRenderer<D> {
             let mut pos = 0;
             for mut ls in line_sets.into_iter() {
                 if ls.rowspan > 1 {
-                    if let Some(l) = (&ls.lines).get(cell_height) {
+                    if let Some(l) = ls.lines.get(cell_height) {
                         let mut tmppos = pos;
                         for ts in l.clone().into_tagged_line() {
                             let w = ts.width();
@@ -2052,7 +2052,7 @@ impl<D: TextDecorator> Renderer for SubRenderer<D> {
                         next_border.add_text_span(
                             pos,
                             TaggedLineElement::Str(TaggedString {
-                                s: " ".repeat(ls.width).into(),
+                                s: " ".repeat(ls.width),
                                 tag: next_border.tag.clone(),
                             }),
                         );
