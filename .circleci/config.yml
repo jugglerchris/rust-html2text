@@ -23,7 +23,7 @@ jobs:
       - run:
           name: Clippy
           command: |
-            cargo clippy
+            cargo clippy --all-features
   build-css:
     docker:
       - image: cimg/rust:1.80.1
