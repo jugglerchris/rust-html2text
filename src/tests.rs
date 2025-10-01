@@ -1275,6 +1275,50 @@ world
     );
 }
 
+#[test]
+fn test_multi_pre() {
+    test_html(
+        br##"<head><style><!--
+pre
+	{
+	margin:0cm;
+	margin-bottom:.0001pt;
+	}
+--></style></head>
+<body>
+    <pre>&nbsp;</pre>
+    <pre>Senior Security Engineer</pre>
+    <pre>&nbsp;</pre>
+    <pre>Singapore Washington DC</pre>
+    <pre>&nbsp;</pre>
+    <pre>email: x.y@z.com</pre>
+    <pre>&nbsp;</pre>
+    <pre>mobile:33 999999</pre>
+    <pre>phone: 33 999999</pre>
+</body>
+"##,
+        "\u{a0}
+
+Senior Security Engineer
+
+\u{a0}
+
+Singapore Washington DC
+
+\u{a0}
+
+email: x.y@z.com
+
+\u{a0}
+
+mobile:33 999999
+
+phone: 33 999999
+",
+        80,
+    );
+}
+
 // Check that spans work correctly inside <pre>
 #[test]
 fn test_pre_span() {
