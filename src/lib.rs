@@ -1549,7 +1549,7 @@ impl RenderInput {
                 }
             }
 
-            if let Some(offset_range) = get_offset(&full_text, s) {
+            if let Some(offset_range) = get_offset(full_text, s) {
                 node_styles.push((offset_range, style));
             } // else we ignore the highlight.
         }
@@ -1560,7 +1560,7 @@ impl RenderInput {
     // Return the children in the right form
     fn children(&self) -> Vec<RenderInput> {
         #[cfg(feature = "css_ext")]
-        if self.extra_styles.borrow().len() > 0 {
+        if !self.extra_styles.borrow().is_empty() {
             let mut offset = 0;
             let mut result = Vec::new();
             let mut start_style_index = 0;
@@ -1645,7 +1645,7 @@ impl RenderInput {
         RenderInput::do_extract_text(
             &mut result,
             &self.handle,
-            &mut *self.node_lengths.borrow_mut(),
+            &mut self.node_lengths.borrow_mut(),
         );
         result
     }
@@ -2039,7 +2039,7 @@ fn process_dom_node<T: Write>(
                     }
 
                     if let Some(title) = title {
-                        Finished(RenderNode::new_styled(Svg(title.into()), computed))
+                        Finished(RenderNode::new_styled(Svg(title), computed))
                     } else {
                         Nothing
                     }

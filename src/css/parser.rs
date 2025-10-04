@@ -786,11 +786,8 @@ fn parse_display(value: &RawValue) -> Result<Display, nom::Err<nom::error::Error
 
 #[cfg(feature = "css_ext")]
 fn parse_syntax(value: &RawValue) -> Result<String, nom::Err<nom::error::Error<&'static str>>> {
-    for tok in &value.tokens {
-        if let Token::Ident(word) = tok {
-            return Ok(word.to_string());
-        }
-        break;
+    if let Some(Token::Ident(word)) = value.tokens.iter().next() {
+        return Ok(word.to_string());
     }
     Err(empty_fail())
 }

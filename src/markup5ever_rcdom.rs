@@ -327,10 +327,7 @@ impl RcDom {
     pub fn get_node_by_path(&self, path: &[usize]) -> Option<Handle> {
         let mut node = self.document.clone();
         for idx in path {
-            node = match node.nth_child(*idx) {
-                Some(new_node) => new_node,
-                None => return None,
-            };
+            node = node.nth_child(*idx)?;
         }
         Some(node)
     }
