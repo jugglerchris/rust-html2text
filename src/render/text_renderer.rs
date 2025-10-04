@@ -1161,10 +1161,10 @@ impl<T: Clone> BorderHoriz<T> {
     {
         // Adjust the line pieces on either side.
         if pos > 0 {
-            self.segments.get_mut(pos - 1).map(|seg| seg.chop_right());
+            if let Some(seg) = self.segments.get_mut(pos - 1) { seg.chop_right() }
         }
         let rpos = pos + t.width();
-        self.segments.get_mut(rpos).map(|seg| seg.chop_left());
+        if let Some(seg) = self.segments.get_mut(rpos) { seg.chop_left() }
         self.holes.push((pos, t));
     }
 
