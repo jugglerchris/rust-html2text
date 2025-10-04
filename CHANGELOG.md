@@ -11,6 +11,8 @@ Possible log types:
 
 ### Latest
 
+- [changed] Updated MSRV to 1.85.
+
 ### 0.15.5
 
 - [fixed] Fix an assertion and some missing styles with rowspan cells in rich mode.

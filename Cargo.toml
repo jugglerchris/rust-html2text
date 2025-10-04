@@ -7,7 +7,7 @@ repository = "https://github.com/jugglerchris/rust-html2text/"
 readme = "README.md"
 documentation = "https://docs.rs/html2text/"
 edition = "2021"
-rust-version = "1.72"
+rust-version = "1.85"
 categories = ["text-processing"]
 
 keywords = ["html", "text"]

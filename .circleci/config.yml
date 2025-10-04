@@ -6,7 +6,7 @@ orbs:
 jobs:
   build-stable:
     docker:
-      - image: cimg/rust:1.80.1
+      - image: cimg/rust:1.85.1
     steps:
       - checkout
       - run: cargo --version
@@ -26,15 +26,15 @@ jobs:
             cargo clippy
   build-css:
     docker:
-      - image: cimg/rust:1.80.1
+      - image: cimg/rust:1.90
     steps:
       - checkout
       - run: cargo --version
       - run: cargo build --features=css
       - run: cargo test --features=css
-  build-1-72:
+  build-1-85:
     docker:
-      - image: cimg/rust:1.72
+      - image: cimg/rust:1.85
     steps:
       - checkout
       - run: cargo --version
@@ -75,5 +75,5 @@ workflows:
     jobs:
       - "build-stable"
       - "build-css"
-      - "build-1-72"
+      - "build-1-85"
       - "build-windows"
