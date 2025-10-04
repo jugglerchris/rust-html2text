@@ -1161,10 +1161,14 @@ impl<T: Clone> BorderHoriz<T> {
     {
         // Adjust the line pieces on either side.
         if pos > 0 {
-            if let Some(seg) = self.segments.get_mut(pos - 1) { seg.chop_right() }
+            if let Some(seg) = self.segments.get_mut(pos - 1) {
+                seg.chop_right()
+            }
         }
         let rpos = pos + t.width();
-        if let Some(seg) = self.segments.get_mut(rpos) { seg.chop_left() }
+        if let Some(seg) = self.segments.get_mut(rpos) {
+            seg.chop_left()
+        }
         self.holes.push((pos, t));
     }
 
@@ -1527,7 +1531,7 @@ impl<D: TextDecorator> SubRenderer<D> {
 
     #[cfg(feature = "html_trace")]
     /// Returns a string of the current builder contents (for testing).
-    #[allow(clippy::inherent_to_string)]
+    #[allow(clippy::inherent_to_string_shadow_display)]
     fn to_string(&self) -> String {
         let mut result = String::new();
         for line in &self.lines {

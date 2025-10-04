@@ -162,8 +162,6 @@ use std::collections::{BTreeSet, HashMap};
 #[cfg(feature = "css_ext")]
 use std::ops::Range;
 use std::rc::Rc;
-#[cfg(feature = "css_ext")]
-use std::sync::Arc;
 use unicode_width::UnicodeWidthStr;
 
 use std::io;
@@ -1452,16 +1450,16 @@ where
 #[cfg(feature = "css_ext")]
 #[derive(Clone, Default)]
 struct HighlighterMap {
-    map: HashMap<String, Arc<SyntaxHighlighter>>,
+    map: HashMap<String, Rc<SyntaxHighlighter>>,
 }
 
 #[cfg(feature = "css_ext")]
 impl HighlighterMap {
-    pub fn get(&self, name: &str) -> Option<Arc<SyntaxHighlighter>> {
+    pub fn get(&self, name: &str) -> Option<Rc<SyntaxHighlighter>> {
         self.map.get(name).cloned()
     }
 
-    fn insert(&mut self, name: impl Into<String>, f: Arc<SyntaxHighlighter>) {
+    fn insert(&mut self, name: impl Into<String>, f: Rc<SyntaxHighlighter>) {
         self.map.insert(name.into(), f);
     }
 }
@@ -1558,6 +1556,7 @@ impl RenderInput {
     }
 
     // Return the children in the right form
+    #[allow(clippy::mut_range_bound)]
     fn children(&self) -> Vec<RenderInput> {
         #[cfg(feature = "css_ext")]
         if !self.extra_styles.borrow().is_empty() {
@@ -1577,6 +1576,9 @@ impl RenderInput {
                     }
                     if style_range.end <= offset {
                         // We don't need to look at this again
+                        // Note this is here to restart this loop in a different place
+                        // in the next run of the outer loop; hence allowing
+                        // clippy::mut_range_bound on the function.
                         start_style_index = es_idx;
                     }
                     // This piece must overlap!
@@ -3140,8 +3142,9 @@ pub mod config {
             name: impl Into<String>,
             f: SyntaxHighlighter,
         ) -> Self {
-            self.syntax_highlighters
-                .insert(name.into(), std::sync::Arc::new(f));
+            use std::rc::Rc;
+
+            self.syntax_highlighters.insert(name.into(), Rc::new(f));
             self
         }
     }
