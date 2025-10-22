@@ -2616,7 +2616,10 @@ fn test_rowspan_underflow() {
     <td></td>
   </tr>
 </table>
-        "#, "\n", 20);
+        "#,
+        "\n",
+        20,
+    );
 }
 
 #[test]
