@@ -1930,7 +1930,9 @@ impl<D: TextDecorator> Renderer for SubRenderer<D> {
             }
         }
 
-        tot_width -= 1;
+        // If we haven't added any columns, tot_width will be 0; otherwise
+        // it will be one too high for a final unneeded border.
+        tot_width = tot_width.saturating_sub(1);
 
         let mut next_border = BorderHoriz::new(tot_width, self.ann_stack.clone());
 
@@ -2010,7 +2012,9 @@ impl<D: TextDecorator> Renderer for SubRenderer<D> {
             .max()
             .unwrap_or(0);
         let spaces: String = (0..tot_width).map(|_| ' ').collect();
-        let last_cellno = line_sets.len() - 1;
+        // line_sets can be empty; if so last_cellno can safely be 0 as
+        // we won't use it.
+        let last_cellno = line_sets.len().saturating_sub(1);
         for i in 0..cell_height {
             let mut line = TaggedLine::new();
             for (cellno, ls) in line_sets.iter_mut().enumerate() {
