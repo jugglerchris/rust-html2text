@@ -9,9 +9,11 @@ Possible log types:
 - `[fixed]` for any bug fixes.
 - `[security]` to invite users to upgrade in case of vulnerabilities.
 
-### Latest
+### 0.16.0
 
 - [changed] Updated MSRV to 1.85.
+- [fixed] Fix a panic in debug mode (subtraction underflow) with some table/rowspan
+  edge cases (thanks mtorromeo)
 
 ### 0.15.5
 
