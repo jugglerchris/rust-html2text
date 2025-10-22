@@ -2605,6 +2605,24 @@ W  │Hmm oh │  │fou
 }
 
 #[test]
+fn test_rowspan_underflow() {
+    test_html(
+        br#"<table>
+  <tr>
+    <td></td>
+    <td rowspan="2"></td>
+  </tr>
+  <tr>
+    <td></td>
+  </tr>
+</table>
+        "#,
+        "\n",
+        20,
+    );
+}
+
+#[test]
 fn test_issue_187() {
     let html = br#"<div><table><tbody><tr><td><div><table><tbody><tr><td><div><pre>na na na na na na na na na na na na na na na</p></div></td></tr>/<tbody></table></div></td></tr>/<tbody></table></div>"#;
     let _ = crate::config::plain().string_from_read(&html[..], 17);
