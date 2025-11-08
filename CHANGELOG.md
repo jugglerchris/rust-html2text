@@ -9,6 +9,11 @@ Possible log types:
 - `[fixed]` for any bug fixes.
 - `[security]` to invite users to upgrade in case of vulnerabilities.
 
+### 0.16.1
+
+- [added] Add `Config::empty_img_mode()` to configure how images with no alt text
+  are handled.
+
 ### 0.16.0
 
 - [changed] Updated MSRV to 1.85.
