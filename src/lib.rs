@@ -1498,6 +1498,7 @@ struct HtmlContext {
     wrap_links: bool,
     include_link_footnotes: bool,
     use_unicode_strikeout: bool,
+    image_mode: config::ImageRenderMode,
 
     #[cfg(feature = "css_ext")]
     syntax_highlighters: HighlighterMap,
@@ -2008,9 +2009,10 @@ fn process_dom_node<T: Write>(
                             break;
                         }
                     }
-                    if let (Some(title), Some(src)) = (title, src) {
+                    // Ignore `<img>` without src.
+                    if let Some(src) = src {
                         Finished(RenderNode::new_styled(
-                            Img(src.into(), title.into()),
+                            Img(src.into(), title.unwrap_or("").into()),
                             computed,
                         ))
                     } else {
@@ -2040,11 +2042,10 @@ fn process_dom_node<T: Write>(
                         }
                     }
 
-                    if let Some(title) = title {
-                        Finished(RenderNode::new_styled(Svg(title), computed))
-                    } else {
-                        Nothing
-                    }
+                    Finished(RenderNode::new_styled(
+                        Svg(title.unwrap_or_else(|| String::new())),
+                        computed,
+                    ))
                 }
                 expanded_name!(html "h1")
                 | expanded_name!(html "h2")
@@ -2865,6 +2866,21 @@ pub mod config {
     #[cfg(feature = "css_ext")]
     use crate::{HighlighterMap, SyntaxHighlighter};
 
+    /// Specify how images with missing or empty alt text are handled
+    #[derive(Copy, Clone, Debug, Default, PartialEq, Eq)]
+    #[non_exhaustive]
+    pub enum ImageRenderMode {
+        /// Ignore `<img>` without alt, or `<svg>` without `<title>`.
+        #[default]
+        IgnoreEmpty,
+        /// Always process images (will be handled by the decorator)
+        ShowAlways,
+        /// Use a fixed replacement text (e.g. emoji)
+        Replace(&'static str),
+        /// Replace with the last component of the link filename if any
+        Filename,
+    }
+
     /// Configure the HTML processing.
     pub struct Config<D: TextDecorator> {
         decorator: D,
@@ -2884,6 +2900,7 @@ pub mod config {
         wrap_links: bool,
         include_link_footnotes: bool,
         use_unicode_strikeout: bool,
+        image_mode: ImageRenderMode,
 
         #[cfg(feature = "css_ext")]
         syntax_highlighters: HighlighterMap,
@@ -2906,6 +2923,7 @@ pub mod config {
                 wrap_links: self.wrap_links,
                 include_link_footnotes: self.include_link_footnotes,
                 use_unicode_strikeout: self.use_unicode_strikeout,
+                image_mode: self.image_mode,
 
                 #[cfg(feature = "css_ext")]
                 syntax_highlighters: self.syntax_highlighters.clone(),
@@ -3132,6 +3150,12 @@ pub mod config {
             self
         }
 
+        /// Configure how images with no alt text are handled.
+        pub fn empty_img_mode(mut self, img_mode: ImageRenderMode) -> Self {
+            self.image_mode = img_mode;
+            self
+        }
+
         #[cfg(feature = "css_ext")]
         /// Register a named syntax highlighter.
         ///
@@ -3222,6 +3246,7 @@ pub mod config {
             wrap_links: true,
             include_link_footnotes: false,
             use_unicode_strikeout: true,
+            image_mode: ImageRenderMode::IgnoreEmpty,
             #[cfg(feature = "css_ext")]
             syntax_highlighters: Default::default(),
         }
@@ -3262,6 +3287,7 @@ impl RenderTree {
             wrap_links: context.wrap_links,
             include_link_footnotes: context.include_link_footnotes,
             use_unicode_strikeout: context.use_unicode_strikeout,
+            img_mode: context.image_mode,
         };
         let test_decorator = decorator.make_subblock_decorator();
         let builder = SubRenderer::new(width, render_options, decorator);

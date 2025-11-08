@@ -3,6 +3,7 @@
 //! This module implements helpers and concrete types for rendering from HTML
 //! into different text formats.
 
+use crate::config::ImageRenderMode;
 use crate::Colour;
 use crate::WhiteSpace;
 use crate::WhitespaceExt as _;
@@ -1393,6 +1394,9 @@ pub(crate) struct RenderOptions {
 
     /// Whether to use Unicode combining characters for crossing text out.
     pub use_unicode_strikeout: bool,
+
+    /// Image rendering mode
+    pub img_mode: ImageRenderMode,
 }
 
 impl Default for RenderOptions {
@@ -1406,6 +1410,7 @@ impl Default for RenderOptions {
             wrap_links: true,
             include_link_footnotes: false,
             use_unicode_strikeout: true,
+            img_mode: Default::default(),
         }
     }
 }
@@ -2192,7 +2197,23 @@ impl<D: TextDecorator> Renderer for SubRenderer<D> {
         Ok(())
     }
     fn add_image(&mut self, src: &str, title: &str) -> Result<()> {
-        let (s, tag) = self.decorator.decorate_image(src, title);
+        dbg!((src, title, self.options.img_mode));
+        let (s, tag) = match (title, self.options.img_mode) {
+            ("", ImageRenderMode::IgnoreEmpty) => {
+                return Ok(());
+            }
+            ("", ImageRenderMode::Filename) => {
+                let slash = src.rfind('/');
+                let sub_title = match slash {
+                    Some(pos) => &src[pos + 1..],
+                    None => src,
+                };
+                self.decorator.decorate_image(src, sub_title)
+            }
+            ("", ImageRenderMode::ShowAlways) => self.decorator.decorate_image(src, title),
+            ("", ImageRenderMode::Replace(s)) => self.decorator.decorate_image(src, s),
+            (title, _) => self.decorator.decorate_image(src, title),
+        };
         self.ann_stack.push(tag);
         self.add_inline_text(&s)?;
         self.ann_stack.pop();

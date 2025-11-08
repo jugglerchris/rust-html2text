@@ -1079,20 +1079,41 @@ fn test_img_alt() {
 
 #[test]
 fn test_img_noalt() {
+    test_html(br"<p>Hello x<img src='foo.jpg'>y</p>", "Hello xy\n", 80);
     test_html(
-        br"<p>Hello x<img src='foo.jpg'>y</p>",
+        br"<p>Hello x<img src='foo.jpg' alt=''>y</p>",
         "Hello xy\n",
         80,
+    );
+    test_html_conf(
+        br"<p>Hello x<img src='foo.jpg' alt=''>y</p>",
+        "Hello x[foo.jpg]y\n",
+        80,
+        |conf| conf.empty_img_mode(config::ImageRenderMode::Filename),
+    );
+    test_html_conf(
+        br"<p>Hello x<img src='http://www.example.com/path/foo.jpg' alt=''>y</p>",
+        "Hello x[foo.jpg]y\n",
+        80,
+        |conf| conf.empty_img_mode(config::ImageRenderMode::Filename),
+    );
+    test_html_conf(
+        br"<p>Hello x<img src='foo.jpg'>y</p>",
+        "Hello x[]y\n",
+        80,
+        |conf| conf.empty_img_mode(config::ImageRenderMode::ShowAlways),
+    );
+    test_html_conf(
+        br"<p>Hello x<img src='foo.jpg'>y</p>",
+        "Hello x[XYZ]y\n",
+        80,
+        |conf| conf.empty_img_mode(config::ImageRenderMode::Replace("XYZ")),
     );
 }
 
 #[test]
 fn test_img_nosrc() {
-    test_html(
-        br"<p>Hello x<img alt='myalt'>y</p>",
-        "Hello xy\n",
-        80,
-    );
+    test_html(br"<p>Hello x<img alt='myalt'>y</p>", "Hello xy\n", 80);
 }
 
 #[test]
@@ -1107,6 +1128,7 @@ fn test_svg() {
         "Hello\n",
         80,
     );
+    test_html(br"<p>Hello<svg></svg></p>", "Hello\n", 80);
 }
 
 #[test]
@@ -1117,7 +1139,6 @@ fn test_noscript() {
         "Hello\n\n**There**\n",
         80,
     );
-    test_html(br"<p>Hello<svg></svg></p>", "Hello\n", 80);
 }
 
 #[test]
