@@ -1,5 +1,3 @@
-use std::os::raw;
-
 use wasm_bindgen::prelude::wasm_bindgen;
 
 use ratzilla::ratatui::{
@@ -10,7 +8,10 @@ use ratzilla::ratatui::{
     Terminal,
 };
 
-use html2text::render::TextDecorator;
+use html2text::{
+    config::ImageRenderMode,
+    render::TextDecorator,
+};
 use ratzilla::DomBackend;
 
 #[derive(Default)]
@@ -30,6 +31,7 @@ pub struct Config {
     unicode_so: bool,
     do_decorate: bool,
     link_footnotes: bool,
+    image_mode: ImageRenderMode,
 }
 
 #[wasm_bindgen]
@@ -98,6 +100,15 @@ impl Config {
         self.link_footnotes = value;
     }
 
+    pub fn image_mode(&mut self, value: &str) {
+        match value {
+            "ignore" => self.image_mode = ImageRenderMode::IgnoreEmpty,
+            "always" => self.image_mode = ImageRenderMode::ShowAlways,
+            "replace" => self.image_mode = ImageRenderMode::Replace("XX"),
+            "filename" =>  self.image_mode = ImageRenderMode::Filename,
+            _ => self.image_mode = ImageRenderMode::IgnoreEmpty,
+        }
+    }
 
     fn update_conf<D: TextDecorator>(&self, conf: html2text::config::Config<D>) -> Result<html2text::config::Config<D>, String> {
         let mut conf = if self.css {
@@ -139,6 +150,9 @@ impl Config {
             conf = conf.do_decorate();
         }
         conf = conf.link_footnotes(self.link_footnotes);
+        if self.image_mode != ImageRenderMode::IgnoreEmpty {
+            conf = conf.empty_img_mode(self.image_mode);
+        }
         Ok(conf
             .unicode_strikeout(false))
     }

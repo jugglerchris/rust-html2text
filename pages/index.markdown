@@ -81,6 +81,7 @@ The following are the configuration settings (accessible via [`html2text::config
 | <input type="checkbox" id="conf_unicode_so">Use Unicode combining characters for strikeout | This allows crossed out text without terminal codes, but some environments don't render them correctly (e.g. offset). |
 | <input type="checkbox" id="conf_do_decorate">Add markdown-like decoration | Add characters, e.g. `*` around `<em>` text even with plain decorators. |
 | <input type="checkbox" id="conf_link_footnotes">URL footnotes | Add numbered list of URLs at the end of the output |
+| <select name="imgmode" id="conf_img_mode"><option value="">--Select mode--</option><option value="ignore">IgnoreEmpty</option><option value="always">ShowAlways</option><option value="replace">Replace(...)</option><option value="filename">Filename</option></select> | Configure how images with no `alt` text are handled |
 
 </div>
 

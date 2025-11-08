@@ -1,3 +1,9 @@
+const img_modes = {
+    "ignore": "IgnoreEmpty",
+    "always": "ShowAlways",
+    "replace": "Replace(\"XX\")",
+    "filename": "Filename",
+};
 const controls = [
     // Element id, (conf, value) -> "rust code"
     ["conf_css", (conf, value) => { conf.use_css(); return ".use_doc_css()"; }],
@@ -13,6 +19,7 @@ const controls = [
     ["conf_unicode_so", (conf, value) => { conf.unicode_so(); return `.unicode_strikeout(true)`; }],
     ["conf_do_decorate", (conf, value) => { conf.do_decorate(); return `.do_decorate(true)`; }],
     ["conf_link_footnotes", (conf, value) => { conf.link_footnotes(value); return `.link_footnotes({value})`; }],
+    ["conf_img_mode", (conf, value) => { conf.image_mode(value); return '.empty_img_mode(ImageRenderMode::' + img_modes[value] + ")"; }],
 
 ];
 function update_html() {
@@ -81,6 +88,10 @@ let text = conf.string_from_read(input, width);
 function start() {
     const confItems = document.querySelectorAll("input");
     confItems.forEach((elt) => {
+        elt.addEventListener("change", update_html);
+    });
+    const selectItems = document.querySelectorAll("select");
+    selectItems.forEach((elt) => {
         elt.addEventListener("change", update_html);
     });
     // Do the first render
