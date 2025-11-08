@@ -1078,6 +1078,24 @@ fn test_img_alt() {
 }
 
 #[test]
+fn test_img_noalt() {
+    test_html(
+        br"<p>Hello x<img src='foo.jpg'>y</p>",
+        "Hello xy\n",
+        80,
+    );
+}
+
+#[test]
+fn test_img_nosrc() {
+    test_html(
+        br"<p>Hello x<img alt='myalt'>y</p>",
+        "Hello xy\n",
+        80,
+    );
+}
+
+#[test]
 fn test_svg() {
     test_html(
         br"<p>Hello <svg><title>world</title></svg></p>",
