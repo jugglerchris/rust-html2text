@@ -2197,7 +2197,6 @@ impl<D: TextDecorator> Renderer for SubRenderer<D> {
         Ok(())
     }
     fn add_image(&mut self, src: &str, title: &str) -> Result<()> {
-        dbg!((src, title, self.options.img_mode));
         let (s, tag) = match (title, self.options.img_mode) {
             ("", ImageRenderMode::IgnoreEmpty) => {
                 return Ok(());
