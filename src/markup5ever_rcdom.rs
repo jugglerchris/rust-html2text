@@ -311,9 +311,13 @@ impl RcDom {
 
     /// Serialise the DOM to a writable.
     pub fn serialize(&self, writer: impl io::Write) -> io::Result<()> {
+        let doc = &self.document;
+        let children = doc.children.borrow();
+        debug_assert_eq!(children.len(), 1);
+
         html5ever::serialize(
             writer,
-            &SerializableHandle(self.document.clone()),
+            &SerializableHandle(children[0].clone()),
             html5ever::serialize::SerializeOpts {
                 scripting_enabled: true,
                 traversal_scope: html5ever::serialize::TraversalScope::IncludeNode,
