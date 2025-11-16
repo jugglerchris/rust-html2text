@@ -1,6 +1,6 @@
 [package]
 name = "html2text"
-version = "0.16.2"
+version = "0.16.3"
 authors = ["Chris Emerson <github@mail.nosreme.org>"]
 description = "Render HTML as plain text."
 repository = "https://github.com/jugglerchris/rust-html2text/"
