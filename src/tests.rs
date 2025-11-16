@@ -1,3 +1,5 @@
+use std::str;
+
 use crate::config::Config;
 use crate::render::text_renderer::{PlainDecorator, TaggedString};
 use crate::render::TaggedLineElement;
@@ -2717,6 +2719,15 @@ fn frag_list() {
             })],
         ]
     );
+}
+
+#[test]
+fn test_serialise_full() {
+    let dom = config::plain().parse_html(&b"<p>Hello</p>"[..]).unwrap();
+    let mut result = Vec::new();
+    dom.serialize(&mut result).unwrap();
+    let s = str::from_utf8(&result).unwrap();
+    assert_eq!(s, "<html><head></head><body><p>Hello</p></body></html>");
 }
 
 #[cfg(feature = "css")]

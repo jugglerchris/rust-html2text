@@ -187,7 +187,7 @@ mod top {
 
         loop {
             // max_y is the largest (0-based) index of a real document line.
-            let max_y = annotated.len() - 1;
+            let max_y = annotated.len().saturating_sub(1);
 
             // Sanity-check the current screen position. max_y should
             // be small enough that no blank lines beyond the end of

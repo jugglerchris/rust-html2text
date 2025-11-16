@@ -9,6 +9,12 @@ Possible log types:
 - `[fixed]` for any bug fixes.
 - `[security]` to invite users to upgrade in case of vulnerabilities.
 
+### 0.16.3
+
+- [fixed] RcDom::serialize() panicked.
+- [changed] Bumped html5ever dependency
+- [fixed] Fixed a subtraction underflow in the `html2term` example.
+
 ### 0.16.2
 
 - [fixed] Removed spurious `dbg!()` accidentally left in.
