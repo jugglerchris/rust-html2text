@@ -9,6 +9,10 @@ Possible log types:
 - `[fixed]` for any bug fixes.
 - `[security]` to invite users to upgrade in case of vulnerabilities.
 
+### 0.16.4
+
+- [fixed] Further fix for RcDom::serialize() when there is a `<doctype>`.
+
 ### 0.16.3
 
 - [fixed] RcDom::serialize() panicked.
