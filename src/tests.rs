@@ -3451,6 +3451,17 @@ Foo and Bar
     }
 }
 
+#[test]
+fn test_issue_252() {
+    test_html(
+        b"<table><td rowspan=8><tr><tr>",
+        r"
+
+",
+        10,
+    );
+}
+
 #[cfg(feature = "css_ext")]
 mod css_ext_tests {
     use super::test_html_conf_rendertree;
