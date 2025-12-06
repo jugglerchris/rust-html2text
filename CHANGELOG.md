@@ -9,6 +9,11 @@ Possible log types:
 - `[fixed]` for any bug fixes.
 - `[security]` to invite users to upgrade in case of vulnerabilities.
 
+### 0.16.5
+
+- [fixed] Fix a subtract with underflow with rowspans and empty rows (thanks
+  mdierksen)
+
 ### 0.16.4
 
 - [fixed] Further fix for RcDom::serialize() when there is a `<doctype>`.

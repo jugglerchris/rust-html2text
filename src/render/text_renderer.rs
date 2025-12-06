@@ -1945,7 +1945,7 @@ impl<D: TextDecorator> Renderer for SubRenderer<D> {
         if let Some(RenderLine::Line(prev_border)) = self.lines.back_mut() {
             let mut pos = 0;
             html_trace!("Merging with last line:\n{}", prev_border.to_string());
-            for ls in &line_sets[..line_sets.len() - 1] {
+            for ls in &line_sets[..line_sets.len().saturating_sub(1)] {
                 let w = ls.width;
                 html_trace!("pos={}, w={}", pos, w);
                 prev_border.join_below(pos + w);
