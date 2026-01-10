@@ -549,14 +549,18 @@ impl TreeSink for RcDom {
 
     fn clone_subtree(&self, node: &Handle) -> Handle {
         let parent = None.into();
-        let children = node.children.borrow().iter().map(|node| self.clone_subtree(node)).collect();
+        let children = node
+            .children
+            .borrow()
+            .iter()
+            .map(|node| self.clone_subtree(node))
+            .collect();
         let data = node.data.clone();
         Rc::new(Node {
             parent,
             children: RefCell::new(children),
-            data
+            data,
         })
-
     }
 }
 
