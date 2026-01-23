@@ -18,7 +18,7 @@ html5ever = "0.37.1"
 tendril = "0.5"
 unicode-width = "0.2"
 backtrace = { version = "0.3", optional=true }
-thiserror = "2.0.0"
+thiserror = "2.0.18"
 log = { version = "0.4.20", optional = true }
 nom = { version = "8.0.0", optional = true }
 
