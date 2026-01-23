@@ -14,7 +14,7 @@ keywords = ["html", "text"]
 license = "MIT"
 
 [dependencies]
-html5ever = "0.37.1"
+html5ever = "0.38.0"
 tendril = "0.5"
 unicode-width = "0.2"
 backtrace = { version = "0.3", optional=true }
