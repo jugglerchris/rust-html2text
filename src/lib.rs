@@ -1983,9 +1983,11 @@ fn process_dom_node<T: Write>(
                 | expanded_name!(html "ins") => pending(input, move |_, cs| {
                     Some(RenderNode::new_styled(Em(cs), computed))
                 }),
-                expanded_name!(html "strong") => pending(input, move |_, cs| {
-                    Some(RenderNode::new_styled(Strong(cs), computed))
-                }),
+                expanded_name!(html "strong") | expanded_name!(html "b") => {
+                    pending(input, move |_, cs| {
+                        Some(RenderNode::new_styled(Strong(cs), computed))
+                    })
+                }
                 expanded_name!(html "s") | expanded_name!(html "del") => {
                     pending(input, move |_, cs| {
                         Some(RenderNode::new_styled(Strikeout(cs), computed))
@@ -3138,6 +3140,8 @@ pub mod config {
                 Self::make_surround_rule("dt", true, "*"),
                 Self::make_surround_rule("strong", false, "**"),
                 Self::make_surround_rule("strong", true, "**"),
+                Self::make_surround_rule("b", false, "**"),
+                Self::make_surround_rule("b", true, "**"),
                 Self::make_surround_rule("code", false, "`"),
                 Self::make_surround_rule("code", true, "`"),
             ]);
