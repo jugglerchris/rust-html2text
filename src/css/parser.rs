@@ -3,13 +3,13 @@
 use std::{borrow::Cow, ops::Deref, str::FromStr};
 
 use nom::{
+    AsChar, IResult, Parser,
     branch::alt,
     bytes::complete::{tag, take_until},
     character::complete::{self, digit0, digit1},
     combinator::{fail, map, opt, recognize},
     error::ErrorKind,
     multi::{many0, many1, separated_list0},
-    AsChar, IResult, Parser,
 };
 
 #[derive(Debug, PartialEq)]
@@ -175,7 +175,7 @@ pub(crate) struct Declaration {
 
 use crate::css::styles_from_properties;
 
-use super::{types::Importance, PseudoElement, Selector, SelectorComponent, StyleDecl, WhiteSpace};
+use super::{PseudoElement, Selector, SelectorComponent, StyleDecl, WhiteSpace, types::Importance};
 
 #[derive(Debug, PartialEq)]
 pub(crate) struct RuleSet {
@@ -1161,8 +1161,8 @@ pub(crate) fn parse_style_attribute(text: &str) -> crate::Result<Vec<StyleDecl>>
 #[cfg(test)]
 mod test {
     use crate::css::{
-        parser::{Height, Importance, LengthUnit, RuleSet, Selector},
         AttrOperator, PseudoElement, SelectorComponent,
+        parser::{Height, Importance, LengthUnit, RuleSet, Selector},
     };
 
     use super::{Colour, Decl, Declaration, Overflow, PropertyName};

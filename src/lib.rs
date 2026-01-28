@@ -2858,15 +2858,15 @@ pub mod config {
     use super::Error;
     use crate::css::types::Importance;
     use crate::css::{Ruleset, Selector, SelectorComponent, Style, StyleData};
+    #[cfg(feature = "css_ext")]
+    use crate::{HighlighterMap, SyntaxHighlighter};
     use crate::{
+        HtmlContext, MIN_WIDTH, RenderTree, Result,
         css::{PseudoContent, PseudoElement, StyleDecl},
         render::text_renderer::{
             PlainDecorator, RichAnnotation, RichDecorator, TaggedLine, TextDecorator,
         },
-        HtmlContext, RenderTree, Result, MIN_WIDTH,
     };
-    #[cfg(feature = "css_ext")]
-    use crate::{HighlighterMap, SyntaxHighlighter};
 
     /// Specify how images with missing or empty alt text are handled
     #[derive(Copy, Clone, Debug, Default, PartialEq, Eq)]

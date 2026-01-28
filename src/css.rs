@@ -14,11 +14,11 @@ use parser::parse_style_attribute;
 use types::Importance;
 
 use crate::{
+    ComputedStyle, Specificity, StyleOrigin,
     markup5ever_rcdom::{
         Handle,
         NodeData::{self, Comment, Document, Element},
     },
-    ComputedStyle, Specificity, StyleOrigin,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -179,26 +179,23 @@ impl Selector {
                     _ => false,
                 },
                 SelectorComponent::Star => Self::do_matches(&comps[1..], node),
-                SelectorComponent::CombChild => {
-                    match node.get_parent() { Some(parent) => {
-                        Self::do_matches(&comps[1..], &parent)
-                    } _ => {
-                        false
-                    }}
-                }
-                SelectorComponent::CombDescendant => {
-                    match node.get_parent() { Some(parent) => {
+                SelectorComponent::CombChild => match node.get_parent() {
+                    Some(parent) => Self::do_matches(&comps[1..], &parent),
+                    _ => false,
+                },
+                SelectorComponent::CombDescendant => match node.get_parent() {
+                    Some(parent) => {
                         Self::do_matches(&comps[1..], &parent) || Self::do_matches(comps, &parent)
-                    } _ => {
-                        false
-                    }}
-                }
+                    }
+                    _ => false,
+                },
                 SelectorComponent::NthChild { a, b, sel } => {
-                    let parent = match node.get_parent() { Some(parent) => {
-                        parent
-                    } _ => {
-                        return false;
-                    }};
+                    let parent = match node.get_parent() {
+                        Some(parent) => parent,
+                        _ => {
+                            return false;
+                        }
+                    };
                     let mut idx = 0i32;
                     for child in parent.children.borrow().iter() {
                         if let Element { .. } = child.data {
@@ -724,11 +721,12 @@ pub(crate) mod dom_extract {
     use crate::{expanded_name, local_name, ns};
 
     use crate::{
+        Result, TreeMapResult,
         markup5ever_rcdom::{
             Handle,
             NodeData::{self, Comment, Document, Element},
         },
-        tree_map_reduce, Result, TreeMapResult,
+        tree_map_reduce,
     };
 
     use super::StyleData;

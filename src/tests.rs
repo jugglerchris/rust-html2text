@@ -1,12 +1,12 @@
 use std::str;
 
 use crate::config::Config;
-use crate::render::text_renderer::{PlainDecorator, TaggedString};
 use crate::render::TaggedLineElement;
-use crate::{config, Error};
+use crate::render::text_renderer::{PlainDecorator, TaggedString};
+use crate::{Error, config};
 
 use super::render::text_renderer::{RichAnnotation, RichDecorator, TaggedLine, TrivialDecorator};
-use super::{from_read, from_read_with_decorator, parse, TextDecorator};
+use super::{TextDecorator, from_read, from_read_with_decorator, parse};
 
 /// Like assert_eq!(), but prints out the results normally as well
 macro_rules! assert_eq_str {
