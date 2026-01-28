@@ -9,6 +9,11 @@ Possible log types:
 - `[fixed]` for any bug fixes.
 - `[security]` to invite users to upgrade in case of vulnerabilities.
 
+### 0.16.7
+
+- [added] Support `<b>` tags as bold (thanks amir)
+- [changed] Update html5ever to 0.38.0 (thanks mtorromeo)
+
 ### 0.16.6
 
 - [changed] Update html5ever and tendril dependencies.
