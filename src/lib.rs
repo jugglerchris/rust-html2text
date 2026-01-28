@@ -522,7 +522,7 @@ impl RenderTableRow {
     }
     /// Return an iterator which returns cells by values (removing
     /// them from the row).
-    fn cells_drain(&mut self) -> impl Iterator<Item = RenderTableCell> {
+    fn cells_drain(&mut self) -> impl Iterator<Item = RenderTableCell> + use<> {
         std::mem::take(&mut self.cells).into_iter()
     }
     /// Count the number of cells in the row.

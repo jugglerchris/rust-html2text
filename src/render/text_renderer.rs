@@ -319,7 +319,7 @@ impl<T: Debug + Eq + PartialEq + Clone + Default> TaggedLine<T> {
     }
 
     /// Remove the contained items
-    fn remove_items(&mut self) -> impl Iterator<Item = TaggedLineElement<T>> {
+    fn remove_items(&mut self) -> impl Iterator<Item = TaggedLineElement<T>> + use<T> {
         self.len = 0;
         std::mem::take(&mut self.v).into_iter()
     }
@@ -1487,7 +1487,7 @@ impl<D: TextDecorator> SubRenderer<D> {
         }
         if self.options.pad_block_width {
             match &mut line {
-                RenderLine::Text(ref mut tl) => {
+                RenderLine::Text(tl) => {
                     tl.pad_to(self.width, &self.ann_stack);
                 }
                 RenderLine::Line(..) => (),

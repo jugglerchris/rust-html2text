@@ -129,13 +129,13 @@ impl Node {
     }
 
     pub fn get_parent(&self) -> Option<Rc<Self>> {
-        if let Some(parent) = self.parent.take() {
+        match self.parent.take() { Some(parent) => {
             let parent_handle = parent.upgrade();
             self.parent.set(Some(parent));
             parent_handle
-        } else {
+        } _ => {
             None
-        }
+        }}
     }
 
     /// Return the nth child element of this node, or None.

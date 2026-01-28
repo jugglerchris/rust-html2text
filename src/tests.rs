@@ -10,7 +10,7 @@ use super::{from_read, from_read_with_decorator, parse, TextDecorator};
 
 /// Like assert_eq!(), but prints out the results normally as well
 macro_rules! assert_eq_str {
-    ($a:expr, $b:expr) => {
+    ($a:expr_2021, $b:expr_2021) => {
         if $a != $b {
             println!("<<<\n{}===\n{}>>>", $a, $b);
             assert_eq!($a, $b);

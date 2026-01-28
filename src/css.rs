@@ -180,25 +180,25 @@ impl Selector {
                 },
                 SelectorComponent::Star => Self::do_matches(&comps[1..], node),
                 SelectorComponent::CombChild => {
-                    if let Some(parent) = node.get_parent() {
+                    match node.get_parent() { Some(parent) => {
                         Self::do_matches(&comps[1..], &parent)
-                    } else {
+                    } _ => {
                         false
-                    }
+                    }}
                 }
                 SelectorComponent::CombDescendant => {
-                    if let Some(parent) = node.get_parent() {
+                    match node.get_parent() { Some(parent) => {
                         Self::do_matches(&comps[1..], &parent) || Self::do_matches(comps, &parent)
-                    } else {
+                    } _ => {
                         false
-                    }
+                    }}
                 }
                 SelectorComponent::NthChild { a, b, sel } => {
-                    let parent = if let Some(parent) = node.get_parent() {
+                    let parent = match node.get_parent() { Some(parent) => {
                         parent
-                    } else {
+                    } _ => {
                         return false;
-                    };
+                    }};
                     let mut idx = 0i32;
                     for child in parent.children.borrow().iter() {
                         if let Element { .. } = child.data {
