@@ -1564,6 +1564,18 @@ fn test_em_strong() {
 }
 
 #[test]
+fn test_b_tag() {
+    test_html(
+        br##"
+   <p>Hi <b>bold</b></p>
+"##,
+        r#"Hi **bold**
+"#,
+        21,
+    );
+}
+
+#[test]
 fn test_nbsp_indent() {
     test_html(
         br##"
