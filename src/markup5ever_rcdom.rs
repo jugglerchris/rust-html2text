@@ -546,22 +546,6 @@ impl TreeSink for RcDom {
             panic!("not an element!")
         }
     }
-
-    fn clone_subtree(&self, node: &Handle) -> Handle {
-        let parent = None.into();
-        let children = node
-            .children
-            .borrow()
-            .iter()
-            .map(|node| self.clone_subtree(node))
-            .collect();
-        let data = node.data.clone();
-        Rc::new(Node {
-            parent,
-            children: RefCell::new(children),
-            data,
-        })
-    }
 }
 
 impl Default for RcDom {
