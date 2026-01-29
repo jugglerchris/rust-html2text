@@ -16,8 +16,8 @@ fn default_colour_map(
     use_css_colours: bool,
     no_default_colours: bool,
 ) -> String {
-    use termion::color::*;
     use RichAnnotation::*;
+    use termion::color::*;
     // Explicit CSS colours override any other colours
     let mut have_explicit_colour = no_default_colours;
     let mut start = Vec::new();

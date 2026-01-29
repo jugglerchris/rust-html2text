@@ -3,10 +3,10 @@
 //! This module implements helpers and concrete types for rendering from HTML
 //! into different text formats.
 
-use crate::config::ImageRenderMode;
 use crate::Colour;
 use crate::WhiteSpace;
 use crate::WhitespaceExt as _;
+use crate::config::ImageRenderMode;
 
 use super::Renderer;
 use super::Result;
@@ -319,7 +319,7 @@ impl<T: Debug + Eq + PartialEq + Clone + Default> TaggedLine<T> {
     }
 
     /// Remove the contained items
-    fn remove_items(&mut self) -> impl Iterator<Item = TaggedLineElement<T>> {
+    fn remove_items(&mut self) -> impl Iterator<Item = TaggedLineElement<T>> + use<T> {
         self.len = 0;
         std::mem::take(&mut self.v).into_iter()
     }
@@ -593,7 +593,7 @@ impl<T: Clone + Eq + Debug + Default> WrappedBlock<T> {
                 let w = piece.width();
                 let mut wpos = 0; // Width of already-copied pieces
                 let mut bpos = 0; // Byte position of already-copied pieces
-                                  //
+                //
                 while w - wpos > lineleft {
                     let mut split_idx = 0;
                     for (idx, c) in piece.s[bpos..].char_indices() {
@@ -1487,7 +1487,7 @@ impl<D: TextDecorator> SubRenderer<D> {
         }
         if self.options.pad_block_width {
             match &mut line {
-                RenderLine::Text(ref mut tl) => {
+                RenderLine::Text(tl) => {
                     tl.pad_to(self.width, &self.ann_stack);
                 }
                 RenderLine::Line(..) => (),

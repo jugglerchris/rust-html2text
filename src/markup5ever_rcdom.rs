@@ -49,14 +49,14 @@ use std::rc::{Rc, Weak};
 use html5ever::interface::ElemName;
 use tendril::StrTendril;
 
+use html5ever::Attribute;
+use html5ever::ExpandedName;
+use html5ever::QualName;
 use html5ever::interface::tree_builder;
 use html5ever::interface::tree_builder::{ElementFlags, NodeOrText, QuirksMode, TreeSink};
 use html5ever::serialize::TraversalScope;
 use html5ever::serialize::TraversalScope::{ChildrenOnly, IncludeNode};
 use html5ever::serialize::{Serialize, Serializer};
-use html5ever::Attribute;
-use html5ever::ExpandedName;
-use html5ever::QualName;
 
 /// The different kinds of nodes in the DOM.
 #[derive(Debug, Clone)]
@@ -129,12 +129,13 @@ impl Node {
     }
 
     pub fn get_parent(&self) -> Option<Rc<Self>> {
-        if let Some(parent) = self.parent.take() {
-            let parent_handle = parent.upgrade();
-            self.parent.set(Some(parent));
-            parent_handle
-        } else {
-            None
+        match self.parent.take() {
+            Some(parent) => {
+                let parent_handle = parent.upgrade();
+                self.parent.set(Some(parent));
+                parent_handle
+            }
+            _ => None,
         }
     }
 
@@ -545,22 +546,6 @@ impl TreeSink for RcDom {
         } else {
             panic!("not an element!")
         }
-    }
-
-    fn clone_subtree(&self, node: &Handle) -> Handle {
-        let parent = None.into();
-        let children = node
-            .children
-            .borrow()
-            .iter()
-            .map(|node| self.clone_subtree(node))
-            .collect();
-        let data = node.data.clone();
-        Rc::new(Node {
-            parent,
-            children: RefCell::new(children),
-            data,
-        })
     }
 }
 

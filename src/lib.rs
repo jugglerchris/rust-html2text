@@ -522,7 +522,7 @@ impl RenderTableRow {
     }
     /// Return an iterator which returns cells by values (removing
     /// them from the row).
-    fn cells_drain(&mut self) -> impl Iterator<Item = RenderTableCell> {
+    fn cells_drain(&mut self) -> impl Iterator<Item = RenderTableCell> + use<> {
         std::mem::take(&mut self.cells).into_iter()
     }
     /// Count the number of cells in the row.
@@ -2858,15 +2858,15 @@ pub mod config {
     use super::Error;
     use crate::css::types::Importance;
     use crate::css::{Ruleset, Selector, SelectorComponent, Style, StyleData};
+    #[cfg(feature = "css_ext")]
+    use crate::{HighlighterMap, SyntaxHighlighter};
     use crate::{
+        HtmlContext, MIN_WIDTH, RenderTree, Result,
         css::{PseudoContent, PseudoElement, StyleDecl},
         render::text_renderer::{
             PlainDecorator, RichAnnotation, RichDecorator, TaggedLine, TextDecorator,
         },
-        HtmlContext, RenderTree, Result, MIN_WIDTH,
     };
-    #[cfg(feature = "css_ext")]
-    use crate::{HighlighterMap, SyntaxHighlighter};
 
     /// Specify how images with missing or empty alt text are handled
     #[derive(Copy, Clone, Debug, Default, PartialEq, Eq)]

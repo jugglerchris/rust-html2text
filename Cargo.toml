@@ -1,12 +1,12 @@
 [package]
 name = "html2text"
-version = "0.16.6"
+version = "0.16.7"
 authors = ["Chris Emerson <github@mail.nosreme.org>"]
 description = "Render HTML as plain text."
 repository = "https://github.com/jugglerchris/rust-html2text/"
 readme = "README.md"
 documentation = "https://docs.rs/html2text/"
-edition = "2021"
+edition = "2024"
 rust-version = "1.85"
 categories = ["text-processing"]
 
@@ -14,7 +14,7 @@ keywords = ["html", "text"]
 license = "MIT"
 
 [dependencies]
-html5ever = "0.37.1"
+html5ever = "0.38.0"
 tendril = "0.5"
 unicode-width = "0.2"
 backtrace = { version = "0.3", optional=true }

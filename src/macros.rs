@@ -40,10 +40,10 @@ macro_rules! html_trace {
 #[macro_export]
 #[doc(hidden)]
 macro_rules! html_trace {
-    ($fmt:expr) => {
+    ($fmt:expr_2021) => {
         $crate::macros::nop();
     };
-    ($fmt:expr, $( $args:expr ),*) => {
+    ($fmt:expr_2021, $( $args:expr_2021 ),*) => {
         $crate::macros::nop();
     };
 }
@@ -64,10 +64,10 @@ macro_rules! html_trace_quiet {
 #[macro_export]
 #[doc(hidden)]
 macro_rules! html_trace_quiet {
-    ($fmt:expr) => {
+    ($fmt:expr_2021) => {
         $crate::macros::nop();
     };
-    ($fmt:expr, $( $args:expr ),*) => {
+    ($fmt:expr_2021, $( $args:expr_2021 ),*) => {
         $crate::macros::nop();
     };
 }
