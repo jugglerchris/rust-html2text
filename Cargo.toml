@@ -38,7 +38,7 @@ name = "html2text"
 path = "examples/html2text.rs"
 
 [dev-dependencies]
-env_logger = "0.11.6"
+env_logger = "0.11.10"
 argparse = "0.2.2"
 log = "0.4.20"
 syntect = "5.2.0"
