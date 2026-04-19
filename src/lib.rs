@@ -1500,6 +1500,9 @@ struct HtmlContext {
     use_unicode_strikeout: bool,
     image_mode: config::ImageRenderMode,
 
+    #[cfg(feature = "xml")]
+    xml_mode: config::XmlMode,
+
     #[cfg(feature = "css_ext")]
     syntax_highlighters: HighlighterMap,
 }
@@ -2884,6 +2887,21 @@ pub mod config {
         Filename,
     }
 
+    #[cfg(feature = "xml")]
+    /// Specify HTML vs XHTML handling
+    #[derive(Copy, Clone, Debug, Default, PartialEq, Eq)]
+    #[non_exhaustive]
+    pub enum XmlMode {
+        /// Treat as HTML unless the document starts with an XML declaration
+        /// (`<?xml ...?>`).
+        #[default]
+        Auto,
+        /// Always treat as HTML
+        Html,
+        /// Always treat as XHTML
+        Xhtml,
+    }
+
     /// Configure the HTML processing.
     pub struct Config<D: TextDecorator> {
         decorator: D,
@@ -2904,6 +2922,9 @@ pub mod config {
         include_link_footnotes: bool,
         use_unicode_strikeout: bool,
         image_mode: ImageRenderMode,
+
+        #[cfg(feature = "xml")]
+        xml_mode: XmlMode,
 
         #[cfg(feature = "css_ext")]
         syntax_highlighters: HighlighterMap,
@@ -2928,6 +2949,9 @@ pub mod config {
                 use_unicode_strikeout: self.use_unicode_strikeout,
                 image_mode: self.image_mode,
 
+                #[cfg(feature = "xml")]
+                xml_mode: self.xml_mode,
+
                 #[cfg(feature = "css_ext")]
                 syntax_highlighters: self.syntax_highlighters.clone(),
             }
@@ -2937,7 +2961,29 @@ pub mod config {
         where
             R: io::Read,
         {
+            #[cfg(feature = "xml")]
+            let dom = {
+                match context.xml_mode {
+                    XmlMode::Html => self.parse_html(input)?,
+                    XmlMode::Xhtml => self.parse_xml(input)?,
+                    XmlMode::Auto => {
+                        const XML_CHECK: &[u8] = b"<?xml";
+                        let mut input = input;
+                        let mut firstbuf = [0u8; XML_CHECK.len()];
+                        let bytes_read = input.read(&mut firstbuf)?;
+                        let first_slice = &firstbuf[..bytes_read];
+                        if bytes_read == XML_CHECK.len() && &firstbuf == XML_CHECK {
+                            self.parse_xml(std::io::Read::chain(first_slice, input))?
+                        } else {
+                            self.parse_html(std::io::Read::chain(first_slice, input))?
+                        }
+                    }
+                }
+            };
+
+            #[cfg(not(feature = "xml"))]
             let dom = self.parse_html(input)?;
+
             let render_tree = super::dom_to_render_tree_with_context(
                 dom.document.clone(),
                 &mut io::sink(),
@@ -2965,12 +3011,7 @@ pub mod config {
         #[cfg(feature = "xml")]
         /// Parse document as XML into a DOM structure.
         pub fn parse_xml<R: io::Read>(&self, mut input: R) -> Result<super::RcDom> {
-            use ::xml5ever::{
-                driver::{
-                    parse_document,
-                },
-                tendril::TendrilSink,
-            };
+            use ::xml5ever::{driver::parse_document, tendril::TendrilSink};
             let opts = Default::default();
             Ok(parse_document(super::RcDom::default(), opts)
                 .from_utf8()
@@ -3176,6 +3217,13 @@ pub mod config {
             self
         }
 
+        #[cfg(feature = "xml")]
+        /// Configure the HTML vs XHTML parsing mode.
+        pub fn xml_mode(mut self, xml_mode: XmlMode) -> Self {
+            self.xml_mode = xml_mode;
+            self
+        }
+
         #[cfg(feature = "css_ext")]
         /// Register a named syntax highlighter.
         ///
@@ -3267,6 +3315,8 @@ pub mod config {
             include_link_footnotes: false,
             use_unicode_strikeout: true,
             image_mode: ImageRenderMode::IgnoreEmpty,
+            #[cfg(feature = "xml")]
+            xml_mode: XmlMode::Auto,
             #[cfg(feature = "css_ext")]
             syntax_highlighters: Default::default(),
         }

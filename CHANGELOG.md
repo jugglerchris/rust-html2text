@@ -9,6 +9,11 @@ Possible log types:
 - `[fixed]` for any bug fixes.
 - `[security]` to invite users to upgrade in case of vulnerabilities.
 
+### 0.17.1
+
+- [added] Add support for XHTML (for the cases where it doesn't quite behave
+  like HTML).
+
 ### 0.17.0
 
 - [changed] Split `html2text` example into `html2text-cli` crate

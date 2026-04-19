@@ -3,7 +3,7 @@ use std::str;
 use crate::config::Config;
 use crate::render::TaggedLineElement;
 use crate::render::text_renderer::{PlainDecorator, TaggedString};
-use crate::{config, Error};
+use crate::{Error, config};
 
 use super::render::text_renderer::{RichAnnotation, RichDecorator, TaggedLine, TrivialDecorator};
 use super::{TextDecorator, from_read, from_read_with_decorator, parse};
@@ -197,13 +197,9 @@ where
 #[track_caller]
 fn test_xml(input: &[u8], expected: &str, width: usize) {
     let conf = config::plain();
-    let dom = conf
-        .parse_xml(input)
-        .expect("Failed to parse XHTML");
-    let rt = conf.dom_to_render_tree(&dom)
-        .expect("To Render Tree");
-    let output = conf.render_to_string(rt, width)
-        .expect("Render to string");
+    let dom = conf.parse_xml(input).expect("Failed to parse XHTML");
+    let rt = conf.dom_to_render_tree(&dom).expect("To Render Tree");
+    let output = conf.render_to_string(rt, width).expect("Render to string");
 
     assert_eq_str!(output, expected);
 }
@@ -3489,7 +3485,10 @@ fn test_issue_252() {
 }
 
 #[test]
+#[cfg(feature = "xml")]
 fn test_xml1() {
+    use crate::config::XmlMode;
+
     let doc = br#"<?xml version="1.0" encoding="UTF-8" standalone="no"?>
 <html xmlns="http://www.w3.org/1999/xhtml">
 <head>
@@ -3500,16 +3499,36 @@ fn test_xml1() {
 <p>Not Heading</p>
 </body>
 </html>"#;
+
     // Parsing XHTML as HTML - expect wrong output.
-    test_html(doc, r"# Not Heading
+    test_html_conf(
+        doc,
+        r"# Not Heading
 ",
         20,
+        |conf| conf.xml_mode(XmlMode::Html),
     );
-    // Parsing XHTML as XHTML - expect wrong output.
-    test_xml(doc,
+    // Parsing with default settings - detects XML correctly
+    test_html(
+        doc,
         r"Not Heading
 ",
         20,
+    );
+    // Parsing XHTML as XHTML - expect correct output.
+    test_xml(
+        doc,
+        r"Not Heading
+",
+        20,
+    );
+    // Parsing XHTML as XHTML - using config and explicit Xml mode.
+    test_html_conf(
+        doc,
+        r"Not Heading
+",
+        20,
+        |conf| conf.xml_mode(XmlMode::Xhtml),
     );
 }
 
