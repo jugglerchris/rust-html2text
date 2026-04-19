@@ -1,23 +1,29 @@
 [package]
 name = "html2text"
-version = "0.17.0"
-authors = ["Chris Emerson <github@mail.nosreme.org>"]
 description = "Render HTML as plain text."
-repository = "https://github.com/jugglerchris/rust-html2text/"
 readme = "README.md"
 documentation = "https://docs.rs/html2text/"
-edition = "2024"
-rust-version = "1.85"
 categories = ["text-processing"]
-
 keywords = ["html", "text"]
-license = "MIT"
+version.workspace = true
+repository.workspace = true
+license.workspace = true
+edition.workspace = true
+rust-version.workspace = true
 
 [workspace]
 members = [
   ".",
   "html2text-cli",
 ]
+
+[workspace.package]
+version = "0.17.0"
+repository = "https://github.com/jugglerchris/rust-html2text/"
+license = "MIT"
+authors = ["Chris Emerson <github@mail.nosreme.org>"]
+edition = "2024"
+rust-version = "1.85"
 
 [dependencies]
 html5ever = "0.39.0"

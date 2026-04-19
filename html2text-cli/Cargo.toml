@@ -1,18 +1,15 @@
 [package]
 name = "html2text-cli"
-version = "0.17.0"
-authors = ["Chris Emerson <github@mail.nosreme.org>"]
 description = "Render HTML as plain text."
-repository = "https://github.com/jugglerchris/rust-html2text/"
 readme = "README.md"
-edition = "2024"
-rust-version = "1.85"
 categories = ["text-processing"]
-
 keywords = ["html", "text"]
-license = "MIT"
-
 default-run = "html2text"
+version.workspace = true
+repository.workspace = true
+license.workspace = true
+edition.workspace = true
+rust-version.workspace = true
 
 [[bin]]
 name = "html2text"
