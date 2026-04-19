@@ -1,20 +1,32 @@
 [package]
 name = "html2text"
-version = "0.16.7"
-authors = ["Chris Emerson <github@mail.nosreme.org>"]
 description = "Render HTML as plain text."
-repository = "https://github.com/jugglerchris/rust-html2text/"
 readme = "README.md"
 documentation = "https://docs.rs/html2text/"
+categories = ["text-processing"]
+keywords = ["html", "text"]
+version.workspace = true
+repository.workspace = true
+license.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+
+[workspace]
+members = [
+  ".",
+  "html2text-cli",
+]
+
+[workspace.package]
+version = "0.17.0"
+repository = "https://github.com/jugglerchris/rust-html2text/"
+license = "MIT"
+authors = ["Chris Emerson <github@mail.nosreme.org>"]
 edition = "2024"
 rust-version = "1.85"
-categories = ["text-processing"]
-
-keywords = ["html", "text"]
-license = "MIT"
 
 [dependencies]
-html5ever = "0.38.0"
+html5ever = "0.39.0"
 tendril = "0.5"
 unicode-width = "0.2"
 backtrace = { version = "0.3", optional=true }
@@ -33,15 +45,10 @@ css_ext = ["css"]
 name = "html2term"
 path = "examples/html2term.rs"
 
-[[example]]
-name = "html2text"
-path = "examples/html2text.rs"
-
 [dev-dependencies]
 env_logger = "0.11.6"
 argparse = "0.2.2"
 log = "0.4.20"
-syntect = "5.2.0"
 
 [target.'cfg(unix)'.dev-dependencies]
 termion = "4.0"

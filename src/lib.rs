@@ -1581,13 +1581,14 @@ impl RenderInput {
                         // in the next run of the outer loop; hence allowing
                         // clippy::mut_range_bound on the function.
                         start_style_index = es_idx;
-                    }
-                    // This piece must overlap!
-                    // Clip the range to this node.
-                    style_range.start = style_range.start.max(offset) - offset;
-                    style_range.end = style_range.end.min(end_offset) - offset;
+                    } else {
+                        // This piece must overlap!
+                        // Clip the range to this node.
+                        style_range.start = style_range.start.max(offset) - offset;
+                        style_range.end = style_range.end.min(end_offset) - offset;
 
-                    child_extra_styles.push((style_range, extra_styles[es_idx].1.clone()));
+                        child_extra_styles.push((style_range, extra_styles[es_idx].1.clone()));
+                    }
                 }
                 result.push(RenderInput {
                     handle: Rc::clone(child),
@@ -2045,7 +2046,7 @@ fn process_dom_node<T: Write>(
                     }
 
                     Finished(RenderNode::new_styled(
-                        Svg(title.unwrap_or_else(|| String::new())),
+                        Svg(title.unwrap_or_else(String::new)),
                         computed,
                     ))
                 }

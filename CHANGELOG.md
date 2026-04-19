@@ -9,6 +9,12 @@ Possible log types:
 - `[fixed]` for any bug fixes.
 - `[security]` to invite users to upgrade in case of vulnerabilities.
 
+### 0.17.0
+
+- [changed] Split `html2text` example into `html2text-cli` crate
+- [fixed] A possible panic when syntax-highlighting
+- [changed] Update html5ever to 0.39.0
+
 ### 0.16.7
 
 - [added] Support `<b>` tags as bold (thanks amir)
