@@ -7,6 +7,8 @@ plain text (as in Rust `String`) or text spans with annotations like colours,
 e.g. optionally using CSS.  See [the online demo](https://jugglerchris.github.io/rust-html2text/)
 for examples of the output.
 
+`cargo install html2text-cli` will install the `html2text` CLI wrapper.
+
 It makes use of the [Servo project](https://github.com/servo/servo)'s HTML
 parser, [html5ever](https://github.com/servo/html5ever/), using the DOM to
 generate text (which can optionally include annotations for some features such
@@ -16,7 +18,7 @@ The project aims to do a reasonable job of rendering reasonable HTML in a
 terminal or other places where HTML needs to be converted to text (for
 example the text/plain fallback in HTML e-mails).
 
-With features (see below) some CSS/colour support is available.
+With feature flags enabled (see below) some CSS/colour support is available.
 
 ## Examples
 
@@ -93,6 +95,7 @@ read keys from stdin.
 |Feature| Description|
 |-------|------------|
 |css    | Limited handling of CSS, adding Coloured nodes to the render tree. |
+|css\_ext| Some CSS extensions (see below for details) |
 |html\_trace| Add verbose internal logging (not recommended) |
 |html\_trace\_bt| Add backtraces to the verbose internal logging |
 
@@ -110,10 +113,15 @@ Style rules are taken from:
 The following CSS features are implemented:
 * Basic selector matching (including child and descendents, classes and element
   types).
+* Attribute selectors including `[foo]` and `[foo="bar"]`
+* `nth-child` pseudo-class.
 * CSS colors (`color`/`background-color`) will add
   `Coloured(...)`/`BgColoured(...)` nodes to the render tree.
 * Rules with `display: none` will cause matching elements to be removed from
-  the render tree.
+  the render tree.  The same is true if `overflow: hidden` or `overflow-y: hidden` and
+  the `height` or `max-height` are 0.
+* `content: "text"` inside a `::before`/`::after`
+* `white-space` values "normal", "pre", and "prewrap"
 
 The CSS handling is expected to improve in future (PRs welcome), but not to a full-
 blown browser style system, which would be overkill for terminal output.
@@ -124,3 +132,15 @@ There are two ways to make use of the colours:
 * Use `from_read_coloured()`.  This is similar to `from_read()`, but you provide
   a function to add terminal colours (or other styling) based on the same
   RichAnnotations.  See examples/html2text.rs for an example using termion.
+
+### CSS extensions (`css\_ext` Cargo feature)
+
+The following CSS extensions are implemented:
+
+* `x-syntax: foo;`
+  - Syntax-highlight with language "foo".  A highlighter needs to be registered
+    for that language with `config::register_highlighter()` - see the
+    `html2text-cli` for an example using `syntect`.
+* `display: x-raw-dom;`
+  - Show the HTML elements instead of rendering them.  (Useful for debugging, along
+    with something like `:nth-child(...)` to select a particular node)
