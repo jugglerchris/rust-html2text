@@ -33,6 +33,7 @@ backtrace = { version = "0.3", optional=true }
 thiserror = "2.0.0"
 log = { version = "0.4.20", optional = true }
 nom = { version = "8.0.0", optional = true }
+xml5ever = { version = "0.39.0", optional = true }
 
 [features]
 html_trace = ["dep:log"]
@@ -40,6 +41,7 @@ html_trace_bt = ["html_trace", "dep:backtrace"]
 default = []
 css = [ "dep:nom" ]
 css_ext = ["css"]
+xml = ["dep:xml5ever"]
 
 [[example]]
 name = "html2term"

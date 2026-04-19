@@ -2962,6 +2962,21 @@ pub mod config {
                 .read_from(&mut input)?)
         }
 
+        #[cfg(feature = "xml")]
+        /// Parse document as XML into a DOM structure.
+        pub fn parse_xml<R: io::Read>(&self, mut input: R) -> Result<super::RcDom> {
+            use ::xml5ever::{
+                driver::{
+                    parse_document,
+                },
+                tendril::TendrilSink,
+            };
+            let opts = Default::default();
+            Ok(parse_document(super::RcDom::default(), opts)
+                .from_utf8()
+                .read_from(&mut input)?)
+        }
+
         /// Convert an HTML DOM into a RenderTree.
         pub fn dom_to_render_tree(&self, dom: &super::RcDom) -> Result<RenderTree> {
             Ok(RenderTree(

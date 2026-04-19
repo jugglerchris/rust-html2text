@@ -3,7 +3,7 @@ use std::str;
 use crate::config::Config;
 use crate::render::TaggedLineElement;
 use crate::render::text_renderer::{PlainDecorator, TaggedString};
-use crate::{Error, config};
+use crate::{config, Error};
 
 use super::render::text_renderer::{RichAnnotation, RichDecorator, TaggedLine, TrivialDecorator};
 use super::{TextDecorator, from_read, from_read_with_decorator, parse};
@@ -192,6 +192,20 @@ where
         .dom_to_render_tree(&dom)
         .expect("Failed to get render tree");
     assert_eq_str!(rt.to_string(), expected.to_string());
+}
+
+#[track_caller]
+fn test_xml(input: &[u8], expected: &str, width: usize) {
+    let conf = config::plain();
+    let dom = conf
+        .parse_xml(input)
+        .expect("Failed to parse XHTML");
+    let rt = conf.dom_to_render_tree(&dom)
+        .expect("To Render Tree");
+    let output = conf.render_to_string(rt, width)
+        .expect("Render to string");
+
+    assert_eq_str!(output, expected);
 }
 
 #[test]
@@ -3471,6 +3485,31 @@ fn test_issue_252() {
 
 ",
         10,
+    );
+}
+
+#[test]
+fn test_xml1() {
+    let doc = br#"<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+<title>Testing, testing</title>
+</head>
+<body>
+<h1/>
+<p>Not Heading</p>
+</body>
+</html>"#;
+    // Parsing XHTML as HTML - expect wrong output.
+    test_html(doc, r"# Not Heading
+",
+        20,
+    );
+    // Parsing XHTML as XHTML - expect wrong output.
+    test_xml(doc,
+        r"Not Heading
+",
+        20,
     );
 }
 
