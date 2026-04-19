@@ -194,6 +194,17 @@ where
     assert_eq_str!(rt.to_string(), expected.to_string());
 }
 
+#[cfg(feature = "xml")]
+#[track_caller]
+fn test_xml(input: &[u8], expected: &str, width: usize) {
+    let conf = config::plain();
+    let dom = conf.parse_xml(input).expect("Failed to parse XHTML");
+    let rt = conf.dom_to_render_tree(&dom).expect("To Render Tree");
+    let output = conf.render_to_string(rt, width).expect("Render to string");
+
+    assert_eq_str!(output, expected);
+}
+
 #[test]
 fn test_table() {
     test_html(
@@ -3471,6 +3482,54 @@ fn test_issue_252() {
 
 ",
         10,
+    );
+}
+
+#[test]
+#[cfg(feature = "xml")]
+fn test_xml1() {
+    use crate::config::XmlMode;
+
+    let doc = br#"<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+<title>Testing, testing</title>
+</head>
+<body>
+<h1/>
+<p>Not Heading</p>
+</body>
+</html>"#;
+
+    // Parsing XHTML as HTML - expect wrong output.
+    test_html_conf(
+        doc,
+        r"# Not Heading
+",
+        20,
+        |conf| conf.xml_mode(XmlMode::Html),
+    );
+    // Parsing with default settings - detects XML correctly
+    test_html(
+        doc,
+        r"Not Heading
+",
+        20,
+    );
+    // Parsing XHTML as XHTML - expect correct output.
+    test_xml(
+        doc,
+        r"Not Heading
+",
+        20,
+    );
+    // Parsing XHTML as XHTML - using config and explicit Xml mode.
+    test_html_conf(
+        doc,
+        r"Not Heading
+",
+        20,
+        |conf| conf.xml_mode(XmlMode::Xhtml),
     );
 }
 

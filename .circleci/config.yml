@@ -30,8 +30,8 @@ jobs:
     steps:
       - checkout
       - run: cargo --version
-      - run: cargo build --features=css,css_ext --workspace
-      - run: cargo test --features=css,css_ext
+      - run: cargo build --features=css,css_ext,xml --workspace
+      - run: cargo test --features=css,css_ext,xml
   build-1-85:
     docker:
       - image: cimg/rust:1.85

@@ -96,6 +96,7 @@ read keys from stdin.
 |-------|------------|
 |css    | Limited handling of CSS, adding Coloured nodes to the render tree. |
 |css\_ext| Some CSS extensions (see below for details) |
+|xml | Support XHTML (for cases where a document may be parsed differently than as HTML). |
 |html\_trace| Add verbose internal logging (not recommended) |
 |html\_trace\_bt| Add backtraces to the verbose internal logging |
 
@@ -144,3 +145,25 @@ The following CSS extensions are implemented:
 * `display: x-raw-dom;`
   - Show the HTML elements instead of rendering them.  (Useful for debugging, along
     with something like `:nth-child(...)` to select a particular node)
+
+### XML/XHTML support
+
+In some rare cases, parsing an XHTML document as HTML behaves differently.  For example:
+
+```xml
+<?xml version="1.0"?>
+<html xmlns="http://www.w3.org/1999/xhtml">
+<body>
+ <h1/>
+ <p>Not Heading</p>
+</body>
+</html>
+
+```
+
+HTML does not have the self-closing `<h1/>` form, so this would parse as an
+unclosed `<h1>` element, containing the following `<p>`, but in XHTML this is parsed as an empty `<h1>` followed by a `<p>`.
+
+With the `xml` Cargo feature enabled, by default documents are parsed as XHTML
+if they start with the `<?xml?>` declaration and HTML otherwise.  This can be
+configured with `Config::xml_mode()`.
