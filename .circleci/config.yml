@@ -10,7 +10,7 @@ jobs:
     steps:
       - checkout
       - run: cargo --version
-      - run: cargo build
+      - run: cargo build --workspace
       - run: cargo test
       - run:
           name: Install tools
@@ -30,8 +30,8 @@ jobs:
     steps:
       - checkout
       - run: cargo --version
-      - run: cargo build --features=css
-      - run: cargo test --features=css
+      - run: cargo build --features=css,css_ext --workspace
+      - run: cargo test --features=css,css_ext
   build-1-85:
     docker:
       - image: cimg/rust:1.85
