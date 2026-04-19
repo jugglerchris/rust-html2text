@@ -194,6 +194,7 @@ where
     assert_eq_str!(rt.to_string(), expected.to_string());
 }
 
+#[cfg(feature = "xml")]
 #[track_caller]
 fn test_xml(input: &[u8], expected: &str, width: usize) {
     let conf = config::plain();
