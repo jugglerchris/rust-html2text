@@ -34,7 +34,8 @@ impl Term {
         let mut stdout = std::io::stdout();
         execute!(stdout, EnterAlternateScreen)?;
         let backend = CrosstermBackend::new(stdout);
-        let terminal = Terminal::new(backend)?;
+        let mut terminal = Terminal::new(backend)?;
+        terminal.clear()?;
         Ok(Term {
             terminal,
         })

@@ -15,6 +15,7 @@ rust-version.workspace = true
 members = [
   ".",
   "html2text-cli",
+  "wtt",
 ]
 
 [workspace.package]

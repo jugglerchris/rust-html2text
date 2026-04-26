@@ -9,6 +9,16 @@ use crossterm::{
 use futures::{
     StreamExt,
 };
+use ratatui::{
+    buffer::Buffer,
+    layout::{
+        Rect,
+    },
+    widgets::{
+        Clear,
+        StatefulWidget,
+    },
+};
 
 use crate::{
     Browser,
@@ -16,6 +26,15 @@ use crate::{
 };
 
 struct HtmlView {
+}
+
+struct HtmlWidget { }
+
+impl StatefulWidget for HtmlWidget {
+    type State = HtmlView;
+    fn render(self, area: Rect, buf: &mut Buffer, state: &mut Self::State) {
+        buf.set_string(area.left(), area.top(), "hello world", ratatui::style::Style::default());
+    }
 }
 
 struct UrlBar {
@@ -29,6 +48,7 @@ enum Event {
 
 /// Overall UI state
 struct UI {
+    main_view: HtmlView,
 }
 
 enum EventEffect {
@@ -43,6 +63,7 @@ enum EventEffect {
 impl UI {
     fn new() -> UI {
         UI {
+            main_view: HtmlView {},
         }
     }
 
@@ -78,6 +99,8 @@ pub async fn run_browser(terminal: &mut Term, browser: &mut Browser) -> Result<(
     loop {
         if needs_draw {
             terminal.terminal.draw(|frame| {
+                let view_area = Rect::new(0, 0, frame.area().width, frame.area().height - 1);
+                frame.render_stateful_widget(HtmlWidget{}, view_area, &mut ui.main_view);
             })?;
             needs_draw = false;
         }
