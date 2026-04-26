@@ -25,15 +25,32 @@ use crate::{
     Term,
 };
 
+enum HtmlState {
+    Empty,
+    Loading,
+    Rendered,
+}
+
 struct HtmlView {
+    state: HtmlState,
 }
 
 struct HtmlWidget { }
 
 impl StatefulWidget for HtmlWidget {
     type State = HtmlView;
-    fn render(self, area: Rect, buf: &mut Buffer, state: &mut Self::State) {
-        buf.set_string(area.left(), area.top(), "hello world", ratatui::style::Style::default());
+    fn render(self, area: Rect, buf: &mut Buffer, view: &mut Self::State) {
+        match view.state {
+            HtmlState::Empty => {
+                buf.set_string(area.left(), area.top(), "No document", ratatui::style::Style::default());
+            }
+            HtmlState::Loading => {
+                buf.set_string(area.left(), area.top(), "Loading...", ratatui::style::Style::default());
+            }
+            HtmlState::Rendered => {
+                buf.set_string(area.left(), area.top(), "hello world", ratatui::style::Style::default());
+            }
+        }
     }
 }
 
@@ -48,6 +65,7 @@ enum Event {
 
 /// Overall UI state
 struct UI {
+    browser: Browser,
     main_view: HtmlView,
 }
 
@@ -61,9 +79,12 @@ enum EventEffect {
 }
 
 impl UI {
-    fn new() -> UI {
+    fn new(browser: Browser) -> UI {
         UI {
-            main_view: HtmlView {},
+            browser,
+            main_view: HtmlView {
+                state: HtmlState::Empty,
+            },
         }
     }
 
@@ -79,9 +100,9 @@ impl UI {
 }
 
 /// Run the terminal browser UI
-pub async fn run_browser(terminal: &mut Term, browser: &mut Browser) -> Result<(), Box<dyn Error>> {
+pub async fn run_browser(terminal: &mut Term, browser: Browser) -> Result<(), Box<dyn Error>> {
     let mut term_events = EventStream::new();
-    let mut ui = UI::new();
+    let mut ui = UI::new(browser);
 
     let (evt_sender, mut evt_recv) = tokio::sync::mpsc::channel(20);
     tokio::task::spawn_local(async move {

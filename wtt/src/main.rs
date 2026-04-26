@@ -61,7 +61,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     let mut terminal = Term::new()?;
 
-    run_browser(&mut terminal, &mut browser).await
+    run_browser(&mut terminal, browser).await
 }
 
 
