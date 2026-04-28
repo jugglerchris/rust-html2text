@@ -14,7 +14,6 @@ use crossterm::{
     },
 };
 use ratatui::prelude::{
-    Backend,
     CrosstermBackend,
     Terminal,
 };
@@ -53,15 +52,11 @@ impl Drop for Term {
 async fn main() -> Result<(), Box<dyn Error>> {
     let cli = Cli::parse();
 
-    let mut browser = if let Some(url) = cli.url {
-        Browser::new_with_url(url)
-    } else {
-        Browser::new()
-    };
+    let browser = Browser::new();
 
     let mut terminal = Term::new()?;
 
-    run_browser(&mut terminal, browser).await
+    run_browser(&mut terminal, browser, cli.url).await
 }
 
 
