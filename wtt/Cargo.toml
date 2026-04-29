@@ -16,3 +16,4 @@ ratatui = "0.30.0"
 tokio = { version = "1.52.1", features = ["macros"] }
 futures = "0.3.32"
 async-stream = "0.3.6"
+tracing = "0.1.44"
