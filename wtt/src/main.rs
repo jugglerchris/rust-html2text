@@ -9,6 +9,9 @@ use crossterm::{
 };
 use ratatui::prelude::{CrosstermBackend, Terminal};
 use std::error::Error;
+use tracing_subscriber::{
+    filter::EnvFilter,
+};
 
 use args::Cli;
 use browser::Browser;
@@ -40,6 +43,11 @@ impl Drop for Term {
 
 #[tokio::main(flavor = "local")]
 async fn main() -> Result<(), Box<dyn Error>> {
+    tracing_subscriber::fmt()
+        .with_env_filter(EnvFilter::from_default_env())
+        .with_writer(std::io::stderr)
+        .init();
+
     let cli = Cli::parse();
 
     let browser = Browser::new();

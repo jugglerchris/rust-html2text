@@ -174,6 +174,17 @@ impl Node {
             },
         )
     }
+
+    /// Get any direct children by name.
+    pub fn get_children_by_name(self: &Rc<Self>, name: &str) -> Vec<Rc<Self>> {
+        let mut result = Vec::new();
+        for child in self.children.borrow().iter() {
+            if let Some(child_name) = child.element_name() && name == child_name {
+                result.push(child.clone());
+            }
+        }
+        result
+    }
 }
 
 impl Drop for Node {

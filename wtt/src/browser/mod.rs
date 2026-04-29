@@ -3,7 +3,11 @@
 use async_stream::stream;
 use std::sync::Arc;
 
-use html2text::render::{RichDecorator, TaggedLine, TextDecorator};
+use html2text::{
+    expanded_name, local_name, ns, Element,
+    render::{RichDecorator, TaggedLine, TextDecorator},
+};
+use tracing::info;
 
 pub type RenderedText = Vec<TaggedLine<Vec<<RichDecorator as TextDecorator>::Annotation>>>;
 
@@ -12,8 +16,10 @@ pub type RenderedText = Vec<TaggedLine<Vec<<RichDecorator as TextDecorator>::Ann
 struct Inner {
     location: Option<String>,
     doc_string: Option<String>,
+    dom: Option<html2text::RcDom>,
     client: reqwest::Client,
     evt_listeners: Vec<tokio::sync::mpsc::Sender<Event>>,
+    stylesheet_urls: Vec<String>,
 }
 
 impl Inner {
@@ -21,8 +27,10 @@ impl Inner {
         Inner {
             location: None,
             doc_string: None,
+            dom: None,
             client: reqwest::Client::new(),
             evt_listeners: Vec::new(),
+            stylesheet_urls: Vec::new(),
         }
     }
 
@@ -31,14 +39,68 @@ impl Inner {
         self.emit(Event::DocUpdated).await;
     }
     // Todo: content types, streaming body, etc.
-    async fn set_body(&mut self, data: String) {
+    async fn set_content(&mut self, data: String) {
+        let dom = html2text::config::plain()
+            .parse_html(data.as_bytes())
+            .ok();
         self.doc_string = Some(data);
+        self.dom = dom;
+        self.stylesheet_urls = vec![];
+
+        if let Some(dom) = self.dom.as_ref() {
+            let html = dom.document.get_children_by_name("html").pop();
+            if let Some(html) = html {
+                let head = html.get_children_by_name("head");
+                if let Some(head) = head.first() {
+                    self.parse_head(head);
+                }
+            }
+        }
         self.emit(Event::DocUpdated).await;
     }
 
     async fn emit(&self, event: Event) {
         for sender in &self.evt_listeners {
-            sender.send(event).await;
+            let _ = sender.send(event).await;
+        }
+    }
+
+    fn parse_head(&mut self, head: &html2text::Handle) {
+        info!("Parsing head");
+        for child in head.children.borrow().iter() {
+            match child.data {
+                Element {
+                    ref name,
+                    ref attrs,
+                    ..
+                } => {
+                    match name.expanded() {
+                        expanded_name!(html "link") => {
+                            info!("Found link element");
+                            // Is it a stylesheet?
+                            let attrs = attrs.borrow();
+                            let mut attr_rel = None;
+                            let mut attr_href = None;
+                            for attr in attrs.iter() {
+                                if &attr.name.local == "rel" {
+                                    attr_rel = Some(&*attr.value);
+                                } else if &attr.name.local == "href" {
+                                    attr_href = Some(&*attr.value);
+                                }
+                            }
+                            match (attr_rel, attr_href) {
+                                (Some("stylesheet"), Some(href)) => {
+                                    info!("Found stylesheet URL {href}");
+                                    self.stylesheet_urls.push(href.into());
+                                }
+                                _ => {}
+                            }
+                        }
+                        _ => {}
+                    }
+                }
+                _ => {}
+            }
         }
     }
 }
@@ -101,7 +163,7 @@ impl Browser {
                             .await;
                     }
                     Ok(text) => {
-                        inner.lock().await.set_body(text).await;
+                        inner.lock().await.set_content(text).await;
                     }
                 },
             }
