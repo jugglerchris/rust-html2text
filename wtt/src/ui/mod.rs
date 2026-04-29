@@ -23,6 +23,7 @@ struct HtmlView {
     state: HtmlState,
     body: browser::RenderedText,
     pos: u16,
+    area: Option<Rect>,
 }
 
 impl HtmlView {
@@ -40,6 +41,7 @@ struct HtmlWidget {}
 impl StatefulWidget for HtmlWidget {
     type State = HtmlView;
     fn render(self, area: Rect, buf: &mut Buffer, view: &mut Self::State) {
+        view.area = Some(area);
         match view.state {
             HtmlState::Empty => {
                 buf.set_string(area.left(), area.top(), "No document", Style::default());
@@ -135,6 +137,7 @@ impl UI {
                 state: HtmlState::Empty,
                 body: Default::default(),
                 pos: 0,
+                area: None,
             },
         }
     }
@@ -149,8 +152,16 @@ impl UI {
                 self.main_view.move_up(1);
                 EventEffect::Update
             }
-            (NONE, KeyCode::Down) => {
+            (NONE, Down) => {
                 self.main_view.move_down(1);
+                EventEffect::Update
+            }
+            (NONE, PageUp) => {
+                self.main_view.move_up(self.main_view.area.map(|a| a.height-1).unwrap_or(23));
+                EventEffect::Update
+            }
+            (NONE, PageDown | Char(' ')) => {
+                self.main_view.move_down(self.main_view.area.map(|a| a.height-1).unwrap_or(23));
                 EventEffect::Update
             }
             _ => EventEffect::Nothing,
