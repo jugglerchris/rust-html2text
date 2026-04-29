@@ -86,7 +86,7 @@ impl StatefulWidget for HtmlWidget {
                                         _ => {}
                                     }
                                 }
-                                buf.set_string(y, x, &ts.s, style);
+                                buf.set_string(x, y, &ts.s, style);
                                 x += ts.width() as u16;
                             }
                             FragmentStart(..) => {}
