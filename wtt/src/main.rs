@@ -2,21 +2,13 @@ mod args;
 mod browser;
 mod ui;
 
-use std::error::Error;
 use clap::Parser;
 use crossterm::{
     execute,
-    terminal::{
-        disable_raw_mode,
-        enable_raw_mode,
-        EnterAlternateScreen,
-        LeaveAlternateScreen,
-    },
+    terminal::{EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode},
 };
-use ratatui::prelude::{
-    CrosstermBackend,
-    Terminal,
-};
+use ratatui::prelude::{CrosstermBackend, Terminal};
+use std::error::Error;
 
 use args::Cli;
 use browser::Browser;
@@ -35,9 +27,7 @@ impl Term {
         let backend = CrosstermBackend::new(stdout);
         let mut terminal = Terminal::new(backend)?;
         terminal.clear()?;
-        Ok(Term {
-            terminal,
-        })
+        Ok(Term { terminal })
     }
 }
 
@@ -58,5 +48,3 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     run_browser(&mut terminal, browser, cli.url).await
 }
-
-

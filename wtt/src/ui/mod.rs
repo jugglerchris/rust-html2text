@@ -1,36 +1,17 @@
 //! The UI widgets.
 
-use std::error::Error;
-use crossterm::{
-    event::{
-        EventStream,
-    }
-};
-use futures::{
-    StreamExt,
-};
-use html2text::render::{
-    TaggedLineElement,
-};
+use crossterm::event::{EventStream, KeyModifiers};
+use futures::StreamExt;
+use html2text::render::TaggedLineElement;
 use ratatui::{
     buffer::Buffer,
-    layout::{
-        Rect,
-    },
-    style::{
-        Modifier,
-        Style,
-    },
-    widgets::{
-        StatefulWidget,
-    },
+    layout::Rect,
+    style::{Modifier, Style},
+    widgets::StatefulWidget,
 };
+use std::error::Error;
 
-use crate::{
-    browser,
-    Browser,
-    Term,
-};
+use crate::{Browser, Term, browser};
 
 enum HtmlState {
     Empty,
@@ -41,9 +22,20 @@ enum HtmlState {
 struct HtmlView {
     state: HtmlState,
     body: browser::RenderedText,
+    pos: u16,
 }
 
-struct HtmlWidget { }
+impl HtmlView {
+    fn move_up(&mut self, dist: u16) {
+        self.pos = self.pos.saturating_sub(dist);
+    }
+
+    fn move_down(&mut self, dist: u16) {
+        self.pos = self.pos.saturating_add(dist);
+    }
+}
+
+struct HtmlWidget {}
 
 impl StatefulWidget for HtmlWidget {
     type State = HtmlView;
@@ -57,7 +49,10 @@ impl StatefulWidget for HtmlWidget {
             }
             HtmlState::Rendered => {
                 let mut y = area.top();
-                for line in &view.body {
+                if (view.pos + area.height) as usize > view.body.len() {
+                    view.pos = view.body.len().saturating_sub(area.height as usize) as u16;
+                }
+                for line in &view.body[view.pos as usize..] {
                     if y > area.bottom() {
                         break;
                     }
@@ -70,6 +65,7 @@ impl StatefulWidget for HtmlWidget {
                                 let mut style = Style::default();
                                 for ann in &ts.tag {
                                     use html2text::render::RichAnnotation::*;
+                                    use ratatui::style::Color;
                                     match ann {
                                         Default => {}
                                         Link(..) => {}
@@ -78,11 +74,17 @@ impl StatefulWidget for HtmlWidget {
                                         Strong => {
                                             style = style.add_modifier(Modifier::BOLD);
                                         }
-                                        Strikeout => {}
+                                        Strikeout => {
+                                            style = style.add_modifier(Modifier::CROSSED_OUT);
+                                        }
                                         Code => {}
                                         Preformat(..) => {}
-                                        Colour(..) => {}
-                                        BgColour(..) => {}
+                                        Colour(col) => {
+                                            style = style.fg(Color::Rgb(col.r, col.g, col.b));
+                                        }
+                                        BgColour(col) => {
+                                            style = style.bg(Color::Rgb(col.r, col.g, col.b));
+                                        }
                                         _ => {}
                                     }
                                 }
@@ -99,8 +101,7 @@ impl StatefulWidget for HtmlWidget {
     }
 }
 
-struct UrlBar {
-}
+struct UrlBar {}
 
 #[derive(Debug)]
 /// All kinds of event which can happen.
@@ -133,16 +134,26 @@ impl UI {
             main_view: HtmlView {
                 state: HtmlState::Empty,
                 body: Default::default(),
+                pos: 0,
             },
         }
     }
 
     fn handle_key(&mut self, kevt: crossterm::event::KeyEvent) -> EventEffect {
         use crossterm::event::KeyCode;
-        if kevt.code == KeyCode::Char('q') {
-            EventEffect::Quit
-        } else {
-            EventEffect::Update
+        const NONE: KeyModifiers = KeyModifiers::NONE;
+        use KeyCode::*;
+        match (kevt.modifiers, kevt.code) {
+            (NONE, Char('q')) => EventEffect::Quit,
+            (NONE, Up) => {
+                self.main_view.move_up(1);
+                EventEffect::Update
+            }
+            (NONE, KeyCode::Down) => {
+                self.main_view.move_down(1);
+                EventEffect::Update
+            }
+            _ => EventEffect::Nothing,
         }
     }
 
@@ -150,7 +161,8 @@ impl UI {
         use browser::Event::*;
         match bevt {
             DocUpdated => {
-                let body = self.browser
+                let body = self
+                    .browser
                     .render_body(80)
                     .await
                     .unwrap_or_else(|_| vec![]);
@@ -168,7 +180,11 @@ impl UI {
 }
 
 /// Run the terminal browser UI
-pub async fn run_browser(terminal: &mut Term, browser: Browser, url: Option<String>) -> Result<(), Box<dyn Error>> {
+pub async fn run_browser(
+    terminal: &mut Term,
+    browser: Browser,
+    url: Option<String>,
+) -> Result<(), Box<dyn Error>> {
     let mut term_events = EventStream::new();
     let mut ui = UI::new(browser);
     let (evt_sender, mut evt_recv) = tokio::sync::mpsc::channel(20);
@@ -178,7 +194,7 @@ pub async fn run_browser(terminal: &mut Term, browser: Browser, url: Option<Stri
         let mut stream = Box::pin(ui.browser.events().await);
 
         tokio::task::spawn_local(async move {
-            while let Some(evt) = stream.next().await { 
+            while let Some(evt) = stream.next().await {
                 sender.send(Event::Browser(evt)).await.unwrap();
             }
         });
@@ -189,7 +205,7 @@ pub async fn run_browser(terminal: &mut Term, browser: Browser, url: Option<Stri
             match r_evt {
                 Ok(evt) => {
                     let _ = evt_sender.send(Event::Term(evt)).await;
-                },
+                }
                 Err(e) => panic!("Error: {e}"),
             }
         }
@@ -204,7 +220,7 @@ pub async fn run_browser(terminal: &mut Term, browser: Browser, url: Option<Stri
         if needs_draw {
             terminal.terminal.draw(|frame| {
                 let view_area = Rect::new(0, 0, frame.area().width, frame.area().height - 1);
-                frame.render_stateful_widget(HtmlWidget{}, view_area, &mut ui.main_view);
+                frame.render_stateful_widget(HtmlWidget {}, view_area, &mut ui.main_view);
             })?;
             needs_draw = false;
         }
@@ -225,22 +241,19 @@ pub async fn run_browser(terminal: &mut Term, browser: Browser, url: Option<Stri
                             break;
                         }
                     },
-                    _ => ()
+                    _ => (),
                 }
             }
-            Some(Event::Browser(b_evt)) => {
-                match ui.handle_browser_event(b_evt).await {
-                    EventEffect::Nothing => (),
-                    EventEffect::Update => {
-                        needs_draw = true;
-                    }
-                    EventEffect::Quit => {
-                        break;
-                    }
+            Some(Event::Browser(b_evt)) => match ui.handle_browser_event(b_evt).await {
+                EventEffect::Nothing => (),
+                EventEffect::Update => {
+                    needs_draw = true;
                 }
-            }
+                EventEffect::Quit => {
+                    break;
+                }
+            },
         }
     }
     Ok(())
 }
-

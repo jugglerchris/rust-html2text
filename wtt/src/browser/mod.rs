@@ -1,15 +1,9 @@
 //! Core browser state.
 
-use std::sync::Arc;
 use async_stream::stream;
+use std::sync::Arc;
 
-use html2text::{
-    render::{
-        RichDecorator,
-        TaggedLine,
-        TextDecorator,
-    },
-};
+use html2text::render::{RichDecorator, TaggedLine, TextDecorator};
 
 pub type RenderedText = Vec<TaggedLine<Vec<<RichDecorator as TextDecorator>::Annotation>>>;
 
@@ -70,8 +64,7 @@ impl Browser {
         }
     }
 
-    pub(crate) async fn events(&mut self) -> impl futures::Stream<Item = Event> + use<>
-    {
+    pub(crate) async fn events(&mut self) -> impl futures::Stream<Item = Event> + use<> {
         let (sender, mut receiver) = tokio::sync::mpsc::channel(1);
         let mut inner = self.inner.lock().await;
         inner.evt_listeners.push(sender);
@@ -99,16 +92,18 @@ impl Browser {
                 Err(e) => {
                     inner.lock().await.set_error(format!("Error: {e}")).await;
                 }
-                Ok(res) => {
-                    match res.text().await {
-                        Err(e) => {
-                            inner.lock().await.set_error(format!("Error on text(): {e}")).await;
-                        }
-                        Ok(text) => {
-                            inner.lock().await.set_body(text).await;
-                        }
+                Ok(res) => match res.text().await {
+                    Err(e) => {
+                        inner
+                            .lock()
+                            .await
+                            .set_error(format!("Error on text(): {e}"))
+                            .await;
                     }
-                }
+                    Ok(text) => {
+                        inner.lock().await.set_body(text).await;
+                    }
+                },
             }
         });
     }
