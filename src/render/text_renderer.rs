@@ -1386,6 +1386,9 @@ pub(crate) struct RenderOptions {
     /// Whether to draw table borders
     pub draw_borders: bool,
 
+    /// Whether to wrap tables in code fences (triple backticks)
+    pub fence_tables: bool,
+
     /// Whether to wrap links as normal text
     pub wrap_links: bool,
 
@@ -1407,6 +1410,7 @@ impl Default for RenderOptions {
             pad_block_width: Default::default(),
             raw: false,
             draw_borders: true,
+            fence_tables: false,
             wrap_links: true,
             include_link_footnotes: false,
             use_unicode_strikeout: true,
