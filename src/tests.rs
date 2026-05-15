@@ -2587,6 +2587,75 @@ foo
 }
 
 #[test]
+fn test_fence_tables() {
+    test_html_conf(
+        br##"
+   <p>text</p>
+   <table>
+     <tr><th>1</th><th>2</th></tr>
+     <tr><td>3</td><td>4</td></tr>
+     <tr><td>5</td><td>6</td></tr>
+   </table>
+   <p>text</p>
+"##,
+        r#"text
+
+```
+─┬─
+1│2
+─┼─
+3│4
+─┼─
+5│6
+─┴─
+```
+
+text
+"#,
+        12,
+        |c| c.fence_tables(),
+    );
+}
+
+#[test]
+fn test_fence_tables_nested() {
+    test_html_conf(
+        br##"
+   <p>text</p>
+   <table>
+     <tr><th>1</th><th>2</th></tr>
+     <tr>
+       <td>3</td>
+       <td>
+         <table>
+           <tr><td>4</td><td>5</td></tr>
+           <tr><td>6</td><td>7</td></tr>
+         </table>
+       </td>
+     </tr>
+   </table>
+   <p>text</p>
+"##,
+        r#"text
+
+```
+─┬─────
+1│2    
+─┼─┬───
+3│4│5  
+ │─┼───
+ │6│7  
+─┴─┴───
+```
+
+text
+"#,
+        12,
+        |c| c.fence_tables(),
+    );
+}
+
+#[test]
 fn test_rowspan1() {
     test_html(
         br#"<table>
