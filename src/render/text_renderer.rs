@@ -26,6 +26,7 @@ use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
 pub(crate) struct TextRenderer<D: TextDecorator> {
     subrender: Vec<SubRenderer<D>>,
     links: Vec<String>,
+    pub(crate) table_depth: usize,
 }
 
 impl<D: TextDecorator> Deref for TextRenderer<D> {
@@ -48,6 +49,7 @@ impl<D: TextDecorator> TextRenderer<D> {
         TextRenderer {
             subrender: vec![subrenderer],
             links: Vec::new(),
+            table_depth: 0,
         }
     }
 

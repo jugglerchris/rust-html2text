@@ -2767,8 +2767,9 @@ fn render_table_tree<T: Write, D: TextDecorator>(
     };
 
     renderer.start_table()?;
+    renderer.table_depth += 1;
 
-    if renderer.options.fence_tables {
+    if renderer.options.fence_tables && renderer.table_depth == 1 {
         renderer.add_inline_text("```")?;
     }
 
@@ -2779,9 +2780,10 @@ fn render_table_tree<T: Write, D: TextDecorator>(
     Ok(TreeMapResult::PendingChildren {
         children: table.into_rows(col_widths, vert_row),
         cons: Box::new(|renderer, _| {
-            if renderer.options.fence_tables {
+            if renderer.options.fence_tables && renderer.table_depth == 1 {
                 renderer.add_inline_text("```")?;
             }
+            renderer.table_depth -= 1;
             Ok(Some(None))
         }),
         prefn: None,
