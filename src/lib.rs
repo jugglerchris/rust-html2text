@@ -1495,6 +1495,7 @@ struct HtmlContext {
     min_wrap_width: usize,
     raw: bool,
     draw_borders: bool,
+    fence_tables: bool,
     wrap_links: bool,
     include_link_footnotes: bool,
     use_unicode_strikeout: bool,
@@ -2766,6 +2767,11 @@ fn render_table_tree<T: Write, D: TextDecorator>(
     };
 
     renderer.start_table()?;
+    renderer.table_depth += 1;
+
+    if renderer.options.fence_tables && renderer.table_depth == 1 {
+        renderer.add_inline_text("```")?;
+    }
 
     if table_width != 0 && renderer.options.draw_borders {
         renderer.add_horizontal_border_width(table_width)?;
@@ -2773,7 +2779,13 @@ fn render_table_tree<T: Write, D: TextDecorator>(
 
     Ok(TreeMapResult::PendingChildren {
         children: table.into_rows(col_widths, vert_row),
-        cons: Box::new(|_, _| Ok(Some(None))),
+        cons: Box::new(|renderer, _| {
+            if renderer.options.fence_tables && renderer.table_depth == 1 {
+                renderer.add_inline_text("```")?;
+            }
+            renderer.table_depth -= 1;
+            Ok(Some(None))
+        }),
         prefn: None,
         postfn: None,
     })
@@ -2918,6 +2930,7 @@ pub mod config {
         min_wrap_width: usize,
         raw: bool,
         draw_borders: bool,
+        fence_tables: bool,
         wrap_links: bool,
         include_link_footnotes: bool,
         use_unicode_strikeout: bool,
@@ -2944,6 +2957,7 @@ pub mod config {
                 min_wrap_width: self.min_wrap_width,
                 raw: self.raw,
                 draw_borders: self.draw_borders,
+                fence_tables: self.fence_tables,
                 wrap_links: self.wrap_links,
                 include_link_footnotes: self.include_link_footnotes,
                 use_unicode_strikeout: self.use_unicode_strikeout,
@@ -3156,6 +3170,11 @@ pub mod config {
             self.draw_borders = false;
             self
         }
+        /// Wrap tables in code fences (triple backticks)
+        pub fn fence_tables(mut self) -> Self {
+            self.fence_tables = true;
+            self
+        }
         /// Do not wrap links
         pub fn no_link_wrapping(mut self) -> Self {
             self.wrap_links = false;
@@ -3311,6 +3330,7 @@ pub mod config {
             min_wrap_width: MIN_WIDTH,
             raw: false,
             draw_borders: true,
+            fence_tables: false,
             wrap_links: true,
             include_link_footnotes: false,
             use_unicode_strikeout: true,
@@ -3354,6 +3374,7 @@ impl RenderTree {
             allow_width_overflow: context.allow_width_overflow,
             raw: context.raw,
             draw_borders: context.draw_borders,
+            fence_tables: context.fence_tables,
             wrap_links: context.wrap_links,
             include_link_footnotes: context.include_link_footnotes,
             use_unicode_strikeout: context.use_unicode_strikeout,
