@@ -18,7 +18,7 @@ path = "src/main.rs"
 [dependencies]
 html2text = { version = "0.17.0", path = ".." }
 argparse = "0.2.2"
-log = "0.4.20"
+log = "0.4.30"
 syntect = "5.2.0"
 
 [target.'cfg(unix)'.dependencies]
