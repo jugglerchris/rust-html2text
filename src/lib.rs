@@ -1317,7 +1317,7 @@ fn td_to_render_tree<'a, T: Write>(
             }
             if &attr.name.local == "rowspan" {
                 let v: &str = &attr.value;
-                rowspan = v.parse().unwrap_or(1);
+                rowspan = v.parse().unwrap_or(1).max(1);
             }
         }
     }
