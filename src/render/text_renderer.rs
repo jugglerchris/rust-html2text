@@ -1197,16 +1197,20 @@ impl<T: Clone> BorderHoriz<T> {
     fn to_string(&self) -> String {
         let mut result = String::new();
         let mut pos = 0usize;
-
+        let len = self.segments.len();
         for (holepos, hole) in &self.holes {
-            for seg in &self.segments[pos..*holepos] {
+            let start = pos.min(len);
+            let end = (*holepos).min(len).max(start);
+
+            for seg in &self.segments[start..end] {
                 result.push(Self::seg_to_char(*seg));
             }
             pos = *holepos;
             result.push_str(hole.as_str());
             pos += hole.width();
         }
-        if pos < self.segments.len() {
+
+        if pos < len {
             for seg in &self.segments[pos..] {
                 result.push(Self::seg_to_char(*seg));
             }
@@ -2038,7 +2042,7 @@ impl<D: TextDecorator> Renderer for SubRenderer<D> {
                     None => line.push(Str(TaggedString {
                         s: column_padding[cellno]
                             .clone()
-                            .unwrap_or_else(|| spaces[0..ls.width].to_string()),
+                            .unwrap_or_else(|| spaces[0..ls.width.min(spaces.len())].to_string()),
                         tag: self.ann_stack.clone(),
                     })),
                 }
