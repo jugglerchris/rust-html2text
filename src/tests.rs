@@ -734,6 +734,58 @@ ple.com/
 }
 
 #[test]
+fn test_base_url_resolves_relative_links() {
+    // Without a base URL, a relative href is emitted as-is — which only means
+    // something to a reader who has the original page.
+    test_html(
+        br#"<p><a href="/login">Sign in</a></p>"#,
+        r"[Sign in][1]
+
+[1]: /login
+",
+        80,
+    );
+
+    // With one, the same link is resolvable on its own.
+    test_html_conf(
+        br#"<p><a href="/login">Sign in</a></p>"#,
+        r"[Sign in][1]
+
+[1]: https://example.com/login
+",
+        80,
+        |conf| conf.base_url("https://example.com/a/page.html"),
+    );
+}
+
+#[test]
+fn test_base_url_leaves_absolute_and_non_http_links_alone() {
+    test_html_conf(
+        br#"<p><a href="https://other.example/x">a</a> <a href="mailto:x@example.com">b</a></p>"#,
+        r"[a][1] [b][2]
+
+[1]: https://other.example/x
+[2]: mailto:x@example.com
+",
+        80,
+        |conf| conf.base_url("https://example.com/"),
+    );
+}
+
+#[test]
+fn test_base_url_merges_relative_paths() {
+    test_html_conf(
+        br#"<p><a href="../other.html">a</a></p>"#,
+        r"[a][1]
+
+[1]: https://example.com/other.html
+",
+        80,
+        |conf| conf.base_url("https://example.com/dir/page.html"),
+    );
+}
+
+#[test]
 fn test_links_footnotes() {
     // Default plain includes footnotes
     test_html(
