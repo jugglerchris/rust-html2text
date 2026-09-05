@@ -1096,11 +1096,26 @@ impl RenderNode {
                     )?;
                     for cell in &rtr.cells {
                         Self::write_style(f, indent + 2, &cell.style)?;
+                        let colspan_s;
+                        let rowspan_s;
+                        let colspan = if cell.colspan == 1 {
+                            ""
+                        } else {
+                            colspan_s = format!("colspan={} ", cell.colspan);
+                            colspan_s.as_str()
+                        };
+                        let rowspan = if cell.rowspan == 1 {
+                            ""
+                        } else {
+                            rowspan_s = format!("rowspan={} ", cell.rowspan);
+                            rowspan_s.as_str()
+                        };
                         writeln!(
                             f,
-                            "{:width$}Cell colspan={} width={:?}:",
+                            "{:width$}Cell {}{}width={:?}:",
                             "",
-                            cell.colspan,
+                            colspan,
+                            rowspan,
                             cell.col_width,
                             width = indent + 2
                         )?;
