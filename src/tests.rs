@@ -3558,9 +3558,29 @@ fn test_issue_252() {
         b"<table><td rowspan=8><tr><tr>",
         r"
 
+
 ",
         10,
     );
+}
+
+#[test]
+fn test_issue_285_1() {
+    let html = r###"/p>
+<table><td colspan="3"><td rowspan="3" colspan="5"><tr><td rowspan="2"><tr><td rowspan="2"><tr><td><td rowspan="2"><b>Foo<td rowspan="2" colspan="8"><b><a href="/" title="title">Bar<tr><td><td><"###;
+
+    let _ = crate::config::plain().string_from_read(html.as_bytes(), 10000);
+}
+
+#[test]
+fn test_issue_285_2() {
+    let html = r###"
+    <table>
+    <td rowspan="2">foo bar</table>
+    <table>
+    <td>x<td>y"###;
+
+    let _ = crate::config::plain().string_from_read(html.as_bytes(), 10000);
 }
 
 #[test]
