@@ -640,6 +640,29 @@ impl RenderTable {
             overhang_cells = std::mem::take(&mut next_overhang_cells);
             overhang_cells.reverse();
         }
+        // Add new rows for any overhanging cells below the bottom
+        while !overhang_cells.is_empty() {
+            let mut new_cells = Vec::new();
+
+            // Once we're past the end of the main rows, we can coallesce overhang rows.
+            let row_increment = overhang_cells.iter().map(|cell| cell.0).min().unwrap_or(1);
+
+            while let Some(mut hanging) = overhang_cells.pop() {
+                new_cells.push(RenderTableCell::dummy(hanging.2));
+                if hanging.0 > row_increment {
+                    hanging.0 = hanging.0 - row_increment;
+                    next_overhang_cells.push(hanging);
+                }
+            }
+
+            rows.push(RenderTableRow {
+                cells: new_cells,
+                col_sizes: None,
+                style: Default::default(),
+            });
+            overhang_cells = std::mem::take(&mut next_overhang_cells);
+            overhang_cells.reverse();
+        }
 
         let colmap: HashMap<_, _> = col_positions
             .into_iter()

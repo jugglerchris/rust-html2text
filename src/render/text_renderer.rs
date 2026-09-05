@@ -1162,6 +1162,7 @@ impl<T: Clone> BorderHoriz<T> {
     where
         T: Debug,
     {
+        self.stretch_to(pos + t.width());
         // Adjust the line pieces on either side.
         if pos > 0 {
             if let Some(seg) = self.segments.get_mut(pos - 1) {
@@ -1345,8 +1346,8 @@ impl<D: TextDecorator> std::fmt::Display for SubRenderer<D> {
                 RenderLine::Text(tagged_line) => {
                     writeln!(f, "  {}", tagged_line.to_string())?;
                 }
-                RenderLine::Line(_) => {
-                    writeln!(f, "  <<<border>>>")?;
+                RenderLine::Line(bord) => {
+                    writeln!(f, "  <<<{}>>>", bord.to_string())?;
                 }
             }
         }
@@ -1929,7 +1930,7 @@ impl<D: TextDecorator> Renderer for SubRenderer<D> {
                             lines: Default::default(),
                         });
                     }
-                    if ls.pos + ls.width > tot_width {
+                    if (ls.pos + ls.width) > tot_width {
                         // +1 because we subtract one later
                         tot_width = ls.pos + ls.width + 1;
                     }
