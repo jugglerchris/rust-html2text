@@ -59,6 +59,7 @@ mod macros;
 
 pub mod css;
 pub mod render;
+mod url_resolve;
 
 /// Extra methods on chars for dealing with special cases with wrapping and whitespace.
 trait WhitespaceExt {
@@ -1538,6 +1539,8 @@ struct HtmlContext {
     include_link_footnotes: bool,
     use_unicode_strikeout: bool,
     image_mode: config::ImageRenderMode,
+    /// Base URL that relative `href`s are resolved against, if set.
+    base_url: Option<String>,
 
     #[cfg(feature = "xml")]
     xml_mode: config::XmlMode,
@@ -2005,6 +2008,13 @@ fn process_dom_node<T: Write>(
                         children: input.children(),
                         cons: if let Some(href) = target {
                             let href: String = href.into();
+                            // A relative href only means something relative to
+                            // the page it came from, which the reader of this
+                            // output does not have.
+                            let href = match context.base_url.as_deref() {
+                                Some(base) => crate::url_resolve::resolve(base, &href),
+                                None => href,
+                            };
                             Box::new(move |_, cs: Vec<RenderNode>| {
                                 if cs.iter().any(|c| !c.is_shallow_empty()) {
                                     Ok(Some(RenderNode::new_styled(Link(href, cs), computed)))
@@ -2973,6 +2983,7 @@ pub mod config {
         include_link_footnotes: bool,
         use_unicode_strikeout: bool,
         image_mode: ImageRenderMode,
+        base_url: Option<String>,
 
         #[cfg(feature = "xml")]
         xml_mode: XmlMode,
@@ -3000,6 +3011,7 @@ pub mod config {
                 include_link_footnotes: self.include_link_footnotes,
                 use_unicode_strikeout: self.use_unicode_strikeout,
                 image_mode: self.image_mode,
+                base_url: self.base_url.clone(),
 
                 #[cfg(feature = "xml")]
                 xml_mode: self.xml_mode,
@@ -3274,6 +3286,22 @@ pub mod config {
             self
         }
 
+        /// Resolve relative links against a base URL.
+        ///
+        /// Without this, an `<a href="/login">` renders as `/login`, which a
+        /// reader of the output has no way to resolve — it only means
+        /// something in the context of the page it came from. With the base
+        /// URL of that page set, the same link renders as
+        /// `https://example.com/login`.
+        ///
+        /// Resolution follows RFC 3986 §5.3. Links that are already absolute,
+        /// and non-HTTP schemes such as `mailto:` and `data:`, are left
+        /// untouched.
+        pub fn base_url(mut self, base_url: impl Into<String>) -> Self {
+            self.base_url = Some(base_url.into());
+            self
+        }
+
         #[cfg(feature = "xml")]
         /// Configure the HTML vs XHTML parsing mode.
         pub fn xml_mode(mut self, xml_mode: XmlMode) -> Self {
@@ -3373,6 +3401,7 @@ pub mod config {
             include_link_footnotes: false,
             use_unicode_strikeout: true,
             image_mode: ImageRenderMode::IgnoreEmpty,
+            base_url: None,
             #[cfg(feature = "xml")]
             xml_mode: XmlMode::Auto,
             #[cfg(feature = "css_ext")]
