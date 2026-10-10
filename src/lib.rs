@@ -501,6 +501,10 @@ impl RenderTableCell {
             is_dummy: true,
         }
     }
+
+    fn extract_children(self, out: &mut Vec<RenderNode>) {
+        out.extend(self.content);
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -560,6 +564,12 @@ impl RenderTableRow {
             colno += colspan;
         }
         result
+    }
+
+    fn extract_children(self, out: &mut Vec<RenderNode>) {
+        for cell in self.cells {
+            cell.extract_children(out);
+        }
     }
 }
 
@@ -745,6 +755,12 @@ impl RenderTable {
         self.size_estimate.set(Some(result));
         result
     }
+
+    fn extract_children(self, out: &mut Vec<RenderNode>) {
+        for row in self.rows {
+            row.extract_children(out);
+        }
+    }
 }
 
 /// The node-specific information distilled from the DOM.
@@ -805,6 +821,55 @@ enum RenderNodeInfo {
     ListItem(Vec<RenderNode>),
     /// Superscript text
     Sup(Vec<RenderNode>),
+}
+
+impl RenderNodeInfo {
+    // Extract any children into the provided vector.
+    // Used for non-recursive destruction.
+    fn extract_children(self, out: &mut Vec<RenderNode>) {
+        match self {
+            RenderNodeInfo::Text(_)
+            | RenderNodeInfo::Img(_, _)
+            | RenderNodeInfo::Svg(_)
+            | RenderNodeInfo::Break
+            | RenderNodeInfo::FragStart(_) => {}
+
+            RenderNodeInfo::Container(render_nodes)
+            | RenderNodeInfo::Link(_, render_nodes)
+            | RenderNodeInfo::Em(render_nodes)
+            | RenderNodeInfo::Strong(render_nodes)
+            | RenderNodeInfo::Strikeout(render_nodes)
+            | RenderNodeInfo::Code(render_nodes)
+            | RenderNodeInfo::Block(render_nodes)
+            | RenderNodeInfo::Header(_, render_nodes)
+            | RenderNodeInfo::Div(render_nodes)
+            | RenderNodeInfo::BlockQuote(render_nodes)
+            | RenderNodeInfo::Ul(render_nodes)
+            | RenderNodeInfo::Ol(_, render_nodes)
+            | RenderNodeInfo::Dl(render_nodes)
+            | RenderNodeInfo::Dt(render_nodes)
+            | RenderNodeInfo::Dd(render_nodes)
+            | RenderNodeInfo::ListItem(render_nodes)
+            | RenderNodeInfo::Sup(render_nodes) => {
+                out.extend(render_nodes.into_iter());
+            }
+
+            RenderNodeInfo::Table(render_table) => {
+                render_table.extract_children(out);
+            }
+            RenderNodeInfo::TableBody(render_table_rows) => {
+                for row in render_table_rows {
+                    row.extract_children(out);
+                }
+            }
+            RenderNodeInfo::TableRow(render_table_row, _) => {
+                render_table_row.extract_children(out);
+            }
+            RenderNodeInfo::TableCell(render_table_cell) => {
+                render_table_cell.extract_children(out);
+            }
+        }
+    }
 }
 
 /// Common fields from a node.
@@ -1163,6 +1228,25 @@ impl RenderNode {
         }
         Ok(())
     }
+
+    fn into_info(mut self) -> RenderNodeInfo {
+        let result = std::mem::replace(&mut self.info, RenderNodeInfo::Break);
+        result
+    }
+}
+
+impl Drop for RenderNode {
+    fn drop(&mut self) {
+        let mut children = Vec::new();
+        let top_info = std::mem::replace(&mut self.info, RenderNodeInfo::Break);
+        top_info.extract_children(&mut children);
+
+        // Iteratively remove children to prevent unbounded stack usage.
+
+        while let Some(child) = children.pop() {
+            child.into_info().extract_children(&mut children);
+        }
+    }
 }
 
 fn precalc_size_estimate<'a, D: TextDecorator>(
@@ -1236,10 +1320,13 @@ fn table_to_render_tree<'a, T: Write>(
     pending(input, move |_, rowset| {
         let mut rows = vec![];
         for bodynode in rowset {
-            if let RenderNodeInfo::TableBody(body) = bodynode.info {
-                rows.extend(body);
-            } else {
-                html_trace!("Found in table: {:?}", bodynode.info);
+            match bodynode.into_info() {
+                RenderNodeInfo::TableBody(body) => {
+                    rows.extend(body);
+                }
+                _other => {
+                    html_trace!("Found in table: {:?}", _other);
+                }
             }
         }
         if rows.is_empty() {
@@ -1262,11 +1349,10 @@ fn tbody_to_render_tree<'a, T: Write>(
     pending_noempty(input, move |_, rowchildren| {
         let mut rows = rowchildren
             .into_iter()
-            .flat_map(|rownode| {
-                if let RenderNodeInfo::TableRow(row, _) = rownode.info {
-                    Some(row)
-                } else {
-                    html_trace!("  [[tbody child: {:?}]]", rownode);
+            .flat_map(|rownode| match rownode.into_info() {
+                RenderNodeInfo::TableRow(row, _) => Some(row),
+                _other => {
+                    html_trace!("  [[tbody child: {:?}]]", _other);
                     None
                 }
             })
@@ -1315,11 +1401,10 @@ fn tr_to_render_tree<'a, T: Write>(
     pending(input, move |_, cellnodes| {
         let cells = cellnodes
             .into_iter()
-            .flat_map(|cellnode| {
-                if let RenderNodeInfo::TableCell(cell) = cellnode.info {
-                    Some(cell)
-                } else {
-                    html_trace!("  [[tr child: {:?}]]", cellnode);
+            .flat_map(|cellnode| match cellnode.into_info() {
+                RenderNodeInfo::TableCell(cell) => Some(cell),
+                _other => {
+                    html_trace!("  [[tr child: {:?}]]", _other);
                     None
                 }
             })
@@ -2444,7 +2529,7 @@ fn do_render_node<T: Write, D: TextDecorator>(
 
     let pushed_style = PushedStyleInfo::apply(renderer, &tree.style);
 
-    Ok(match tree.info {
+    Ok(match tree.into_info() {
         Text(ref tstr) => {
             renderer.add_inline_text(tstr)?;
             pushed_style.unwind(renderer);
