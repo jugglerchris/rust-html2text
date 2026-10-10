@@ -1803,19 +1803,15 @@ impl<D: TextDecorator> Renderer for SubRenderer<D> {
         let mut pre_tag_start;
         let mut pre_tag_cont;
 
-        let main_tag;
-        let cont_tag;
-        if self.pre_depth > 0 {
+        let (main_tag, cont_tag) = if self.pre_depth > 0 {
             pre_tag_start = self.ann_stack.clone();
             pre_tag_cont = self.ann_stack.clone();
             pre_tag_start.push(self.decorator.decorate_preformat_first());
             pre_tag_cont.push(self.decorator.decorate_preformat_cont());
-            main_tag = &pre_tag_start;
-            cont_tag = &pre_tag_cont;
+            (&pre_tag_start, &pre_tag_cont)
         } else {
-            main_tag = &self.ann_stack;
-            cont_tag = &self.ann_stack;
-        }
+            (&self.ann_stack, &self.ann_stack)
+        };
         wrapping.add_text(filtered_text, ws_mode, main_tag, cont_tag)?;
         Ok(())
     }

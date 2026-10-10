@@ -660,7 +660,7 @@ impl RenderTable {
             while let Some(mut hanging) = overhang_cells.pop() {
                 new_cells.push(RenderTableCell::dummy(hanging.2));
                 if hanging.0 > row_increment {
-                    hanging.0 = hanging.0 - row_increment;
+                    hanging.0 -= row_increment;
                     next_overhang_cells.push(hanging);
                 }
             }
@@ -851,7 +851,7 @@ impl RenderNodeInfo {
             | RenderNodeInfo::Dd(render_nodes)
             | RenderNodeInfo::ListItem(render_nodes)
             | RenderNodeInfo::Sup(render_nodes) => {
-                out.extend(render_nodes.into_iter());
+                out.extend(render_nodes);
             }
 
             RenderNodeInfo::Table(render_table) => {
@@ -1230,8 +1230,7 @@ impl RenderNode {
     }
 
     fn into_info(mut self) -> RenderNodeInfo {
-        let result = std::mem::replace(&mut self.info, RenderNodeInfo::Break);
-        result
+        std::mem::replace(&mut self.info, RenderNodeInfo::Break)
     }
 }
 
@@ -2927,10 +2926,7 @@ fn render_table_row<T: Write, D: TextDecorator>(
         cons: Box::new(move |builders, children| {
             let children: Vec<_> = children.into_iter().map(Option::unwrap).collect();
             if have_overhang || children.iter().any(|c| !c.empty()) {
-                builders.append_columns_with_borders(
-                    children.into_iter().zip(rowspans.into_iter()),
-                    true,
-                )?;
+                builders.append_columns_with_borders(children.into_iter().zip(rowspans), true)?;
             }
             pushed_style.unwind(builders);
             Ok(Some(None))
