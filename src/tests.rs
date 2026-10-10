@@ -1643,6 +1643,13 @@ hi│hi│hi
 }
 
 #[test]
+fn test_nested_partial() {
+    let html = "<ul><li>".repeat(15000);
+
+    test_html_err(html.as_bytes(), Error::TooNarrow, 78);
+}
+
+#[test]
 fn test_table_no_id() {
     let html = r#"<html><body><table>
         <tr>
