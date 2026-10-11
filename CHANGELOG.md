@@ -18,6 +18,7 @@ Possible log types:
   jmueller209)
 - [fixed] Stack overflow on destroying very nested render trees (thanks
   PixDevApps)
+- [added] Added brief AI policy (summary: no thanks)
 
 ### 0.17.1
 
