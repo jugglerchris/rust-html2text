@@ -20,6 +20,11 @@ example the text/plain fallback in HTML e-mails).
 
 With feature flags enabled (see below) some CSS/colour support is available.
 
+## AI Policy
+
+At this time, this project is not able to accept code contributions produced
+with generative AI/LLMs due to the uncertain copyright status.
+
 ## Examples
 
 The simple functions like `from_read()` return formatted text (in various

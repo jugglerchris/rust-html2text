@@ -9,6 +9,17 @@ Possible log types:
 - `[fixed]` for any bug fixes.
 - `[security]` to invite users to upgrade in case of vulnerabilities.
 
+### 0.17.2
+
+- [added] Add `config.fence_tables()` to add code blocks around tables (thanks
+  J0hannes101)
+- [fixed] Fix a divide by zero panic on `rowspan=0` (thanks longsleep)
+- [fixed] Fix panics related to some combinations of `rowspan`/`colspan` (thanks 
+  jmueller209)
+- [fixed] Stack overflow on destroying very nested render trees (thanks
+  PixDevApps)
+- [added] Added brief AI policy (summary: no thanks)
+
 ### 0.17.1
 
 - [added] Add support for XHTML (for the cases where it doesn't quite behave
