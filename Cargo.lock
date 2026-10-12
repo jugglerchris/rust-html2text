@@ -267,7 +267,7 @@ checksum = "ed5909b6e89a2db4456e54cd5f673791d7eca6732202bbf2a9cc504fe2f9b84a"
 
 [[package]]
 name = "html2text"
-version = "0.17.2"
+version = "0.17.3"
 dependencies = [
  "argparse",
  "backtrace",
@@ -284,7 +284,7 @@ dependencies = [
 
 [[package]]
 name = "html2text-cli"
-version = "0.17.2"
+version = "0.17.3"
 dependencies = [
  "argparse",
  "html2text",
