@@ -750,7 +750,7 @@ pub(crate) mod dom_extract {
             None => Vec::new(),
             Some(mut first) => {
                 for v in it {
-                    first.extend(v.into_iter());
+                    first.extend(v);
                 }
                 first
             }

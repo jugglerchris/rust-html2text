@@ -1484,21 +1484,15 @@ impl<D: TextDecorator> SubRenderer<D> {
                     for part in tagged_line.into_iter() {
                         tl.push(part);
                     }
-                    if self.options.pad_block_width {
-                        tl.pad_to(self.width, &self.ann_stack);
-                    }
                     line = RenderLine::Text(tl);
                 }
                 RenderLine::Line(..) => (),
             }
         }
         if self.options.pad_block_width {
-            match &mut line {
-                RenderLine::Text(tl) => {
-                    tl.pad_to(self.width, &self.ann_stack);
-                }
-                RenderLine::Line(..) => (),
-            }
+            let mut tl = line.into_tagged_line();
+            tl.pad_to(self.width, &self.ann_stack);
+            line = RenderLine::Text(tl);
         }
         self.lines.push_back(line);
     }

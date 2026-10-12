@@ -9,6 +9,10 @@ Possible log types:
 - `[fixed]` for any bug fixes.
 - `[security]` to invite users to upgrade in case of vulnerabilities.
 
+### 0.17.3
+
+- [fixed] Fix padding tables with `pad_width`
+
 ### 0.17.2
 
 - [added] Add `config.fence_tables()` to add code blocks around tables (thanks
