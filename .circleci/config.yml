@@ -67,7 +67,7 @@ jobs:
       - run:
           name: Tests
           command: |
-            cargo test,slow_tests
+            cargo test --features=slow_tests
 
 workflows:
   version: 2
