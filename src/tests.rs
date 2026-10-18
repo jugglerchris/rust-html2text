@@ -3558,6 +3558,12 @@ Foo and Bar
 40,
         );
     }
+
+    #[test]
+    fn test_issue_297() {
+       let html = b"<html><head><style>@media all{p{color: #}}</style></head><body><p>x</p></body></html>";
+        test_html_css(html, "x\n", 80);
+    }
 }
 
 #[test]

@@ -307,7 +307,7 @@ fn parse_token(text: &str) -> IResult<&str, Token<'_>> {
         Some('"') | Some('\'') => parse_string_token(rest),
         Some('#') => match parse_identstring(&rest[1..]) {
             Ok((rest, id)) => Ok((rest, Token::Hash(id.into()))),
-            Err(_) => Ok((rest, Token::Delim('#'))),
+            Err(_) => Ok((&rest[1..], Token::Delim('#'))),
         },
         Some(';') => Ok((&rest[1..], Token::Semicolon)),
         Some('(') => Ok((&rest[1..], Token::OpenRound)),
