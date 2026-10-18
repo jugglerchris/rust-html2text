@@ -11,7 +11,7 @@ jobs:
       - checkout
       - run: cargo --version
       - run: cargo build --workspace
-      - run: cargo test
+      - run: cargo test --features=slow_tests
       - run:
           name: Install tools
           command: |
@@ -31,7 +31,7 @@ jobs:
       - checkout
       - run: cargo --version
       - run: cargo build --features=css,css_ext,xml --workspace
-      - run: cargo test --features=css,css_ext,xml
+      - run: cargo test --features=css,css_ext,xml,slow_tests
   build-1-85:
     docker:
       - image: cimg/rust:1.85
@@ -39,7 +39,7 @@ jobs:
       - checkout
       - run: cargo --version
       - run: cargo build --features=css
-      - run: cargo test --features=css
+      - run: cargo test --features=css,slow_tests
   build-windows:
     executor:
       name: win/default
@@ -67,7 +67,7 @@ jobs:
       - run:
           name: Tests
           command: |
-            cargo test
+            cargo test --features=slow_tests
 
 workflows:
   version: 2

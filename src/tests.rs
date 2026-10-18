@@ -1642,6 +1642,7 @@ hi│hi│hi
     test_html(html.as_bytes(), &result, 10);
 }
 
+#[cfg(feature = "slow_tests")]
 #[test]
 fn test_nested_partial() {
     let html = "<ul><li>".repeat(15000);
@@ -3556,6 +3557,12 @@ Foo and Bar
 "#,
 40,
         );
+    }
+
+    #[test]
+    fn test_issue_297() {
+        let html = b"<html><head><style>@media all{p{color: #}}</style></head><body><p>x</p></body></html>";
+        test_html_css(html, "x\n", 80);
     }
 }
 
