@@ -369,17 +369,9 @@ fn parse_token(text: &str) -> IResult<&str, Token<'_>> {
     }
 }
 
-fn parse_token_not_semicolon(text: &str) -> IResult<&str, Token<'_>> {
-    let (rest, token) = parse_token(text)?;
-    if token == Token::Semicolon {
-        fail().parse(text)
-    } else {
-        Ok((rest, token))
-    }
-}
-
 fn parse_value(text: &str) -> IResult<&str, RawValue<'_>> {
-    let (rest, mut tokens) = many0(parse_token_not_semicolon).parse(text)?;
+    let mut tokens = Vec::new();
+    let (rest, _) = parse_to_end_of_statement(text, Some(&mut tokens), false)?;
     let mut important = false;
     if let [.., Token::Delim('!'), Token::Ident(x)] = &tokens[..] {
         if x == "important" {
@@ -1063,7 +1055,11 @@ fn parse_ruleset(text: &str) -> IResult<&str, RuleSet> {
     ))
 }
 
-fn skip_to_end_of_statement(text: &str) -> IResult<&str, ()> {
+fn parse_to_end_of_statement<'i>(
+    text: &'i str,
+    mut out_tokens: Option<&mut Vec<Token<'i>>>,
+    include_semicolon: bool,
+) -> IResult<&'i str, ()> {
     let mut rest = text;
 
     let mut bra_stack = vec![];
@@ -1101,7 +1097,12 @@ fn skip_to_end_of_statement(text: &str) -> IResult<&str, ()> {
             }
             Token::Semicolon => {
                 if bra_stack.is_empty() {
-                    return Ok((remain, ()));
+                    if include_semicolon {
+                        out_tokens.as_mut().map(|v| v.push(tok));
+                        return Ok((remain, ()));
+                    } else {
+                        return Ok((rest, ()));
+                    }
                 }
             }
             Token::CloseBrace if bra_stack.is_empty() => {
@@ -1116,6 +1117,7 @@ fn skip_to_end_of_statement(text: &str) -> IResult<&str, ()> {
                     if tok == Token::CloseBrace && bra_stack.is_empty() {
                         // The rule lasted until the end of the next block;
                         // eat this closing brace.
+                        out_tokens.as_mut().map(|v| v.push(tok));
                         return Ok((remain, ()));
                     }
                 } else {
@@ -1124,6 +1126,7 @@ fn skip_to_end_of_statement(text: &str) -> IResult<&str, ()> {
                 }
             }
         }
+        out_tokens.as_mut().map(|v| v.push(tok));
         rest = remain;
     }
 }
@@ -1137,7 +1140,7 @@ fn parse_at_rule(text: &str) -> IResult<&str, ()> {
     )
         .parse(text)?;
 
-    skip_to_end_of_statement(rest)
+    parse_to_end_of_statement(rest, None, true)
 }
 
 fn parse_statement(text: &str) -> IResult<&str, Option<RuleSet>> {
@@ -1832,5 +1835,52 @@ mod test {
                 }
             )
         );
+    }
+
+    #[test]
+    fn test_parse_token_hash() {
+        use super::{
+            RawValue, Token, parse_declaration, parse_rules, parse_statement, parse_token,
+            parse_value,
+        };
+        assert_eq!(parse_token("#"), Ok(("", Token::Delim('#'))));
+        assert_eq!(parse_token("#abc"), Ok(("", Token::Hash("abc".into()))));
+        assert_eq!(
+            parse_value("#"),
+            Ok((
+                "",
+                RawValue {
+                    tokens: vec![Token::Delim('#')],
+                    important: false
+                }
+            ))
+        );
+        let unknown_prop_color = || Declaration {
+            data: Decl::Unknown {
+                name: PropertyName("color".into()),
+            },
+            important: Importance::Default,
+        };
+        assert_eq!(
+            parse_declaration("color: #"),
+            Ok(("", Some(unknown_prop_color())))
+        );
+        assert_eq!(
+            parse_rules("color: #"),
+            Ok(("", vec![unknown_prop_color()]))
+        );
+        assert_eq!(
+            parse_rules("color: #;"),
+            Ok((";", vec![unknown_prop_color()]))
+        );
+        let ruleset = || RuleSet {
+            selectors: vec![Selector {
+                components: vec![SelectorComponent::Element("p".into())],
+                pseudo_element: None,
+            }],
+            declarations: vec![unknown_prop_color()],
+        };
+        assert_eq!(parse_statement("p { color: #;}"), Ok(("", Some(ruleset()))));
+        assert_eq!(parse_statement("p { color: #}"), Ok(("", Some(ruleset()))));
     }
 }
