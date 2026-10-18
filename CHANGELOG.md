@@ -9,6 +9,11 @@ Possible log types:
 - `[fixed]` for any bug fixes.
 - `[security]` to invite users to upgrade in case of vulnerabilities.
 
+### 0.17.4
+
+- [fixed] Infinite loop on some ill-formed CSS (unterminated '#' in a media
+  query) (thanks guilbaudl)
+
 ### 0.17.3
 
 - [fixed] Fix padding tables with `pad_width`
