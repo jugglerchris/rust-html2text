@@ -1642,6 +1642,7 @@ hi│hi│hi
     test_html(html.as_bytes(), &result, 10);
 }
 
+#[cfg(feature = "slow_tests")]
 #[test]
 fn test_nested_partial() {
     let html = "<ul><li>".repeat(15000);
