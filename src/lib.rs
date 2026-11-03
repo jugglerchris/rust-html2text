@@ -551,7 +551,15 @@ impl RenderTableRow {
             };
             // Skip any zero-width columns
             if col_width > 0 {
-                let this_col_width = col_width + cell.colspan - 1;
+                let columns = if vertical {
+                    cell.colspan
+                } else {
+                    col_sizes[colno..colno + cell.colspan]
+                        .iter()
+                        .filter(|&&width| width > 0)
+                        .count()
+                };
+                let this_col_width = col_width + columns.saturating_sub(1);
                 cell.col_width = Some(this_col_width);
                 cell.x_pos = Some(x_pos);
                 x_pos += this_col_width + 1;
@@ -582,8 +590,40 @@ struct RenderTable {
 }
 
 impl RenderTable {
+    /// Collapse trailing row spans onto the rows which will actually be rendered.
+    fn normalize_rowspans(rows: &mut [RenderTableRow]) {
+        let row_count = rows.len();
+        let mut trailing_ends: Vec<_> = rows
+            .iter()
+            .enumerate()
+            .flat_map(|(index, row)| {
+                let remaining_rows = row_count - index;
+                row.cells()
+                    .filter(move |cell| cell.rowspan > remaining_rows)
+                    .map(move |cell| cell.rowspan - remaining_rows)
+            })
+            .collect();
+        trailing_ends.sort_unstable();
+        trailing_ends.dedup();
+
+        // Each distinct endpoint needs one synthetic row, regardless of how
+        // large the source rowspan is. Keep the renderer's countdown in this
+        // compressed coordinate system so no cell survives the end of a table.
+        for (index, row) in rows.iter_mut().enumerate() {
+            let remaining_rows = row_count - index;
+            for cell in row.cells_mut() {
+                if cell.rowspan > remaining_rows {
+                    let endpoint = cell.rowspan - remaining_rows;
+                    cell.rowspan =
+                        remaining_rows + trailing_ends.binary_search(&endpoint).unwrap() + 1;
+                }
+            }
+        }
+    }
+
     /// Create a new RenderTable with the given rows
     fn new(mut rows: Vec<RenderTableRow>) -> RenderTable {
+        Self::normalize_rowspans(&mut rows);
         // We later on want to allocate a vector sized by the column count,
         // but occasionally we see something like colspan="1000000000".  We
         // handle this by remapping the column ids to the smallest values
@@ -610,12 +650,20 @@ impl RenderTable {
         let mut next_overhang_cells = Vec::new();
         col_positions.insert(0);
         for row in &mut rows {
-            let mut col = 0;
+            let mut col: usize = 0;
             let mut new_cells = Vec::new();
 
             for cell in row.cells_drain() {
                 while let Some(hanging) = overhang_cells.last() {
-                    if hanging.1 <= col {
+                    if hanging.1 < col.saturating_add(cell.colspan.max(1)) {
+                        // A source colspan may cross a column already occupied
+                        // by a rowspan. Place the cell after that reserved span
+                        // instead of letting the renderer overwrite its text.
+                        if col < hanging.1 {
+                            new_cells.push(RenderTableCell::dummy(hanging.1 - col));
+                            col = hanging.1;
+                            col_positions.insert(col);
+                        }
                         new_cells.push(RenderTableCell::dummy(hanging.2));
                         col += hanging.2;
                         col_positions.insert(col);
@@ -637,6 +685,11 @@ impl RenderTable {
             }
             // Handle remaining overhanging cells
             while let Some(mut hanging) = overhang_cells.pop() {
+                if col < hanging.1 {
+                    new_cells.push(RenderTableCell::dummy(hanging.1 - col));
+                    col = hanging.1;
+                    col_positions.insert(col);
+                }
                 new_cells.push(RenderTableCell::dummy(hanging.2));
                 col += hanging.2;
                 col_positions.insert(col);
@@ -653,12 +706,18 @@ impl RenderTable {
         // Add new rows for any overhanging cells below the bottom
         while !overhang_cells.is_empty() {
             let mut new_cells = Vec::new();
+            let mut col = 0;
 
             // Once we're past the end of the main rows, we can coallesce overhang rows.
             let row_increment = overhang_cells.iter().map(|cell| cell.0).min().unwrap_or(1);
 
             while let Some(mut hanging) = overhang_cells.pop() {
+                if col < hanging.1 {
+                    new_cells.push(RenderTableCell::dummy(hanging.1 - col));
+                    col = hanging.1;
+                }
                 new_cells.push(RenderTableCell::dummy(hanging.2));
+                col += hanging.2;
                 if hanging.0 > row_increment {
                     hanging.0 -= row_increment;
                     next_overhang_cells.push(hanging);
@@ -2919,10 +2978,17 @@ fn render_table_row<T: Write, D: TextDecorator>(
     pushed_style: PushedStyleInfo,
     _err_out: &mut T,
 ) -> TreeMapResult<'static, TextRenderer<D>, RenderNode, Option<SubRenderer<D>>> {
-    let rowspans: Vec<usize> = row.cells().map(|cell| cell.rowspan).collect();
     let have_overhang = row.cells().any(|cell| cell.is_dummy);
+    let children = row.into_cells(false);
+    let rowspans: Vec<_> = children
+        .iter()
+        .map(|node| match &node.info {
+            RenderNodeInfo::TableCell(cell) => cell.rowspan,
+            _ => unreachable!(),
+        })
+        .collect();
     TreeMapResult::PendingChildren {
-        children: row.into_cells(false),
+        children,
         cons: Box::new(move |builders, children| {
             let children: Vec<_> = children.into_iter().map(Option::unwrap).collect();
             if have_overhang || children.iter().any(|c| !c.empty()) {

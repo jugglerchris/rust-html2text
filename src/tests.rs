@@ -367,14 +367,7 @@ fn test_colspan_large() {
      </tr>
    </table>
 "##,
-        r#"─┬─┬─
-1│2│3
-─┴─┼─
-12 │3
-─┬─┴──
-1│23  
-─┴────
-"#,
+        "─┬─┬─\n1│2│3\n─┴─┼─\n12 │3\n─┬─┴─\n1│23 \n─┴───\n",
         12,
     );
 }
@@ -2770,6 +2763,100 @@ fn test_rowspan_zero() {
         "─\nx\n─\n",
         80,
     );
+}
+
+#[test]
+fn test_rowspan_past_table_end_adjacent_short_cell() {
+    test_html(
+        br#"<table><tr><td rowspan="2">A</td></tr></table><table><tr><td>x</td><td>y</td></tr></table>"#,
+        "─\nA\n─\n\n─┬─\nx│y\n─┴─\n",
+        80,
+    );
+}
+
+#[test]
+fn test_rowspan_past_table_end_adjacent_text() {
+    test_html(
+        br#"<table><tr><td rowspan="2">First table text</td></tr></table><table><tr><td>x</td><td>y</td></tr></table>"#,
+        "────────────────\nFirst table text\n────────────────\n\n─┬─\nx│y\n─┴─\n",
+        80,
+    );
+}
+
+#[test]
+fn test_rowspan_past_table_end_adjacent_multiline_cell() {
+    test_html(
+        br#"<table><tr><td rowspan="8">First<br>second<br>third</td></tr></table><table><tr><td>x</td><td>y</td></tr></table>"#,
+        "──────────────────\nFirst             \nsecond            \nthird             \n──────────────────\n\n─┬─\nx│y\n─┴─\n",
+        80,
+    );
+}
+
+#[test]
+fn test_rowspan_past_table_end_adjacent_later_column() {
+    test_html(
+        br#"<table><tr><td>A</td><td rowspan="999999">First<br>second<br>third</td></tr></table><table><tr><td>x</td><td>y</td></tr></table>"#,
+        "─┬──────────────────\nA│First             \n─┤second            \n │third             \n─┴──────────────────\n\n─┬─\nx│y\n─┴─\n",
+        20,
+    );
+}
+
+#[test]
+fn test_rowspan_past_table_end_adjacent_without_borders() {
+    test_html_conf(
+        br#"<table><tr><td rowspan="2">A</td></tr></table><table><tr><td>x</td><td>y</td></tr></table>"#,
+        "A\n\nx y\n",
+        80,
+        |c| c.no_table_borders(),
+    );
+}
+
+#[test]
+fn test_rowspan_past_table_end_colspan_gap_and_mixed_endpoints() {
+    let check_tables = |html: &str, markers: &[&str]| {
+        let output = from_read(html.as_bytes(), 80).unwrap();
+        let first_table = output
+            .strip_suffix("\n─┬─\nx│y\n─┴─\n")
+            .expect("the adjacent table should retain its own cells and borders");
+        for marker in markers {
+            assert_eq!(first_table.matches(marker).count(), 1, "{output}");
+        }
+    };
+    check_tables(
+        r#"<table><tr><td>A</td><td rowspan="3" colspan="2">B</td></tr></table><table><tr><td>x</td><td>y</td></tr></table>"#,
+        &["A", "B"],
+    );
+    check_tables(
+        &format!(
+            r#"<table><tr><td>A</td><td rowspan="2">B1<br>B2<br>B3</td><td rowspan="{}" colspan="2">C1<br>C2<br>C3</td></tr></table><table><tr><td>x</td><td>y</td></tr></table>"#,
+            usize::MAX,
+        ),
+        &["A", "B1", "B2", "B3", "C1", "C2", "C3"],
+    );
+}
+
+#[test]
+fn test_rowspan_colspan_crosses_reserved_column() {
+    let html = br#"<table><tr><td rowspan="2"></td></tr><tr><td>A</td><td rowspan="2">B</td></tr><tr><td colspan="3"></td><td>C</td></tr></table><table><tr><td>x</td><td>y</td></tr></table>"#;
+    let output = from_read(&html[..], 80).unwrap();
+    let first_table = output
+        .strip_suffix("\n─┬─\nx│y\n─┴─\n")
+        .expect("the adjacent table should retain its own cells and borders");
+    for marker in ["A", "B", "C"] {
+        assert_eq!(first_table.matches(marker).count(), 1, "{output}");
+    }
+}
+
+#[test]
+fn test_rowspan_colspan_skips_zero_width_columns() {
+    let html = br#"<table><tr><td colspan="3"></td><td rowspan="2">B</td></tr><tr><td colspan="2">A</td><td></td><td>C</td></tr></table><table><tr><td>x</td><td>y</td></tr></table>"#;
+    let output = from_read(&html[..], 80).unwrap();
+    let first_table = output
+        .strip_suffix("\n─┬─\nx│y\n─┴─\n")
+        .expect("the adjacent table should retain its own cells and borders");
+    for marker in ["B", "A", "C"] {
+        assert_eq!(first_table.matches(marker).count(), 1, "{output}");
+    }
 }
 
 #[test]

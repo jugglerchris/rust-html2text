@@ -1657,10 +1657,13 @@ impl<A: PartialEq + Eq + Clone + Debug + Default> std::fmt::Display for LineSet<
     }
 }
 impl<A> LineSet<A> {
-    fn cell_height(&self) -> usize {
+    fn cell_height(&self, draw_borders: bool) -> usize {
         let tot_lines = self.lines.len();
         if self.rowspan == 1 {
             tot_lines
+        } else if !draw_borders {
+            // Without borders, every content line must fit in a row itself.
+            tot_lines.div_ceil(self.rowspan)
         } else {
             // Divide the height by the rowspan
             // We are only counting the space between the horizontal borders,
@@ -1706,7 +1709,7 @@ impl<D: TextDecorator> Renderer for SubRenderer<D> {
     }
 
     fn start_table(&mut self) -> Result<()> {
-        //debug_assert!(self.overhang_cells.is_empty());
+        debug_assert!(self.overhang_cells.is_empty());
         self.start_block()
     }
 
@@ -2010,7 +2013,7 @@ impl<D: TextDecorator> Renderer for SubRenderer<D> {
 
         let cell_height = line_sets
             .iter()
-            .map(|ls| ls.cell_height())
+            .map(|ls| ls.cell_height(self.options.draw_borders))
             .max()
             .unwrap_or(0);
         let spaces: String = (0..tot_width).map(|_| ' ').collect();
@@ -2051,25 +2054,28 @@ impl<D: TextDecorator> Renderer for SubRenderer<D> {
             let mut pos = 0;
             for mut ls in line_sets.into_iter() {
                 if ls.rowspan > 1 {
-                    if let Some(l) = ls.lines.get(cell_height) {
-                        let mut tmppos = pos;
-                        for ts in l.clone().into_tagged_line() {
-                            let w = ts.width();
-                            next_border.add_text_span(tmppos, ts);
-                            tmppos += w;
+                    if self.options.draw_borders {
+                        if let Some(l) = ls.lines.get(cell_height) {
+                            let mut tmppos = pos;
+                            for ts in l.clone().into_tagged_line() {
+                                let w = ts.width();
+                                next_border.add_text_span(tmppos, ts);
+                                tmppos += w;
+                            }
+                        } else {
+                            next_border.add_text_span(
+                                pos,
+                                TaggedLineElement::Str(TaggedString {
+                                    s: " ".repeat(ls.width),
+                                    tag: next_border.tag.clone(),
+                                }),
+                            );
                         }
-                    } else {
-                        next_border.add_text_span(
-                            pos,
-                            TaggedLineElement::Str(TaggedString {
-                                s: " ".repeat(ls.width),
-                                tag: next_border.tag.clone(),
-                            }),
-                        );
                     }
                     {
                         // TODO: use VecDeque::truncate_front() when available.
-                        let new_len = ls.lines.len().saturating_sub(cell_height + 1);
+                        let consumed = cell_height + usize::from(self.options.draw_borders);
+                        let new_len = ls.lines.len().saturating_sub(consumed);
                         while ls.lines.len() > new_len {
                             ls.lines.pop_front();
                         }
