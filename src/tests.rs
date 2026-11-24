@@ -719,6 +719,72 @@ fn test_link3() {
 }
 
 #[test]
+fn test_link_whitespace_between_words() {
+    let html = br#"<p>Please <a href="https://example.com/">RSVP</a><a href="https://example.com/" style="text-decoration: none;">
+</a>by November 30.</p>"#;
+    test_html(
+        html,
+        "Please [RSVP][1] by November 30.\n\n[1]: https://example.com/\n",
+        80,
+    );
+    test_html_conf_dec(
+        RichDecorator::new(),
+        html,
+        "Please RSVP by November 30.\n",
+        80,
+        |conf| conf,
+    );
+}
+
+#[test]
+fn test_link_whitespace_has_no_extra_footnote() {
+    test_html(
+        b"<p>one<a href='unused'> \t\n </a>two <a href='used'>three</a></p>",
+        "one two [three][1]\n\n[1]: used\n",
+        80,
+    );
+}
+
+#[test]
+fn test_link_whitespace_preserves_nbsp_and_preformatted_spaces() {
+    test_html(
+        b"<p>one<a href='unused'>&nbsp;</a>two</p>",
+        "one\u{a0}two\n",
+        80,
+    );
+    test_html(
+        b"<pre>one<a href='unused'>   </a>two</pre>",
+        "one   two\n",
+        80,
+    );
+}
+
+#[test]
+fn test_empty_link_does_not_insert_whitespace() {
+    test_html(
+        b"<p>micro<a href='unused'></a>scope <a href='used'>word</a>!</p>",
+        "microscope [word][1]!\n\n[1]: used\n",
+        80,
+    );
+}
+
+#[test]
+fn test_link_whitespace_does_not_create_rich_link_annotation() {
+    let lines = config::rich()
+        .lines_from_read(&b"<a href='used'>RSVP</a><a href='unused'> </a>by"[..], 80)
+        .unwrap();
+    assert_eq!(lines.len(), 1);
+    assert_eq!(lines[0].chars().collect::<String>(), "RSVP by");
+    let links: Vec<_> = lines[0]
+        .tagged_strings()
+        .filter(|s| s.tag.iter().any(|a| matches!(a, RichAnnotation::Link(_))))
+        .collect();
+    assert_eq!(links.len(), 1);
+    assert_eq!(links[0].s, "RSVP");
+    assert_eq!(links[0].tag, vec![RichAnnotation::Link("used".into())]);
+}
+
+#[test]
 fn test_link_wrap() {
     test_html(
         br#"

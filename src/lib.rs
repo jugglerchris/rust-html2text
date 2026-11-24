@@ -2089,11 +2089,18 @@ fn process_dom_node<T: Write>(
                         children: input.children(),
                         cons: if let Some(href) = target {
                             let href: String = href.into();
-                            Box::new(move |_, cs: Vec<RenderNode>| {
+                            Box::new(move |_, mut cs: Vec<RenderNode>| {
                                 if cs.iter().any(|c| !c.is_shallow_empty()) {
                                     Ok(Some(RenderNode::new_styled(Link(href, cs), computed)))
                                 } else {
-                                    Ok(None)
+                                    // Whitespace-only text can separate words even when
+                                    // there is no visible anchor text to decorate.
+                                    cs.retain(|c| matches!(&c.info, Text(t) if !t.is_empty()));
+                                    if cs.is_empty() {
+                                        Ok(None)
+                                    } else {
+                                        Ok(Some(RenderNode::new_styled(Container(cs), computed)))
+                                    }
                                 }
                             })
                         } else {
