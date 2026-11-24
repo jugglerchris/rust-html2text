@@ -771,10 +771,7 @@ fn test_empty_link_does_not_insert_whitespace() {
 #[test]
 fn test_link_whitespace_does_not_create_rich_link_annotation() {
     let lines = config::rich()
-        .lines_from_read(
-            &b"<a href='used'>RSVP</a><a href='unused'> </a>by"[..],
-            80,
-        )
+        .lines_from_read(&b"<a href='used'>RSVP</a><a href='unused'> </a>by"[..], 80)
         .unwrap();
     assert_eq!(lines.len(), 1);
     assert_eq!(lines[0].chars().collect::<String>(), "RSVP by");
